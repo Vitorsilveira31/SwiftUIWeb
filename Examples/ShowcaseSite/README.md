@@ -46,9 +46,10 @@ fails the audit, and a type that gets an entry must leave `pending`.
 `Features/Animations` shows eight pieces of SwiftUI's animation API running live, one card each: `contentTransition(.numericText)`,
 transitions, animation curves and springs, `matchedGeometryEffect`, `phaseAnimator`, `keyframeAnimator`, `symbolEffect` and a ring drawn
 with `trim`. A card's button opens its code in a sheet. `AnimationsStrings` holds the words and the code of each card in both
-languages (a test checks that they stay together), and `AnimationsView` lays the cards out with `ViewThatFits`, in three, two or
-one column, in plain stacks. It does not use a `LazyVGrid`: the cards hold state of their own (a counter, a toggle), and the state of a
-view inside a lazy cell was not redrawn when it changed.
+languages (a test checks that they stay together), and `AnimationsView` lays the cards out with `AdaptiveColumnsLayout`, in three, two
+or one column, each card a fixed height. It uses neither of the usual choices. A `LazyVGrid` did not redraw a cell when a state of
+its own changed. A `ViewThatFits` of stacks put the page back at the top whenever a card's content changed size (the star swapping
+for another glyph, the ring's number gaining a digit), because it measures its choices again.
 
 ## How the code is organized
 
