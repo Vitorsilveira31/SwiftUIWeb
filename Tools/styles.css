@@ -2194,6 +2194,23 @@
     height: calc(var(--spacing) * 2);
     width: 100%;
     border-radius: calc(infinity * 1px);
+    /* The browser's own bar is green unless it is drawn here: fill it with the tint, as a Gauge is. */
+    appearance: none;
+    overflow: hidden;
+    background-color: var(--color-swu-muted);
+    accent-color: var(--tint-color, var(--color-swu-primary));
+  }
+  .gauge-meter progress::-webkit-progress-bar {
+    border-radius: 9999px;
+    background: var(--color-swu-muted);
+  }
+  .gauge-meter progress::-webkit-progress-value {
+    border-radius: 9999px;
+    background: var(--tint-color, var(--color-swu-primary));
+  }
+  .gauge-meter progress::-moz-progress-bar {
+    border-radius: 9999px;
+    background: var(--tint-color, var(--color-swu-primary));
   }
 
   /* Navigation and presentation */
@@ -5125,7 +5142,8 @@
     min-height: 0px;
     flex-direction: column;
     overflow-y: auto;
-    background-color: var(--color-swu-surface);
+    /* A tinted gray, as a native sidebar sits behind the content. */
+    background-color: color-mix(in srgb, var(--color-swu-foreground) 4%, var(--color-swu-background));
     padding-inline: calc(var(--spacing) * 2);
     padding-block: calc(var(--spacing) * 3);
   }
@@ -5156,6 +5174,74 @@
     width: 100%;
     height: 100%;
     min-height: 0;
+  }
+
+  /* A sidebar is a source list, not a card: no frame and no hairlines between rows, a rounded row, the selected row
+     filled with the tint, and the icons in one fixed column so the labels line up as in a native sidebar. The layout
+     engine owns the width, margin and padding of a section's rows (with !important), so the top-level rows are
+     indented to meet them and a selected section row is widened with a shadow instead of a margin. */
+  .navigation-split-view .navigation-sidebar .list-view {
+    gap: 2px;
+    border-width: 0;
+    border-radius: 0;
+    background-color: transparent;
+  }
+  .navigation-split-view .navigation-sidebar .list-view > * {
+    border-width: 0;
+    padding: 0;
+  }
+  .navigation-split-view .navigation-sidebar .section-card {
+    border-radius: 0;
+  }
+  .navigation-split-view .navigation-sidebar .section-rows > .section-row + .section-row {
+    border-top: 0;
+  }
+  .navigation-split-view .navigation-sidebar .section-rows > .section-row + .section-row::before {
+    display: none;
+  }
+  .navigation-split-view .navigation-sidebar .section-row .navigation-link::after {
+    inset: 0;
+  }
+  .navigation-split-view .navigation-sidebar .list-view .navigation-link {
+    --row-fill: transparent;
+    border-width: 0;
+    border-radius: var(--radius-lg);
+    padding-block: calc(var(--spacing) * 2);
+    padding-inline: calc(var(--spacing) * 2);
+    color: var(--color-swu-foreground);
+    text-decoration-line: none;
+    background-color: var(--row-fill);
+    &:hover {
+      @media (hover: hover) {
+        --row-fill: color-mix(in srgb, var(--color-swu-foreground) 6%, transparent);
+        text-decoration-line: none;
+      }
+    }
+  }
+  .navigation-split-view .navigation-sidebar .list-view > .navigation-link {
+    padding-inline-start: calc(var(--spacing) * 6);
+  }
+  .navigation-split-view .navigation-sidebar .list-view .navigation-link.item-selected {
+    --row-fill: color-mix(in srgb, var(--tint-color, var(--color-swu-primary)) 16%, transparent);
+  }
+  .navigation-split-view .navigation-sidebar .section-row .navigation-link {
+    box-shadow: calc(var(--spacing) * -4) 0 0 0 var(--row-fill), calc(var(--spacing) * 4) 0 0 0 var(--row-fill);
+  }
+  .navigation-split-view .navigation-sidebar .list-view .navigation-link [data-layout-leaf="text"] {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .navigation-split-view .navigation-sidebar .list-view .navigation-link .icon-label:has(> .symbol-icon) {
+    gap: calc(var(--spacing) * 2);
+  }
+  .navigation-split-view .navigation-sidebar .list-view .navigation-link .icon-label > .symbol-icon {
+    flex: 0 0 1.25rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    display: inline-flex;
+    justify-content: center;
+    color: var(--tint-color, var(--color-swu-primary));
   }
 
   .navigation-split-view .navigation-content,

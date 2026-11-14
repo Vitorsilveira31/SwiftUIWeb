@@ -92,6 +92,22 @@ before/after comparison.
   instead of the 12px that sits under an icon. Checked by rendering the bar's real markup before and after, in light and dark,
   with and without symbols; nothing in an application needs to change.
 
+- **A sidebar in a `NavigationSplitView` is a source list, not a bordered card.** The rows lost their frame and the
+  hairlines between them, are rounded, and the selected row is filled with the tint (16%) instead of being underlined;
+  the icons take the tint and sit in one fixed column so the labels line up, the column is a tinted gray, and a label
+  that does not fit is cut with an ellipsis instead of wrapping. A section's rows lose the grouped card's rounded frame.
+  A `Gauge` is drawn as a rounded bar filled with the tint (the browser's own green `<progress>` showed through in
+  Chromium). Checked by rendering the Food Truck example's panels before and after, next to the same screens on an iPad;
+  nothing in an application needs to change.
+- **The asset catalog's `AccentColor` is the app's tint.** It sets `--tint-color` on the page, as Xcode's global accent
+  color does, so `Color.accentColor`, tinted symbols, pickers, gauges and charts use it instead of the theme's near-black.
+  A color set that names a system color (`"reference": "systemIndigoColor"`) compiles to that color's light and dark
+  values; before, such a set was dropped. An app with no `AccentColor` looks as before, and `.tint(_:)` still overrides it.
+  `.tint(.accentColor)` no longer makes the tint refer to itself (the browser drew a green progress bar for it).
+- **A custom symbol with a content hash in its file name draws as a symbol.** The release step names a compiled catalog
+  symbol `name.symbol.<hash>.svg`; the renderer only knew `name.symbol.svg`, so such a symbol was a picture at the
+  SVG's own size (a donut as tall as the screen) instead of a tinted glyph sized by the text.
+
 ### API and behaviour found by the example apps
 
 The small example apps ("Small apps" in `Examples/README.md`) are fifteen apps, each in its own `Examples/` folder, of ordinary iOS 17 SwiftUI compiled for the browser. Closing what it found added API and changed
