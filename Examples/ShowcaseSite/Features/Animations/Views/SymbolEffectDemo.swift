@@ -9,7 +9,7 @@ struct SymbolEffectDemo: View {
   var body: some View {
     VStack(spacing: 14) {
       HStack(spacing: 28) {
-        Image(systemName: "bell.fill")
+        Image(systemName: "bell")
           .symbolEffect(.bounce, value: rings)
         Image(systemName: "wifi")
           .symbolEffect(.pulse, isActive: listening)
