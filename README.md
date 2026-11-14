@@ -159,7 +159,7 @@ Ideas and requests are welcome in [Discussions](https://github.com/Vitorsilveira
 | [`ShowcaseSite`](Examples/ShowcaseSite/README.md) | The project site: a catalog of components with live knobs and the code they produce |
 | [`Lumio`](Examples/Lumio/README.md), [`Quill`](Examples/Quill/README.md), [`Mailo`](Examples/Mailo/README.md), [`Stayly`](Examples/Stayly/README.md) | Full apps (photos, short posts, mail, stays) over a local mock API, with tests |
 | [`UniversalApp`](Examples/UniversalApp/README.md) | One package for iOS, iPadOS and the web |
-| [`FoodTruck`](Examples/FoodTruck/README.md) | Apple's Food Truck sample running in the browser |
+| [`FoodTruck`](Examples/FoodTruck/README.md) | Apple's Food Truck sample: the same sources run in the browser and as an iOS and iPadOS app |
 
 All of them are in [`Examples/`](Examples/README.md).
 

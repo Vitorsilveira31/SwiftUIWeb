@@ -17,7 +17,7 @@ struct FoodTruckApp: App {
     /// The app's state.
     @StateObject private var model = FoodTruckModel()
     /// The in-app purchase store's state.
-    @StateObject private var accountStore = AccountStore()
+    @State private var accountStore = AccountStore()
     
     /// The app's body function.
     ///

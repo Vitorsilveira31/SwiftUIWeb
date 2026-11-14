@@ -14,8 +14,9 @@ FoodTruck/
 │   ├── FoodTruck/WebAdapters/, FoodTruckKit/WebAdapters/   the few files that replace Apple code bound to a platform
 │   └── README-apple.md    Apple's own README for the sample
 ├── Web/                   the BrowserApp entry point (what App.swift is on Apple platforms)
+├── Xcode/                 the iOS and iPadOS app: an Xcode project over the same Sources (see "Run it on iOS and iPadOS")
 ├── Package.swift          the web package: module aliases, exclusions
-└── LICENSE.txt            Apple's sample-code license, which covers Sources/FoodTruck and Sources/FoodTruckKit
+└── LICENSE.txt            Apple's sample-code license, which covers Sources/FoodTruck, Sources/FoodTruckKit and Xcode/App
 ```
 
 ## Run it
@@ -25,6 +26,28 @@ From the SwiftUIWeb root:
 ```sh
 swift Tools/swiftuiweb-run.swift --path Examples/FoodTruck --product FoodTruckWeb --port 8100
 ```
+
+## Run it on iOS and iPadOS
+
+The same `Sources/` also build as an iPhone and iPad app with Apple's own SwiftUI. Open
+`Xcode/FoodTruck.xcodeproj`, pick a simulator and run the "Food Truck" scheme, or from a terminal:
+
+```sh
+xcodebuild -project Xcode/FoodTruck.xcodeproj -scheme "Food Truck" \
+  -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M5)' build
+```
+
+There is one copy of the code. The project compiles `Sources/FoodTruck` in place, and `Xcode/Kit` is a Swift package
+whose `Sources/FoodTruckKit` is a symlink to `Sources/FoodTruckKit`. Only what the browser build replaces is different
+on Apple platforms, and lives in `Xcode/App`:
+
+- `AccountStore.swift` is Apple's passkey `AccountStore`, observed with Observation instead of Combine (the shared
+  views read it with `@Environment`);
+- `TruckActivityAttributes.swift` is Apple's Live Activity model (the Widgets extension is not part of this project).
+
+`WebAdapters/` is excluded from the iOS build, and `Sources/FoodTruck/App.swift` (Apple's `@main`) holds the account
+store with `@State` instead of `@StateObject`. Passkeys, StoreKit and WeatherKit need a signed build with the matching
+capabilities; on a simulator they fall back to what the sample does without them.
 
 ## How the source is kept close to Apple's
 

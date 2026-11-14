@@ -1,0 +1,278 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1F000000000000000000A015 /* FoodTruckKit in Frameworks */ = {isa = PBXBuildFile; productRef = 1F000000000000000000A014 /* FoodTruckKit */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		1F000000000000000000A005 /* Food Truck.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Food Truck.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		1F000000000000000000A020 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		1F000000000000000000A021 /* Kit */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = Kit; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		1F000000000000000000A011 /* Exceptions for "FoodTruck" folder in "Food Truck" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Entitlements.entitlements,
+				"Entitlements-All.entitlements",
+				"Food-Truck-All-Info.plist",
+				"Food-Truck-Info.plist",
+				"Store/Products.storekit",
+				WebAdapters/WebAppRoot.swift,
+				WebAdapters/WebDetailedMapView.swift,
+			);
+			target = 1F000000000000000000A004 /* Food Truck */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		1F000000000000000000A010 /* FoodTruck */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				1F000000000000000000A011 /* Exceptions for "FoodTruck" folder in "Food Truck" target */,
+			);
+			name = FoodTruck;
+			path = ../Sources/FoodTruck;
+			sourceTree = "<group>";
+		};
+		1F000000000000000000A012 /* App */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = App;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		1F000000000000000000A00D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1F000000000000000000A015 /* FoodTruckKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1F000000000000000000A002 = {
+			isa = PBXGroup;
+			children = (
+				1F000000000000000000A010 /* FoodTruck */,
+				1F000000000000000000A012 /* App */,
+				1F000000000000000000A021 /* Kit */,
+				1F000000000000000000A020 /* Info.plist */,
+				1F000000000000000000A003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		1F000000000000000000A003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				1F000000000000000000A005 /* Food Truck.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1F000000000000000000A004 /* Food Truck */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1F000000000000000000A009 /* Build configuration list for PBXNativeTarget "Food Truck" */;
+			buildPhases = (
+				1F000000000000000000A00C /* Sources */,
+				1F000000000000000000A00D /* Frameworks */,
+				1F000000000000000000A00E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				1F000000000000000000A010 /* FoodTruck */,
+				1F000000000000000000A012 /* App */,
+			);
+			name = "Food Truck";
+			packageProductDependencies = (
+				1F000000000000000000A014 /* FoodTruckKit */,
+			);
+			productName = "Food Truck";
+			productReference = 1F000000000000000000A005 /* Food Truck.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		1F000000000000000000A001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+			};
+			buildConfigurationList = 1F000000000000000000A006 /* Build configuration list for PBXProject "FoodTruck" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				ar,
+				Base,
+			);
+			mainGroup = 1F000000000000000000A002;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				1F000000000000000000A013 /* XCLocalSwiftPackageReference "Kit" */,
+			);
+			productRefGroup = 1F000000000000000000A003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				1F000000000000000000A004 /* Food Truck */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		1F000000000000000000A00E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		1F000000000000000000A00C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1F000000000000000000A007 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		1F000000000000000000A008 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		1F000000000000000000A00A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Food Truck";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				"INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad" = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.swiftuiweb.FoodTruck;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		1F000000000000000000A00B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Food Truck";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				"INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad" = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.swiftuiweb.FoodTruck;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1F000000000000000000A006 /* Build configuration list for PBXProject "FoodTruck" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1F000000000000000000A007 /* Debug */,
+				1F000000000000000000A008 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1F000000000000000000A009 /* Build configuration list for PBXNativeTarget "Food Truck" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1F000000000000000000A00A /* Debug */,
+				1F000000000000000000A00B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		1F000000000000000000A013 /* XCLocalSwiftPackageReference "Kit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Kit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		1F000000000000000000A014 /* FoodTruckKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = FoodTruckKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 1F000000000000000000A001 /* Project object */;
+}
