@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- Content-Security-Policy, filled in by Tools/seal-csp.mjs as the last step of the build (the inline scripts below are
+       allowed by hash). The page runs its own files, WebAssembly and nothing else: no inline handlers, no javascript: URLs,
+       no eval, no plugins, no <base> from markup. Styles may be inline (the runtime sets style attributes) and may come from
+       https (web-font stylesheets). Images, media, fonts, requests and frames may go to any origin, because an application
+       talks to its own APIs and embeds what it needs. An application replaces the whole policy by declaring its own
+       <meta http-equiv="Content-Security-Policy"> in Resources/head.html (see Documentation/BROWSER_APP_SHELL.md). -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' __INLINE_SCRIPT_HASHES__; style-src 'self' 'unsafe-inline' https:; img-src * data: blob:; font-src * data:; media-src * data: blob:; connect-src * data: blob:; frame-src * data: blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>SwiftUIWeb</title>
+  <script>
+    // Establish system appearance before the stylesheet and WASM arrive.
+    document.documentElement.dataset.colorScheme=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+    document.documentElement.style.colorScheme=document.documentElement.dataset.colorScheme;
+  </script>
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#181818" media="(prefers-color-scheme: dark)">
+  <!-- The stylesheet is built from Tools/styles.css at build time. SwiftUIWeb
+       emits compact semantic component classes; the browser never loads a
+       UI framework or a runtime CSS generator. -->
+  <link rel="stylesheet" href="./styles.css">
+  <!-- The runtime module compiles app.wasm as it streams in. Starting both
+       transfers here lets them run while the stylesheet and the classic
+       scripts below are still loading, instead of after the module graph has
+       been evaluated. The wasm is fetched by this script, not announced with
+       `<link rel="preload" as="fetch">`: WebKit did not hand that preload to
+       the runtime's own fetch and downloaded the module twice. The runtime
+       takes this response (`instantiate` in Tools/embedded-runtime.js). -->
+  <link rel="modulepreload" href="./index.js">
+  <script>
+    globalThis.__appModuleFetch={href:new URL("./app.wasm",document.baseURI).href,response:fetch("./app.wasm")};
+  </script>
+</head>
+<body>
+  <!-- Optional route/provider ESM loader. It is intentionally inert during
+       bootstrap; dynamic import and feature CSS happen only on activation. -->
+  <!-- `defer` keeps these off the parser's critical path. Deferred classic scripts and
+       the module below share one queue that runs in document order before
+       DOMContentLoaded, so the globals they define (__loadImagePipeline,
+       __renderMeshGradient, the icon adapter) exist before the module runs. -->
+  <script defer src="./feature-loader.js"></script>
+  <script defer src="./icon-adapter.js"></script>
+  <script defer src="./mesh-gradient.js"></script>
+  <script type="module">
+    performance.mark("runtime-bootstrap");
+    const performanceDiagnostics = new URLSearchParams(location.search).get("render-performance") === "1";
+    // Imported inside the try, not with a static import: a static import that fails to download (a dropped
+    // connection, a 404) aborts this whole module before it runs, so the page stayed blank with no message.
+    // Here the failure reaches the alert below.
+    try {
+      // Resolved against the document's base: WebKit resolves a relative `import()` of an inline module against the page's
+      // own address, which at `/en/story` is `/en/index.js`.
+      const { init } = await import(new URL("./index.js", document.baseURI).href);
+      performance.mark("runtime-wasm-load");
+      await init(undefined, { performanceDiagnostics });
+    }
+    catch(error) {
+      console.error(error);
+      const message=document.createElement("pre"); message.setAttribute("role","alert");
+      message.textContent="SwiftUIWeb failed to start: "+String(error?.message ?? error);
+      document.body.append(message); throw error;
+    }
+    performance.mark("runtime-interactive");
+    performance.measure("runtime-bootstrap-to-interactive", "runtime-bootstrap", "runtime-interactive");
+  </script>
+</body>
+</html>

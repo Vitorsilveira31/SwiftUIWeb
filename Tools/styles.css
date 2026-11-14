@@ -1,0 +1,6071 @@
+/*
+ * SwiftUIWeb browser stylesheet (plain CSS, no build step).
+ *
+ * Views emit a small, stable vocabulary of semantic class names from their RenderNode model;
+ * this file owns what those names look like. Everything lives in cascade layers, so application
+ * CSS (Resources/app.css, unlayered) always wins over the framework without specificity fights.
+ *
+ * The components are the sealed base: an application adds to them (modifiers, inline values, tokens) and does not
+ * rewrite them. The supported surface is the design tokens and the documented custom properties (`--color-swu-*`,
+ * `--radius-swu`, `--tint-color`, `--tab-*`, `--layout-*`); class names and data attributes are internal.
+ * Each component has ONE base rule, and what differs lives in a variant rule next to it. A second set of rules for the
+ * same selectors silently overrides the first, so `bun Tools/lint-styles.mjs` fails when a declaration can never apply.
+ *
+ * The reset in `@layer base` below is adapted from Tailwind CSS preflight (MIT License,
+ * Copyright (c) Tailwind Labs, Inc.).
+ */
+
+@layer theme, base, components, utilities;
+
+/* Values that one rule sets and another rule on the same element reads (shadow and focus ring,
+   line height, easing...). Registered so they never inherit into descendants. */
+@property --border-line {
+  syntax: "*";
+  inherits: false;
+  initial-value: solid;
+}
+@property --ease {
+  syntax: "*";
+  inherits: false;
+}
+@property --leading {
+  syntax: "*";
+  inherits: false;
+}
+@property --outline-line {
+  syntax: "*";
+  inherits: false;
+  initial-value: solid;
+}
+@property --ring-color {
+  syntax: "*";
+  inherits: false;
+}
+@property --ring-inset {
+  syntax: "*";
+  inherits: false;
+}
+@property --ring-layer {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+@property --shadow-layer {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0 0 #0000;
+}
+@property --shift-y {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
+
+/* Design tokens. Spacing, type, radius and motion scales used by the component rules, plus the
+   semantic colour roles. Override them from application CSS to retheme the framework. */
+@layer theme {
+  :root, :host {
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --color-black: #000;
+    --color-white: #fff;
+    --spacing: 0.25rem;
+    --container-sm: 24rem;
+    --container-md: 28rem;
+    --container-lg: 32rem;
+    --container-2xl: 42rem;
+    --text-xs: 0.75rem;
+    --text-xs--line-height: calc(1 / 0.75);
+    --text-sm: 0.875rem;
+    --text-sm--line-height: calc(1.25 / 0.875);
+    --text-base: 1rem;
+    --text-base--line-height: calc(1.5 / 1);
+    --text-lg: 1.125rem;
+    --text-lg--line-height: calc(1.75 / 1.125);
+    --text-xl: 1.25rem;
+    --text-xl--line-height: calc(1.75 / 1.25);
+    --text-2xl: 1.5rem;
+    --text-2xl--line-height: calc(2 / 1.5);
+    --text-3xl: 1.875rem;
+    --text-3xl--line-height: calc(2.25 / 1.875);
+    --text-4xl: 2.25rem;
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+    --tracking-tight: -0.025em;
+    --tracking-wide: 0.025em;
+    --tracking-widest: 0.1em;
+    --leading-tight: 1.25;
+    --leading-normal: 1.5;
+    --leading-relaxed: 1.625;
+    --radius-sm: 0.25rem;
+    --radius-md: 0.375rem;
+    --radius-lg: 0.5rem;
+    --radius-xl: 0.75rem;
+    --radius-2xl: 1rem;
+    --ease-out: cubic-bezier(0, 0, 0.2, 1);
+    /* The curve UIKit presents and pushes with: fast off the mark, a long soft landing (a critically damped spring). */
+    --swu-ease-present: cubic-bezier(0.32, 0.72, 0, 1);
+    --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    --default-font-family: var(--font-sans);
+    --default-mono-font-family: var(--font-mono);
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+
+    /* Semantic colour roles */
+    --color-swu-background: oklch(1 0 0);
+    --color-swu-foreground: oklch(0.145 0 0);
+    --color-swu-surface: oklch(1 0 0);
+    --color-swu-card: oklch(1 0 0);
+    --color-swu-card-foreground: oklch(0.145 0 0);
+    --color-swu-popover: oklch(1 0 0);
+    --color-swu-popover-foreground: oklch(0.145 0 0);
+    --color-swu-primary: oklch(0.205 0 0);
+    --color-swu-primary-foreground: oklch(0.985 0 0);
+    --color-swu-secondary: oklch(0.97 0 0);
+    --color-swu-secondary-foreground: oklch(0.205 0 0);
+    --color-swu-muted: oklch(0.97 0 0);
+    --color-swu-muted-foreground: oklch(0.556 0 0);
+    --color-swu-accent: oklch(0.97 0 0);
+    --color-swu-accent-foreground: oklch(0.205 0 0);
+    --color-swu-destructive: oklch(0.577 0.245 27.325);
+    --color-swu-border: oklch(0.922 0 0);
+    --color-swu-input: oklch(0.922 0 0);
+    --color-swu-ring: oklch(0.708 0 0);
+    --color-swu-success: oklch(0.62 0.17 145);
+    --color-swu-warning: oklch(0.75 0.18 85);
+  }
+}
+
+/* Reset */
+@layer base {
+  *, ::after, ::before, ::backdrop, ::file-selector-button {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0 solid;
+  }
+  html, :host {
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+    tab-size: 4;
+    font-family: var(--default-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");
+    font-feature-settings: var(--default-font-feature-settings, normal);
+    font-variation-settings: var(--default-font-variation-settings, normal);
+    -webkit-tap-highlight-color: transparent;
+  }
+  hr {
+    height: 0;
+    color: inherit;
+    border-top-width: 1px;
+  }
+  abbr:where([title]) {
+    -webkit-text-decoration: underline dotted;
+    text-decoration: underline dotted;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+  a {
+    color: inherit;
+    -webkit-text-decoration: inherit;
+    text-decoration: inherit;
+  }
+  b, strong {
+    font-weight: bolder;
+  }
+  code, kbd, samp, pre {
+    font-family: var(--default-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
+    font-feature-settings: var(--default-mono-font-feature-settings, normal);
+    font-variation-settings: var(--default-mono-font-variation-settings, normal);
+    font-size: 1em;
+  }
+  small {
+    font-size: 80%;
+  }
+  sub, sup {
+    font-size: 75%;
+    line-height: 0;
+    position: relative;
+    vertical-align: baseline;
+  }
+  sub {
+    bottom: -0.25em;
+  }
+  sup {
+    top: -0.5em;
+  }
+  table {
+    text-indent: 0;
+    border-color: inherit;
+    border-collapse: collapse;
+  }
+  :-moz-focusring:where(:not(iframe)) {
+    outline: auto;
+  }
+  progress {
+    vertical-align: baseline;
+  }
+  summary {
+    display: list-item;
+  }
+  ol, ul, menu {
+    list-style: none;
+  }
+  img, svg, video, canvas, audio, iframe, embed, object {
+    display: block;
+    vertical-align: middle;
+  }
+  img, video {
+    max-width: 100%;
+    height: auto;
+  }
+  button, input, select, optgroup, textarea, ::file-selector-button {
+    font: inherit;
+    font-feature-settings: inherit;
+    font-variation-settings: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    border-radius: 0;
+    background-color: transparent;
+    opacity: 1;
+  }
+  :where(select:is([multiple], [size])) optgroup {
+    font-weight: bolder;
+  }
+  :where(select:is([multiple], [size])) optgroup option {
+    padding-inline-start: 20px;
+  }
+  ::file-selector-button {
+    margin-inline-end: 4px;
+  }
+  ::placeholder {
+    opacity: 1;
+  }
+  @supports (not (-webkit-appearance: -apple-pay-button))  or (contain-intrinsic-size: 1px) {
+    ::placeholder {
+      color: currentcolor;
+      @supports (color: color-mix(in lab, red, red)) {
+        color: color-mix(in oklab, currentcolor 50%, transparent);
+      }
+    }
+  }
+  textarea {
+    resize: vertical;
+  }
+  ::-webkit-search-decoration {
+    -webkit-appearance: none;
+  }
+  ::-webkit-date-and-time-value {
+    min-height: 1lh;
+    text-align: inherit;
+  }
+  ::-webkit-datetime-edit {
+    display: inline-flex;
+  }
+  ::-webkit-datetime-edit-fields-wrapper {
+    padding: 0;
+  }
+  ::-webkit-datetime-edit, ::-webkit-datetime-edit-year-field, ::-webkit-datetime-edit-month-field, ::-webkit-datetime-edit-day-field, ::-webkit-datetime-edit-hour-field, ::-webkit-datetime-edit-minute-field, ::-webkit-datetime-edit-second-field, ::-webkit-datetime-edit-millisecond-field, ::-webkit-datetime-edit-meridiem-field {
+    padding-block: 0;
+  }
+  ::-webkit-calendar-picker-indicator {
+    line-height: 1;
+  }
+  :-moz-ui-invalid {
+    box-shadow: none;
+  }
+  button, input:where([type="button"], [type="reset"], [type="submit"]), ::file-selector-button {
+    appearance: button;
+  }
+  ::-webkit-inner-spin-button, ::-webkit-outer-spin-button {
+    height: auto;
+  }
+  [hidden]:where(:not([hidden="until-found"])) {
+    display: none !important;
+  }
+}
+
+@layer base {
+  /* Firefox ignores an intrinsic maximum height on a flex item (`max-height: max-content`), the cap that keeps a view
+     hugging its content from growing along a VStack (Documentation/Architecture/CSS_LAYOUT.md). The layout writes that
+     view's share with these two variables; in Firefox it keeps its content's height instead (`flex: 0 1 auto`). */
+  @supports (-moz-appearance: none) {
+    :root {
+      --sl-hug-grow: 0;
+      --sl-hug-basis: auto;
+    }
+  }
+
+  :root {
+    color-scheme: light;
+    /* Shared layout tokens consumed by framework and documentation hosts. */
+    --layout-header-height: 64px;
+    --layout-sidebar-width: 268px;
+    --layout-content-max-width: 900px;
+    --layout-touch-target: 44px;
+    --layout-focus-width: 2px;
+    --layout-focus-offset: 3px;
+    --layout-radius-control: 8px;
+    --layout-space-2: 8px;
+    --layout-space-3: 12px;
+    --layout-space-4: 16px;
+    --layout-space-6: 24px;
+  }
+
+  /* `.environment(\.colorScheme, ...)` sets the scheme of a subtree. `color` is inherited already resolved, so the
+     subtree reads the foreground token again; without this its text keeps the page's ink. */
+  [data-color-scheme-scope] {
+    color: var(--color-swu-foreground);
+  }
+
+  /* A light subtree inside a dark one: the tokens go back to the light palette (the page's own is the `:root` theme
+     above) and the browser's controls to the light scheme, which an inherited dark `color-scheme` would keep dark. */
+  [data-color-scheme="light"] {
+    color-scheme: light;
+    --color-swu-background: oklch(1 0 0);
+    --color-swu-foreground: oklch(0.145 0 0);
+    --color-swu-surface: oklch(1 0 0);
+    --color-swu-card: oklch(1 0 0);
+    --color-swu-card-foreground: oklch(0.145 0 0);
+    --color-swu-popover: oklch(1 0 0);
+    --color-swu-popover-foreground: oklch(0.145 0 0);
+    --color-swu-primary: oklch(0.205 0 0);
+    --color-swu-primary-foreground: oklch(0.985 0 0);
+    --color-swu-secondary: oklch(0.97 0 0);
+    --color-swu-secondary-foreground: oklch(0.205 0 0);
+    --color-swu-muted: oklch(0.97 0 0);
+    --color-swu-muted-foreground: oklch(0.556 0 0);
+    --color-swu-accent: oklch(0.97 0 0);
+    --color-swu-accent-foreground: oklch(0.205 0 0);
+    --color-swu-destructive: oklch(0.577 0.245 27.325);
+    --color-swu-border: oklch(0.922 0 0);
+    --color-swu-input: oklch(0.922 0 0);
+    --color-swu-ring: oklch(0.708 0 0);
+    --color-swu-success: oklch(0.62 0.17 145);
+    --color-swu-warning: oklch(0.75 0.18 85);
+  }
+
+  [data-color-scheme="dark"],
+  .dark {
+    color-scheme: dark;
+    --color-swu-background: oklch(0.145 0 0);
+    --color-swu-foreground: oklch(0.985 0 0);
+    --color-swu-surface: oklch(0.205 0 0);
+    --color-swu-card: oklch(0.205 0 0);
+    --color-swu-card-foreground: oklch(0.985 0 0);
+    --color-swu-popover: oklch(0.205 0 0);
+    --color-swu-popover-foreground: oklch(0.985 0 0);
+    --color-swu-primary: oklch(0.922 0 0);
+    --color-swu-primary-foreground: oklch(0.205 0 0);
+    --color-swu-secondary: oklch(0.269 0 0);
+    --color-swu-secondary-foreground: oklch(0.985 0 0);
+    --color-swu-muted: oklch(0.269 0 0);
+    --color-swu-muted-foreground: oklch(0.708 0 0);
+    --color-swu-accent: oklch(0.269 0 0);
+    --color-swu-accent-foreground: oklch(0.985 0 0);
+    --color-swu-destructive: oklch(0.704 0.191 22.216);
+    --color-swu-border: oklch(1 0 0 / 10%);
+    --color-swu-input: oklch(1 0 0 / 15%);
+    --color-swu-ring: oklch(0.556 0 0);
+    --color-swu-success: oklch(0.72 0.17 145);
+    --color-swu-warning: oklch(0.8 0.17 85);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-color-scheme="light"]) {
+      color-scheme: dark;
+      --color-swu-background: oklch(0.145 0 0);
+      --color-swu-foreground: oklch(0.985 0 0);
+      --color-swu-surface: oklch(0.205 0 0);
+      --color-swu-card: oklch(0.205 0 0);
+      --color-swu-card-foreground: oklch(0.985 0 0);
+      --color-swu-popover: oklch(0.205 0 0);
+      --color-swu-popover-foreground: oklch(0.985 0 0);
+      --color-swu-primary: oklch(0.922 0 0);
+      --color-swu-primary-foreground: oklch(0.205 0 0);
+      --color-swu-secondary: oklch(0.269 0 0);
+      --color-swu-secondary-foreground: oklch(0.985 0 0);
+      --color-swu-muted: oklch(0.269 0 0);
+      --color-swu-muted-foreground: oklch(0.708 0 0);
+      --color-swu-accent: oklch(0.269 0 0);
+      --color-swu-accent-foreground: oklch(0.985 0 0);
+      --color-swu-destructive: oklch(0.704 0.191 22.216);
+      --color-swu-border: oklch(1 0 0 / 10%);
+      --color-swu-input: oklch(1 0 0 / 15%);
+      --color-swu-ring: oklch(0.556 0 0);
+      --color-swu-success: oklch(0.72 0.17 145);
+      --color-swu-warning: oklch(0.8 0.17 85);
+    }
+  }
+
+  html,
+  body {
+    min-height: 0px;
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+      "Segoe UI", sans-serif;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    margin: 0px;
+    background-color: var(--color-swu-background);
+    color: var(--color-swu-foreground);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    display: block;
+    width: 100%;
+    min-height: 100dvh;
+  }
+
+  #embedded-app-root {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    min-height: 100dvh;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--spacing) * 4);
+  }
+
+  hr {
+    margin-block: calc(var(--spacing) * 2);
+    border-color: var(--color-swu-border);
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font-family: inherit;
+  }
+
+  /* The selection tint. Where the engine inherits highlight styles from the parent element (Chromium; the runtime
+     marks the root with data-highlight-inheritance), it is declared only on the elements that change
+     --color-swu-primary: a var() in a universal ::selection makes the engine compute a highlight style for every
+     element, about half the style cost of a newly inserted subtree. Elsewhere, and before the runtime starts, every
+     element matches it. */
+  :root::selection,
+  [data-tint]::selection,
+  [data-color-scheme]::selection,
+  .dark::selection,
+  :root:not([data-highlight-inheritance]) ::selection {
+    background-color: color-mix(in oklab, var(--color-swu-primary) 18%, transparent);
+  }
+}
+
+@layer components {
+  /* Structural primitives */
+  .vstack {
+    display: flex;
+    min-height: 0px;
+    min-width: 0px;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .hstack {
+    display: flex;
+    min-height: 0px;
+    min-width: 0px;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .zstack {
+    display: grid;
+    min-height: 0px;
+    min-width: 0px;
+    place-items: center;
+  }
+
+  /* ZStack children share one grid cell, matching SwiftUI overlay semantics
+     instead of auto-flowing into separate rows in the browser. */
+  .zstack > * {
+    grid-area: 1 / 1;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  /* Internal boundary used when modifiers layer multiple SwiftUI frames.
+     It carries the outer proposal while its child retains the inner frame's
+     own width/alignment and intrinsic sizing. */
+  .frame-box {
+    min-height: 0px;
+    min-width: 0px;
+  }
+
+  .flex-spacer {
+    min-height: 0px;
+    min-width: 0px;
+    flex: 1;
+  }
+
+  /* SwiftUI hit testing: a layout container that paints nothing (a stack,
+     a frame, a spacer, padding; see RenderNode._isHitTransparent) lets
+     pointer events reach what lies beneath it, such as the backdrop behind a
+     dialog's empty areas or a sibling layer of a ZStack. Its children stay
+     interactive; nested empty containers pass through as well. */
+  .passthrough {
+    pointer-events: none;
+  }
+  .passthrough > * {
+    pointer-events: auto;
+  }
+  .passthrough > .passthrough {
+    pointer-events: none;
+  }
+
+  /* A Spacer grows along the stack's main axis and stretches across its
+     cross-axis. This is the CSS equivalent of SwiftUI's flexible proposal. */
+  .vstack > .flex-spacer {
+    align-self: stretch;
+    width: 100%;
+    min-height: var(--spacer-min-length, 0px);
+  }
+
+  .hstack > .flex-spacer {
+    align-self: stretch;
+    height: 100%;
+    min-width: var(--spacer-min-length, 0px);
+  }
+
+  /* A flexible child makes its containing stack participate in the parent's
+     full proposal. Without this, a leading-aligned VStack would shrink an
+     HStack to its intrinsic contents and leave Spacer with no remainder. */
+  .vstack > .hstack:has(> .flex-spacer) {
+    align-self: stretch;
+    width: 100%;
+  }
+
+  .hstack > .vstack:has(> .flex-spacer) {
+    align-self: stretch;
+    height: 100%;
+  }
+
+  /* A Spacer inside an interactive label makes the control flexible too.
+     Propagate that proposal through the frame/padding/stack wrappers so a
+     settings-style row fills its card instead of shrink-wrapping in it. */
+  .frame-box[data-flexible-width="true"] > :only-child,
+  .frame-box > :only-child:is([data-flexible-width="true"], :has([data-flexible-width="true"])),
+  .padding-box:has([data-flexible-width="true"]),
+  .vstack:has([data-flexible-width="true"]) {
+    width: 100%;
+  }
+
+  .vstack:has([data-flexible-width="true"]) {
+    align-items: stretch;
+  }
+
+  [data-flexible-width="true"] {
+    align-self: stretch;
+    width: 100%;
+  }
+
+  .anchor-link[data-flexible-width="true"],
+  .navigation-link[data-flexible-width="true"],
+  .push-button[data-flexible-width="true"] {
+    display: flex;
+  }
+
+  .hstack > [data-flexible-width="true"] {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .frame-box[data-flexible-width="true"][data-frame-alignment="start"] > .push-button,
+  .frame-box[data-flexible-width="true"][data-frame-alignment="end start"] > .push-button,
+  .frame-box[data-flexible-width="true"][data-frame-alignment="center start"] > .push-button {
+    justify-content: flex-start;
+  }
+
+  .frame-box[data-flexible-width="true"][data-frame-alignment="start end"] > .push-button,
+  .frame-box[data-flexible-width="true"][data-frame-alignment="end"] > .push-button,
+  .frame-box[data-flexible-width="true"][data-frame-alignment="center end"] > .push-button {
+    justify-content: flex-end;
+  }
+
+  [data-flexible-width="true"] > .padding-box:only-child,
+  [data-flexible-width="true"] > .padding-box:only-child > .hstack:has(> .flex-spacer) {
+    width: 100%;
+  }
+
+  .hstack:has(> .flex-spacer) {
+    width: 100%;
+  }
+
+  .list-view {
+    margin: 0px;
+    display: flex;
+    list-style-type: none;
+    flex-direction: column;
+    padding: 0px;
+  }
+
+  .list-view[data-list-style="inset"],
+  .list-view[data-list-style="inset-grouped"] {
+    margin-inline: calc(var(--spacing) * 4);
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-swu-border);
+  }
+
+  .list-view[data-list-style="grouped"] {
+    gap: calc(var(--spacing) * 4);
+    background-color: var(--color-swu-muted);
+    padding: calc(var(--spacing) * 4);
+  }
+
+  /* A plain list runs edge to edge: no frame, only the hairlines between rows. */
+  /* SwiftUI Text keeps the line breaks in its string. */
+  [data-layout-leaf="text"] {
+    white-space: pre-line;
+  }
+
+  /* Monospaced text keeps its spaces: code and columns of figures depend on them. */
+  [data-layout-leaf="text"][style*="monospace"] {
+    white-space: pre-wrap;
+  }
+
+  .list-view[data-list-style="plain"] {
+    border-radius: 0;
+    border-style: solid;
+    border-width: 0px;
+    background-color: transparent;
+  }
+
+  /* A row's background layer is placed over its whole box, border included, so the hairline is drawn above it. */
+  .list-view[data-list-style="plain"] > .lazy-cell {
+    border-bottom-width: 0;
+  }
+  .list-view[data-list-style="plain"] > .lazy-cell:not(:has([data-list-row-separator="hidden"]))::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 1px;
+    background: var(--color-swu-border);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* SwiftUI swipeActions -------------------------------------------------- */
+  /* The row remains a normal Fiber-owned element.  Only its content layer is
+     translated by the browser interaction controller, so recycled rows keep
+     their identity and action buttons retain native focus/click semantics. */
+  .swipe-row {
+    position: relative;
+    min-width: 0;
+    overflow: hidden;
+    isolation: isolate;
+    touch-action: pan-y;
+  }
+
+  .swipe-content {
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+    background: inherit;
+    will-change: transform;
+    transition: transform 180ms cubic-bezier(.2, .8, .2, 1);
+  }
+
+  .swipe-actions {
+    position: absolute;
+    inset-block: 0;
+    z-index: 0;
+    display: flex;
+    min-width: max-content;
+    align-items: stretch;
+  }
+
+  /* Until the row is swiped open the actions stay out of sight: the content layer is transparent, so they would
+     otherwise show through behind it. */
+  .swipe-row:not([data-swipe-state="open"]) > .swipe-actions { visibility: hidden; }
+
+  .swipe-actions-leading { inset-inline-start: 0; }
+  .swipe-actions-trailing { inset-inline-end: 0; }
+
+  .swipe-actions > .push-button,
+  .swipe-actions > * > .push-button {
+    min-width: 72px;
+    height: 100%;
+    flex: 0 0 auto;
+    border-radius: 0;
+    border-width: 0;
+    box-shadow: none;
+  }
+
+  .swipe-row[data-swipe-state="open"] .swipe-actions {
+    pointer-events: auto;
+  }
+
+  .swipe-row[data-swipe-state="closed"] .swipe-actions {
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .swipe-content { transition-duration: 0ms !important; }
+  }
+
+  .scroll-view {
+    min-height: 0px;
+    min-width: 0px;
+  }
+
+  .scroll-vertical {
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .scroll-horizontal {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .scroll-both {
+    overflow: auto;
+  }
+
+  /* SwiftUI scroll-target modifiers map to the browser's native scroll-snap
+     primitives. The semantic attributes are emitted by Core, while this
+     small host stylesheet keeps snapping opt-in and composable. */
+  .scroll-view[data-scroll-target-behavior="paging"] {
+    scroll-snap-type: both mandatory;
+  }
+
+  .scroll-view[data-scroll-target-behavior="view-aligned"] {
+    scroll-snap-type: both proximity;
+  }
+
+  .scroll-view[data-scroll-target-behavior="continuous"] {
+    scroll-snap-type: none;
+  }
+
+  /* SwiftUI aligns scroll targets (the children of `scrollTargetLayout()`)
+     to the leading edge of the visible region for both `.viewAligned` and
+     `.paging` (whose pages are usually `containerRelativeFrame`-sized). A lazy
+     collection's spacers stand for rows that are not rendered and are not
+     targets: snapped to, the browser moved the scroller to a spacer's edge
+     each time the window changed, which moved the window again, forever. */
+  [data-scroll-target-layout="true"] > :not([data-lazy-spacer]) {
+    scroll-snap-align: start;
+    scroll-snap-stop: normal;
+  }
+
+  .scroll-view[data-scroll-target-behavior="paging"] [data-scroll-target-layout="true"] > :not([data-lazy-spacer]) {
+    scroll-snap-stop: always;
+  }
+
+  .scroll-view[data-scroll-indicators="hidden"] {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .scroll-view[data-scroll-indicators="hidden"]::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scroll-view[data-scroll-disabled="true"] {
+    overflow: hidden !important;
+  }
+
+  .scroll-view[data-scroll-content-background="hidden"] {
+    background: transparent;
+  }
+
+  .grid-layout {
+    display: grid;
+    min-height: 0px;
+    min-width: 0px;
+  }
+
+  .scroll-view > * {
+    min-width: 0;
+  }
+
+  /* Viewport proposals are supplied by the host, not by nested component
+     min-height rules. GeometryReader's children use resolved layout boxes. */
+  .geometry-reader {
+    min-height: calc(var(--spacing) * 6);
+    min-width: 0px;
+  }
+
+  .lazy-vstack,
+  .lazy-hstack,
+  .grid-layout {
+    content-visibility: auto;
+  }
+
+  /* Browser virtualization keeps only the active logical range in the DOM.
+     Spacers preserve the full scroll extent while cells remain ordinary flex
+     or grid children, so row layout and SwiftUI spacing continue to apply. */
+  .lazy-spacer {
+    flex: none;
+    min-width: 0;
+    min-height: 0;
+    pointer-events: none;
+  }
+
+  .lazy-cell {
+    min-width: 0;
+  }
+
+  .grid-layout > .lazy-spacer {
+    grid-column: 1 / -1;
+  }
+
+  .hgrid > .lazy-spacer {
+    grid-column: auto;
+    grid-row: 1 / -1;
+  }
+
+  .hgrid {
+    grid-auto-flow: column;
+  }
+
+  .symbol-icon {
+    display: inline-flex;
+    min-width: 1em;
+    align-items: center;
+    justify-content: center;
+    --leading: 1;
+    line-height: 1;
+  }
+
+  /* `imageScale(_:)`: symbols scale relative to the surrounding font. */
+  .symbol-icon[data-image-scale],
+  [data-image-scale] .symbol-icon {
+    font-size: calc(1em * var(--image-scale, 1));
+  }
+
+  /* Lucide is injected only by the browser adapter. Keep this CSS generic so
+     symbols retain the same inherited color and font-relative size as their
+     Core text fallback on native/WASI hosts. */
+  .symbol-icon > svg.lucide-glyph {
+    display: block;
+    width: 1em;
+    height: 1em;
+    flex: none;
+    color: currentColor;
+    /* Lucide's default stroke is 2. Applications can tune the icon weight
+       globally or per subtree, e.g. --icon-stroke-width: 1.7. */
+    stroke-width: var(--icon-stroke-width, 2);
+  }
+
+  /* Some SF Symbols do not have a Lucide equivalent. Keep icon-only adaptive
+     navigation legible rather than leaving an empty hit target in the rail. */
+  .tab-icon[data-lucide-fallback="true"]::before {
+    content: attr(data-tab-fallback);
+    font-size: 0.85rem;
+    font-weight: 650;
+    line-height: 1;
+  }
+
+  .picture-view {
+    display: block;
+    height: auto;
+    max-width: 100%;
+    object-fit: contain;
+    /* An image is content, not a drag source: the browser's native image drag would otherwise cancel the
+       pointer stream of a DragGesture that starts on one. */
+    -webkit-user-drag: none;
+    user-select: none;
+  }
+
+  .async-image {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+  }
+
+  .async-image > img:not(.async-image-loader) {
+    display: block;
+    height: auto;
+    max-width: 100%;
+    object-fit: contain;
+    -webkit-user-drag: none;
+    user-select: none;
+  }
+
+  .async-image-loader {
+    display: none;
+  }
+
+  /* Native controls */
+  .push-button {
+    &:hover {
+      @media (hover: hover) {
+        opacity: 90%;
+      }
+    }
+  }
+
+  /* PasteButton keeps native button semantics and the same design tokens as
+     Button, but has its own stable selector so a custom host can hide or
+     annotate clipboard capability without changing ordinary buttons. */
+  .paste-button {
+    display: inline-flex;
+    min-height: calc(var(--spacing) * 9);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--spacing) * 2);
+    border-radius: var(--radius-md);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-swu-primary);
+    background-color: var(--color-swu-primary);
+    padding-inline: calc(var(--spacing) * 3);
+    padding-block: calc(var(--spacing) * 2);
+    font-size: var(--text-sm);
+    line-height: var(--leading, var(--text-sm--line-height));
+    font-weight: var(--font-weight-medium);
+    color: var(--color-swu-primary-foreground);
+    --shadow-layer: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+    transition-property: background-color, border-color, color, box-shadow, opacity, transform;
+    transition-duration: 150ms;
+    --ease: var(--ease-out);
+    transition-timing-function: var(--ease-out);
+    --outline-line: none;
+    outline-style: none;
+    -webkit-user-select: none;
+    user-select: none;
+    &:hover {
+      @media (hover: hover) {
+        opacity: 90%;
+      }
+    }
+    &:focus-visible {
+      outline-style: var(--outline-line, solid);
+      outline-width: 2px;
+      outline-offset: 2px;
+      outline-color: var(--color-swu-ring);
+    }
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 50%;
+    }
+  }
+
+  .paste-button[data-paste-available="false"] {
+    opacity: 0.55;
+  }
+
+  .button-automatic,
+  .button-bordered-prominent {
+    border-color: var(--color-swu-primary);
+    background-color: var(--color-swu-primary);
+    color: var(--color-swu-primary-foreground);
+  }
+
+  .button-bordered {
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-swu-accent);
+        color: var(--color-swu-accent-foreground);
+      }
+    }
+  }
+
+  .push-button[data-role="destructive"] {
+    &:hover {
+      @media (hover: hover) {
+        opacity: 90%;
+      }
+    }
+  }
+
+  .push-button[data-role="cancel"] {
+    border-color: var(--color-swu-border);
+    background-color: var(--color-swu-surface);
+    color: var(--color-swu-foreground);
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-swu-accent);
+        color: var(--color-swu-accent-foreground);
+      }
+    }
+  }
+
+  .button-plain,
+  .button-borderless {
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-swu-accent);
+        color: var(--color-swu-accent-foreground);
+      }
+    }
+  }
+
+  .button-link {
+    &:hover {
+      @media (hover: hover) {
+        text-decoration-line: underline;
+      }
+    }
+  }
+
+  .control-mini {
+    min-height: calc(var(--spacing) * 7);
+    padding-inline: calc(var(--spacing) * 2);
+    padding-block: var(--spacing);
+    font-size: var(--text-xs);
+    line-height: var(--text-xs--line-height);
+  }
+  .control-small {
+    min-height: calc(var(--spacing) * 8);
+    padding-inline: calc(var(--spacing) * 2.5);
+    padding-block: calc(var(--spacing) * 1.5);
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+  }
+  .control-large {
+    min-height: calc(var(--spacing) * 11);
+    padding-inline: calc(var(--spacing) * 4);
+    padding-block: calc(var(--spacing) * 2.5);
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+  }
+  .control-extraLarge {
+    min-height: calc(var(--spacing) * 12);
+    padding-inline: calc(var(--spacing) * 5);
+    padding-block: calc(var(--spacing) * 3);
+    font-size: var(--text-lg);
+    line-height: var(--text-lg--line-height);
+  }
+
+  [data-tint] {
+    --color-swu-primary: var(--tint-color);
+    --color-swu-ring: var(--tint-color);
+  }
+
+  /* SwiftUI tints only the chrome it draws: prominent buttons are filled
+     with the tint and borderless ones use it for their label. Plain buttons
+     and custom ButtonStyles own their appearance and ignore the tint. */
+  .button-automatic[data-tint],
+  .button-bordered-prominent[data-tint] {
+    border-color: var(--tint-color);
+    background-color: var(--tint-color);
+  }
+
+  .anchor-link[data-tint],
+  .navigation-link[data-tint] {
+    color: var(--tint-color);
+  }
+
+  .anchor-link {
+    color: var(--color-swu-primary);
+    text-underline-offset: 4px;
+    &:hover {
+      @media (hover: hover) {
+        text-decoration-line: underline;
+      }
+    }
+  }
+
+  .navigation-link {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    color: var(--color-swu-primary);
+    text-underline-offset: 4px;
+    &:hover {
+      @media (hover: hover) {
+        text-decoration-line: underline;
+      }
+    }
+  }
+
+  /* A root Form still fills its viewport, while individual fields retain a
+     readable measure instead of stretching a single-line control across a
+     desktop monitor. HStack/VStack parents can opt into a wider field with a
+     normal SwiftUI frame modifier. */
+  .field-input,
+  .text-area {
+    max-width: 36rem;
+  }
+
+  /* Select keeps native keyboard/accessibility behavior, but uses the same
+     quiet chevron treatment as the Starting Point field primitives. The
+     gradient is self-contained, so the browser runtime does not need an
+     external icon asset. */
+  .select-menu {
+    background-image:
+      linear-gradient(45deg, transparent 50%, var(--color-swu-muted-foreground) 50%),
+      linear-gradient(135deg, var(--color-swu-muted-foreground) 50%, transparent 50%);
+    background-position:
+      calc(100% - 0.9rem) 50%,
+      calc(100% - 0.65rem) 50%;
+    background-repeat: no-repeat;
+    background-size: 0.25rem 0.25rem, 0.25rem 0.25rem;
+  }
+
+  .picker-control {
+    display: flex;
+    width: 100%;
+    max-width: var(--container-sm);
+    flex-direction: column;
+    align-items: flex-start;
+    gap: calc(var(--spacing) * 1.5);
+  }
+
+  .section-block {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--spacing) * 2);
+  }
+
+  .section-heading {
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .section-trailer {
+    font-size: 0.8125rem;
+  }
+
+  /* Grouped rows: one rounded card per section, a hairline between rows, a quiet disclosure chevron. */
+  .backdrop-layer:has(> .section-card),
+  .section-card {
+    border-radius: 1.625rem;
+    overflow: hidden;
+  }
+  .section-rows > .section-row + .section-row {
+    border-top: 1px solid #e8e8e8;
+  }
+  /* Under an icon row the hairline starts at the label, not at the card edge. */
+  .section-rows > .section-row + .section-row:has(.icon-label > .symbol-icon) {
+    border-top: 0;
+    position: relative;
+  }
+  .section-rows > .section-row + .section-row:has(.icon-label > .symbol-icon)::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 3.5rem;
+    right: 0;
+    height: 1px;
+    background: #e8e8e8;
+  }
+  .section-heading {
+    color: #848489;
+    padding-inline: 1rem;
+    padding-bottom: .375rem;
+  }
+  .section-trailer {
+    color: #848489;
+    padding-inline: 1rem;
+  }
+  /* Rows read in the label colour with a tinted icon, as in a grouped list. */
+  .section-card .navigation-link,
+  .section-card .anchor-link {
+    color: var(--color-swu-foreground);
+  }
+  /* The whole row is the target, not just the label inside its padding. */
+  .section-row .navigation-link::after,
+  .section-row .anchor-link::after {
+    content: "";
+    position: absolute;
+    inset: -12px -16px;
+  }
+  .section-card .navigation-link .icon-label > .symbol-icon,
+  .section-card .anchor-link .icon-label > .symbol-icon {
+    color: var(--form-tint-color, var(--tint-color, var(--color-swu-primary)));
+  }
+  /* A row's icon is a 22pt glyph in a fixed column, so labels line up as they do in a native list. */
+  .section-card .icon-label:has(> .symbol-icon) {
+    gap: 1rem;
+  }
+  .section-card .icon-label > .symbol-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    flex: none;
+  }
+  .section-card .icon-label > .symbol-icon > svg {
+    width: 100%;
+    height: 100%;
+    stroke-width: 1.6;
+  }
+  .section-card .button-borderless:not([data-role]) {
+    color: var(--tint-color, var(--color-swu-primary));
+  }
+  /* A picker row: the choice sits at the trailing edge in the tint colour, without a field around it. */
+  .picker-row {
+    max-width: none;
+  }
+  .picker-row .picker-label {
+    font: inherit;
+    font-weight: inherit;
+    line-height: inherit;
+  }
+  .picker-row .select-menu {
+    border-width: 0;
+    background-color: transparent;
+    box-shadow: none;
+    padding: 0 0 0 0.25rem;
+    min-height: 0;
+    width: auto;
+    color: var(--form-tint-color, var(--tint-color, var(--color-swu-primary)));
+    font: inherit;
+    appearance: none;
+    padding-right: 1.1rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16' fill='none' stroke='%23A33FD9' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 6l3-3 3 3M2 10l3 3 3-3'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0 center;
+    background-size: 0.6rem 0.95rem;
+    text-align: right;
+  }
+  .disclosure-indicator {
+    color: var(--color-swu-muted-foreground);
+    font-size: 0.8em;
+    opacity: 0.6;
+  }
+
+  .section-block > .section-heading + * {
+    margin-top: 0px;
+  }
+
+  .color-input {
+    cursor: pointer;
+    transition-property: border-color, box-shadow;
+    transition-timing-function: var(--ease, var(--default-transition-timing-function));
+    transition-duration: 150ms;
+    outline-style: none;
+    &:focus-visible {
+      border-color: var(--color-swu-ring);
+      --ring-layer: 0 0 0 calc(3px + 0px) var(--ring-color, currentcolor);
+      box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+      --ring-color: color-mix(in oklab, var(--color-swu-ring) 20%, transparent);
+    }
+  }
+
+  /* iOS colour well: the chosen colour in a round swatch inside a hue ring. */
+  .color-input {
+    appearance: none;
+    width: 2rem;
+    height: 2rem;
+    padding: 0.2rem;
+    border: 0.15rem solid transparent;
+    border-radius: 9999px;
+    background: linear-gradient(var(--color-swu-background), var(--color-swu-background)) padding-box,
+      conic-gradient(#ff5e5e, #ffd35e, #7dff5e, #5effe0, #5e7dff, #d35eff, #ff5e5e) border-box;
+  }
+  .color-input::-webkit-color-swatch-wrapper { padding: 0; }
+  .color-input::-webkit-color-swatch { border: 0; border-radius: 9999px; }
+  .color-input::-moz-color-swatch { border: 0; border-radius: 9999px; }
+
+  .toggle-switch {
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .toggle-switch:has(.check-input:disabled),
+  .toggle-switch:has(.toggle-checkbox:disabled) {
+    cursor: not-allowed;
+    opacity: 50%;
+  }
+
+  /* `.toggleStyle(.checkbox)`: a native checkbox tinted by the accent. */
+  .toggle-checkbox {
+    width: calc(var(--spacing) * 4);
+    height: calc(var(--spacing) * 4);
+    flex-shrink: 0;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    outline-style: none;
+    &:focus-visible {
+      --ring-layer: 0 0 0 calc(3px + 0px) color-mix(in oklab, var(--color-swu-ring) 20%, transparent);
+      box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+    }
+    accent-color: var(--tint-color, var(--color-swu-primary));
+  }
+
+  /* `.toggleStyle(.button)`: selected state reads as a filled button. */
+  .toggle-button[aria-pressed="false"] {
+    border-color: var(--color-swu-border);
+    background-color: var(--color-swu-surface);
+    color: var(--color-swu-foreground);
+  }
+
+  .toggle-button[aria-pressed="true"] {
+    border-color: var(--tint-color, var(--color-swu-primary));
+    background-color: var(--tint-color, var(--color-swu-primary));
+    color: var(--color-swu-primary-foreground);
+  }
+
+  /* `.pickerStyle(.segmented)`: segments in a rounded track; the selected
+     segment is raised like UISegmentedControl. */
+  .segmented-picker {
+    display: flex;
+    width: 100%;
+    max-width: none;
+    flex-direction: row;
+    align-items: stretch;
+    gap: calc(var(--spacing) * 0.5);
+    border-radius: var(--radius-lg);
+    background-color: var(--color-swu-muted);
+    padding: calc(var(--spacing) * 0.5);
+  }
+
+  .segment-item {
+    display: inline-flex;
+    min-height: calc(var(--spacing) * 7);
+    min-width: 0px;
+    flex: 1;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--spacing) * 1.5);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border-radius: var(--radius-md);
+    border-style: solid;
+    border-width: 0px;
+    background-color: transparent;
+    padding-inline: calc(var(--spacing) * 3);
+    padding-block: var(--spacing);
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-swu-foreground);
+    transition-property: background-color, box-shadow, color;
+    transition-duration: 150ms;
+    --ease: var(--ease-out);
+    transition-timing-function: var(--ease-out);
+    outline-style: none;
+    -webkit-user-select: none;
+    user-select: none;
+    &:focus-visible {
+      --ring-layer: 0 0 0 calc(3px + 0px) color-mix(in oklab, var(--color-swu-ring) 30%, transparent);
+      box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+    }
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 50%;
+    }
+  }
+
+  .segment-item[aria-checked="true"] {
+    background-color: var(--color-swu-background);
+    --shadow-layer: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+  }
+
+  .segmented-picker[style*="--tint-color"] .segment-item[aria-checked="true"] {
+    background-color: var(--tint-color);
+    color: var(--color-swu-primary-foreground);
+  }
+
+  .slider-control {
+    accent-color: var(--color-swu-primary);
+    &:focus-visible {
+      --ring-layer: 0 0 0 calc(3px + 0px) color-mix(in oklab, var(--color-swu-ring) 20%, transparent);
+      box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+    }
+  }
+
+  .slider-control:active::-webkit-slider-thumb {
+    transform: scale(1.08);
+  }
+
+  .color-picker,
+  .toggle-switch,
+  .icon-label {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+  }
+
+  /* DatePicker keeps a native input for forms and progressive enhancement,
+     while the browser runtime adds the polished trigger/calendar surface. */
+  .date-picker {
+    position: relative;
+    display: flex;
+    width: 100%;
+    max-width: var(--container-sm);
+    flex-direction: column;
+    align-items: flex-start;
+    gap: calc(var(--spacing) * 1.5);
+  }
+
+  .date-input:not(.date-input-native) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .date-input-native {
+    min-height: calc(var(--spacing) * 9);
+    border-radius: var(--radius-md);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-swu-input);
+    background-color: var(--color-swu-background);
+    padding-inline: calc(var(--spacing) * 3);
+    padding-block: calc(var(--spacing) * 2);
+    font-size: var(--text-sm);
+    line-height: var(--leading, var(--text-sm--line-height));
+    color: var(--color-swu-foreground);
+    --shadow-layer: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+    --outline-line: none;
+    outline-style: none;
+    &:focus {
+      border-color: var(--color-swu-ring);
+      --ring-layer: var(--ring-inset, ) 0 0 0 calc(3px + 0px) var(--ring-color, currentcolor);
+      box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+      --ring-color: color-mix(in oklab, var(--color-swu-ring) 20%, transparent);
+    }
+    width: 100%;
+  }
+
+  .date-picker-trigger {
+    display: inline-flex;
+    min-height: calc(var(--spacing) * 9);
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--spacing) * 2);
+    border-radius: var(--radius-md);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-swu-input);
+    background-color: var(--color-swu-background);
+    padding-inline: calc(var(--spacing) * 3);
+    padding-block: calc(var(--spacing) * 2);
+    text-align: left;
+    font-size: var(--text-sm);
+    line-height: var(--leading, var(--text-sm--line-height));
+    font-weight: var(--font-weight-normal);
+    color: var(--color-swu-foreground);
+    --shadow-layer: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+    transition-property: border-color, box-shadow, background-color, color;
+    transition-duration: 150ms;
+    --ease: var(--ease-out);
+    transition-timing-function: var(--ease-out);
+    --outline-line: none;
+    outline-style: none;
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-swu-accent);
+        color: var(--color-swu-accent-foreground);
+      }
+    }
+    &:focus {
+      border-color: var(--color-swu-ring);
+      --ring-layer: var(--ring-inset, ) 0 0 0 calc(3px + 0px) color-mix(in oklab, var(--color-swu-ring) 20%, transparent);
+      box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+    }
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 50%;
+    }
+  }
+
+  .date-picker-trigger > .symbol-icon {
+    width: calc(var(--spacing) * 4);
+    height: calc(var(--spacing) * 4);
+    flex-shrink: 0;
+    color: var(--color-swu-muted-foreground);
+  }
+
+  .date-picker-value {
+    min-width: 0px;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .date-picker-value[data-placeholder] {
+    color: var(--color-swu-muted-foreground);
+  }
+
+  
+
+  
+
+  .date-picker-header {
+    margin-bottom: calc(var(--spacing) * 3);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--spacing) * 2);
+  }
+
+  .date-picker-month {
+    flex: 1;
+    text-align: center;
+    font-size: var(--text-sm);
+    line-height: var(--leading, var(--text-sm--line-height));
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-swu-popover-foreground);
+  }
+
+  .date-picker-nav {
+    display: inline-flex;
+    width: calc(var(--spacing) * 8);
+    height: calc(var(--spacing) * 8);
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    color: var(--color-swu-muted-foreground);
+    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke;
+    transition-timing-function: var(--ease, var(--default-transition-timing-function));
+    transition-duration: 150ms;
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-swu-accent);
+        color: var(--color-swu-accent-foreground);
+      }
+    }
+    &:focus-visible {
+      outline-style: var(--outline-line, solid);
+      outline-width: 2px;
+      outline-offset: 2px;
+      outline-color: var(--color-swu-ring);
+    }
+  }
+
+  
+  .date-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: var(--spacing);
+  }
+
+  .date-picker-weekday {
+    padding-block: var(--spacing);
+    text-align: center;
+    font-size: 0.7rem;
+    font-weight: var(--font-weight-medium);
+    color: var(--color-swu-muted-foreground);
+  }
+
+  .date-picker-day {
+    display: inline-flex;
+    aspect-ratio: 1 / 1;
+    width: calc(var(--spacing) * 9);
+    height: calc(var(--spacing) * 9);
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    line-height: var(--leading, var(--text-sm--line-height));
+    color: var(--color-swu-popover-foreground);
+    font-variant-numeric: tabular-nums;
+    transition-property: background-color, color, transform;
+    transition-duration: 150ms;
+    --ease: var(--ease-out);
+    transition-timing-function: var(--ease-out);
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-swu-accent);
+        color: var(--color-swu-accent-foreground);
+      }
+    }
+    &:focus-visible {
+      z-index: 10;
+      outline-style: var(--outline-line, solid);
+      outline-width: 2px;
+      outline-offset: 1px;
+      outline-color: var(--color-swu-ring);
+    }
+  }
+
+  .date-picker-day[data-outside-month="true"] {
+    color: color-mix(in oklab, var(--color-swu-muted-foreground) 50%, transparent);
+  }
+
+  .date-picker-day[data-selected="true"] {
+    background-color: var(--color-swu-primary);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-swu-primary-foreground);
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-swu-primary);
+        color: var(--color-swu-primary-foreground);
+      }
+    }
+  }
+
+  .date-picker-day:disabled {
+    pointer-events: none;
+    opacity: 40%;
+  }
+
+  /* MultiDatePicker is rendered as a semantic, keyboard-accessible calendar
+     rather than a single-value browser date input. The grid remains compact
+     on desktop and shrinks fluidly on narrow touch viewports. */
+  .multi-date-picker {
+    display: flex;
+    width: 100%;
+    max-width: var(--container-sm);
+    flex-direction: column;
+    gap: calc(var(--spacing) * 3);
+    border-radius: var(--radius-lg);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: var(--color-swu-background);
+    padding: calc(var(--spacing) * 3);
+    color: var(--color-swu-foreground);
+    container-type: inline-size;
+  }
+
+  .multi-date-picker[aria-disabled="true"] {
+    opacity: 60%;
+  }
+
+  .multi-date-picker-label {
+    font-size: var(--text-sm);
+    --leading: 1;
+    line-height: 1;
+    font-weight: var(--font-weight-medium);
+    color: var(--color-swu-foreground);
+  }
+
+  .multi-date-picker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--spacing) * 2);
+  }
+
+  .multi-date-picker-month {
+    min-width: 0px;
+    flex: 1;
+    text-align: center;
+    font-size: var(--text-sm);
+    line-height: var(--leading, var(--text-sm--line-height));
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-swu-foreground);
+  }
+
+  .multi-date-picker-nav {
+    display: inline-flex;
+    width: calc(var(--spacing) * 8);
+    height: calc(var(--spacing) * 8);
+    flex-shrink: 0;
+    touch-action: manipulation;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    font-size: var(--text-lg);
+    --leading: 1;
+    line-height: 1;
+    color: var(--color-swu-muted-foreground);
+    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke;
+    transition-timing-function: var(--ease, var(--default-transition-timing-function));
+    transition-duration: 150ms;
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-swu-accent);
+        color: var(--color-swu-accent-foreground);
+      }
+    }
+    &:focus-visible {
+      outline-style: var(--outline-line, solid);
+      outline-width: 2px;
+      outline-offset: 2px;
+      outline-color: var(--color-swu-ring);
+    }
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 40%;
+    }
+  }
+
+  .multi-date-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: var(--spacing);
+  }
+
+  .multi-date-picker-weekday {
+    padding-block: var(--spacing);
+    text-align: center;
+    font-size: 0.7rem;
+    font-weight: var(--font-weight-medium);
+    color: var(--color-swu-muted-foreground);
+  }
+
+  .multi-date-picker-blank {
+    aspect-ratio: 1 / 1;
+    width: calc(var(--spacing) * 9);
+    height: calc(var(--spacing) * 9);
+  }
+
+  .multi-date-picker-day {
+    display: inline-flex;
+    aspect-ratio: 1 / 1;
+    width: calc(var(--spacing) * 9);
+    height: calc(var(--spacing) * 9);
+    touch-action: manipulation;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    line-height: var(--leading, var(--text-sm--line-height));
+    color: var(--color-swu-foreground);
+    font-variant-numeric: tabular-nums;
+    transition-property: background-color, color, transform;
+    transition-duration: 150ms;
+    --ease: var(--ease-out);
+    transition-timing-function: var(--ease-out);
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-swu-accent);
+        color: var(--color-swu-accent-foreground);
+      }
+    }
+    &:focus-visible {
+      z-index: 10;
+      outline-style: var(--outline-line, solid);
+      outline-width: 2px;
+      outline-offset: 1px;
+      outline-color: var(--color-swu-ring);
+    }
+    &:active {
+      scale: 95% 95%;
+    }
+  }
+
+  .multi-date-picker-day[data-selected="true"] {
+    background-color: var(--color-swu-primary);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-swu-primary-foreground);
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-swu-primary);
+        color: var(--color-swu-primary-foreground);
+      }
+    }
+  }
+
+  .multi-date-picker-day[aria-current="date"]:not([data-selected="true"]) {
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-swu-primary);
+    --ring-layer: var(--ring-inset, ) 0 0 0 calc(1px + 0px) color-mix(in oklab, var(--color-swu-primary) 50%, transparent);
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+    --ring-inset: inset;
+  }
+
+  .multi-date-picker-day:disabled {
+    pointer-events: none;
+    cursor: not-allowed;
+    opacity: 35%;
+  }
+
+  .multi-date-picker-selection-summary {
+    font-size: var(--text-xs);
+    line-height: var(--leading, var(--text-xs--line-height));
+    color: var(--color-swu-muted-foreground);
+  }
+
+  @container (max-width: 18rem) {
+    .multi-date-picker-day,
+    .multi-date-picker-blank {
+      width: calc(var(--spacing) * 8);
+      height: calc(var(--spacing) * 8);
+    }
+  }
+
+  .spinner-ring {
+    display: inline-block;
+    box-sizing: border-box;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 9999px;
+    border: 2px solid color-mix(in srgb, currentColor 25%, transparent);
+    border-top-color: currentColor;
+    animation: swu-spin 0.8s linear infinite;
+  }
+
+  .progress-ring {
+    display: inline-block;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 9999px;
+    background: conic-gradient(currentColor var(--progress-value, 0%), color-mix(in srgb, currentColor 22%, transparent) 0);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  }
+
+  .progress-bar {
+    height: calc(var(--spacing) * 2);
+    width: 100%;
+    overflow: hidden;
+    border-radius: calc(infinity * 1px);
+    border-style: solid;
+    border-width: 0px;
+    background-color: var(--color-swu-muted);
+    accent-color: var(--color-swu-primary);
+    max-width: 36rem;
+    appearance: none;
+    display: block;
+    width: 100%;
+    height: 0.5rem;
+    min-height: 0.5rem;
+  }
+
+  .progress-bar::-webkit-progress-bar {
+    border-radius: 9999px;
+    background: var(--color-swu-muted);
+  }
+
+  .progress-bar::-webkit-progress-value {
+    border-radius: 9999px;
+    background: var(--color-swu-primary);
+    transition: width 180ms ease-out;
+  }
+
+  .progress-bar::-moz-progress-bar {
+    border-radius: 9999px;
+    background: var(--color-swu-primary);
+    transition: width 180ms ease-out;
+  }
+
+  .progress-bar:not([value]) {
+    background: linear-gradient(90deg, var(--color-swu-muted) 0%, var(--color-swu-primary) 45%, var(--color-swu-muted) 100%);
+    background-size: 220% 100%;
+    animation: swu-progress-indeterminate 1.2s ease-in-out infinite;
+  }
+
+  .stepper-control {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+  }
+
+  .stepper-control > button {
+    display: inline-flex;
+    width: calc(var(--spacing) * 8);
+    height: calc(var(--spacing) * 8);
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    border-style: var(--border-line, solid);
+    border-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: var(--color-swu-surface);
+    color: var(--color-swu-foreground);
+    transition-property: background-color, border-color, box-shadow, transform;
+    transition-timing-function: var(--ease, var(--default-transition-timing-function));
+    transition-duration: 150ms;
+    --outline-line: none;
+    outline-style: none;
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-swu-muted);
+      }
+    }
+    &:focus-visible {
+      border-color: var(--color-swu-ring);
+      --ring-layer: var(--ring-inset, ) 0 0 0 calc(3px + 0px) var(--ring-color, currentcolor);
+      box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+      --ring-color: color-mix(in oklab, var(--color-swu-ring) 20%, transparent);
+    }
+    &:active {
+      scale: 95% 95%;
+    }
+    &:disabled {
+      pointer-events: none;
+      opacity: 50%;
+    }
+  }
+
+  /* The value stays in the accessibility tree (role=spinbutton, aria-valuenow) and out of the layout. */
+  .stepper-control > .stepper-value {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .menu-popup {
+    position: relative;
+    display: inline-block;
+  }
+
+  .menu-popup > summary {
+    display: inline-flex;
+    min-height: calc(var(--spacing) * 9);
+    cursor: pointer;
+    list-style-type: none;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    border-radius: var(--radius-md);
+    border-style: var(--border-line, solid);
+    border-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: var(--color-swu-surface);
+    padding-inline: calc(var(--spacing) * 3);
+    padding-block: calc(var(--spacing) * 2);
+    font-size: var(--text-sm);
+    line-height: var(--leading, var(--text-sm--line-height));
+    font-weight: var(--font-weight-medium);
+    color: var(--color-swu-foreground);
+    --shadow-layer: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+    transition-property: background-color, border-color, box-shadow, transform;
+    transition-duration: 150ms;
+    --ease: var(--ease-out);
+    transition-timing-function: var(--ease-out);
+    --outline-line: none;
+    outline-style: none;
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-swu-accent);
+        color: var(--color-swu-accent-foreground);
+      }
+    }
+    &:focus-visible {
+      --ring-layer: var(--ring-inset, ) 0 0 0 calc(3px + 0px) var(--ring-color, currentcolor);
+      box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+      --ring-color: color-mix(in oklab, var(--color-swu-ring) 20%, transparent);
+    }
+  }
+
+  .menu-popup > summary::after {
+    content: "";
+    width: 0.4rem;
+    height: 0.4rem;
+    margin-top: -0.2rem;
+    transform: rotate(45deg);
+    border-right: 1px solid currentColor;
+    border-bottom: 1px solid currentColor;
+    transition: transform 150ms ease-out;
+  }
+
+  .menu-popup[open] > summary::after {
+    margin-top: 0.2rem;
+    transform: rotate(225deg);
+  }
+
+  .menu-plain > summary {
+    min-height: 0px;
+    border-color: transparent;
+    background-color: transparent;
+    padding: 0px;
+    font-family: inherit;
+    --shadow-layer: 0 0 #0000;
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+    &:hover {
+      @media (hover: hover) {
+        background-color: transparent;
+      }
+    }
+  }
+  .menu-plain > summary {
+    color: inherit;
+  }
+  .menu-plain > summary::after {
+    display: none;
+  }
+
+  .menu-popup > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  /* The panel is a top-layer popover that the host places under the summary (see `installMenus` in embedded-dom.js). */
+  .menu-popup > [role="menu"] {
+    position: fixed;
+    inset: auto;
+    margin: 0px;
+    width: max-content;
+    height: max-content;
+    overflow: visible;
+    transform-origin: 0 0;
+  }
+
+  .menu-popup[open] > [role="menu"] {
+    animation: swu-popover-in 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .menu-popup > [role="menu"] button {
+    &:focus-visible {
+      --outline-line: none;
+      outline-style: none;
+    }
+  }
+
+  /* contextMenu: a top-layer popover positioned at the pointer by the host. */
+  .context-menu-panel {
+    position: fixed;
+    z-index: 50;
+    margin: 0px;
+    display: flex;
+    min-width: calc(var(--spacing) * 44);
+    flex-direction: column;
+    border-radius: var(--radius-md);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: var(--color-swu-popover);
+    padding: var(--spacing);
+    color: var(--color-swu-popover-foreground);
+    --shadow-layer: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    --ring-layer: 0 0 0 calc(1px + 0px) color-mix(in oklab, var(--color-black) 5%, transparent);
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+    inset: auto;
+    width: max-content;
+    height: max-content;
+  }
+
+  .context-menu-panel:not([data-open="true"]):not(:popover-open) {
+    display: none;
+  }
+
+  .context-menu-panel[role="menu"] button {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    border-radius: var(--radius-sm);
+    border-style: var(--border-line, solid);
+    border-width: 0px;
+    background-color: transparent;
+    padding-inline: calc(var(--spacing) * 3);
+    padding-block: calc(var(--spacing) * 2);
+    text-align: left;
+    font-size: var(--text-sm);
+    line-height: var(--leading, var(--text-sm--line-height));
+    color: var(--color-swu-popover-foreground);
+    --shadow-layer: 0 0 #0000;
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke;
+    transition-timing-function: var(--ease, var(--default-transition-timing-function));
+    transition-duration: 100ms;
+    --outline-line: none;
+    outline-style: none;
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-swu-accent);
+        color: var(--color-swu-accent-foreground);
+      }
+    }
+    &:focus-visible {
+      background-color: var(--color-swu-accent);
+    }
+  }
+
+  .option-item {
+    padding-inline: calc(var(--spacing) * 2);
+    padding-block: var(--spacing);
+  }
+
+  /* OutlineGroup is a tree surface rather than a stack of independent
+     disclosure cards. Keep the native details/summary affordance supplied by
+     DisclosureGroup, but flatten its row chrome so indentation and keyed
+     siblings read like one file/navigation tree. */
+  .outline-group {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .outline-group .disclosure-group {
+    border-radius: 0;
+    border-style: solid;
+    border-width: 0px;
+    border-bottom-style: solid;
+    border-bottom-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: transparent;
+    --shadow-layer: 0 0 #0000;
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+  }
+
+  .outline-group .disclosure-summary {
+    border-radius: 0;
+    padding-inline: calc(var(--spacing) * 2);
+    padding-block: calc(var(--spacing) * 2);
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+  }
+
+  .disclosure-summary {
+    position: relative;
+    & *::marker {
+      display: none;
+    }
+    &::marker {
+      display: none;
+    }
+    & *::-webkit-details-marker {
+      display: none;
+    }
+    &:hover {
+      @media (hover: hover) {
+        color: var(--color-swu-accent-foreground);
+      }
+    }
+  }
+
+  .disclosure-summary::after {
+    content: none;
+  }
+
+  .disclosure-group[open] > .disclosure-summary::after {
+    content: none;
+  }
+
+  .disclosure-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .disclosure-chevron {
+    display: inline-block;
+    flex: 0 0 auto;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transition: transform 150ms ease-out;
+  }
+
+  .disclosure-group[open] > .disclosure-content {
+    animation: swu-accordion-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .labeled-content [role="term"] {
+    font-size: var(--text-sm);
+    line-height: var(--leading, var(--text-sm--line-height));
+    color: var(--color-swu-muted-foreground);
+  }
+
+  .labeled-content [role="definition"] {
+    font-size: var(--text-sm);
+    line-height: var(--leading, var(--text-sm--line-height));
+    font-weight: var(--font-weight-medium);
+    color: var(--color-swu-foreground);
+  }
+
+  .group-box {
+    padding: calc(var(--spacing) * 4);
+  }
+
+  .group-box legend {
+    padding-inline: calc(var(--spacing) * 2);
+    font-size: var(--text-sm);
+    line-height: var(--leading, var(--text-sm--line-height));
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-swu-foreground);
+  }
+
+  .gauge-meter {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--spacing) * 2);
+  }
+
+  .gauge-meter progress {
+    height: calc(var(--spacing) * 2);
+    width: 100%;
+    border-radius: calc(infinity * 1px);
+  }
+
+  /* Navigation and presentation */
+  .navigation-stack,
+  .navigation-view,
+  .navigation-root {
+    display: flex;
+    min-height: 0px;
+    min-width: 0px;
+    flex-direction: column;
+    color: var(--color-swu-foreground);
+  }
+
+  /* NavigationTitle is metadata on the Fiber stack. Render the web chrome at
+     the platform boundary so a normal `.navigationTitle(...)` also has a
+     visible, responsive title without adding a browser-specific View. */
+  .navigation-stack[data-navigation-title]::before {
+    content: attr(data-navigation-title);
+    position: sticky;
+    top: 0px;
+    z-index: 10;
+    display: flex;
+    min-height: calc(var(--spacing) * 12);
+    flex-shrink: 0;
+    align-items: center;
+    border-bottom-style: solid;
+    border-bottom-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: color-mix(in oklab, var(--color-swu-background) 90%, transparent);
+    padding-inline: calc(var(--spacing) * 4);
+    font-size: var(--text-lg);
+    line-height: var(--text-lg--line-height);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: var(--tracking-tight);
+    color: var(--color-swu-foreground);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+
+  .navigation-stack[data-navigation-title-display-mode="large"]::before {
+    min-height: calc(var(--spacing) * 16);
+    align-items: flex-end;
+    padding-bottom: calc(var(--spacing) * 3);
+    font-size: var(--text-3xl);
+    line-height: var(--text-3xl--line-height);
+  }
+
+  .navigation-stack > .toolbar-item,
+  .navigation-stack > .toolbar-group {
+    position: sticky;
+    top: 0px;
+    z-index: 20;
+    display: flex;
+    min-height: calc(var(--spacing) * 10);
+    align-items: center;
+    border-bottom-style: solid;
+    border-bottom-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: color-mix(in oklab, var(--color-swu-background) 90%, transparent);
+    padding-inline: calc(var(--spacing) * 4);
+    padding-block: calc(var(--spacing) * 2);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+
+  /* Toolbar modifiers are attached to the content Fiber (as they are in
+     SwiftUI), so style the semantic toolbar itself as well as a direct stack
+     child. This keeps actions aligned to the trailing edge without requiring
+     an app-specific wrapper around the toolbar. */
+  .toolbar-item[role="toolbar"],
+  .toolbar-group[data-toolbar-group-placement] {
+    position: sticky;
+    top: 0px;
+    z-index: 20;
+    display: flex;
+    min-height: calc(var(--spacing) * 10);
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: flex-end;
+    align-self: stretch;
+    border-bottom-style: solid;
+    border-bottom-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: color-mix(in oklab, var(--color-swu-background) 90%, transparent);
+    padding-inline: calc(var(--spacing) * 4);
+    padding-block: calc(var(--spacing) * 2);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+
+  /* A toolbar attached to a NavigationStack is rendered as a semantic
+     fragment with role=toolbar. Honor SwiftUI's leading/principal/trailing
+     placements instead of treating every item as a trailing action. */
+  .navigation-stack > [role="toolbar"] {
+    position: sticky;
+    top: 0px;
+    z-index: 20;
+    display: grid;
+    min-height: calc(var(--spacing) * 12);
+    flex-shrink: 0;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    padding-inline: calc(var(--spacing) * 3);
+    padding-block: calc(var(--spacing) * 2);
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  /* A ToolbarItemGroup is the bar itself, and it is also a role=toolbar: its items share one row, as in the native bar.
+     The grid above places items into three columns, which would wrap a fourth item onto a second row. */
+  .navigation-stack > .toolbar-group[role="toolbar"] {
+    display: flex;
+    flex-wrap: nowrap;
+  }
+
+  .navigation-stack > [role="toolbar"] > [data-toolbar-placement="navigation-bar-leading"],
+  .navigation-stack > [role="toolbar"] > [data-toolbar-placement="top-bar-leading"] {
+    grid-column: 1;
+    justify-self: start;
+  }
+
+  .navigation-stack > [role="toolbar"] > [data-toolbar-placement="principal"] {
+    grid-column: 2;
+    justify-self: center;
+    min-width: 0;
+  }
+
+  .navigation-stack > [role="toolbar"] > [data-toolbar-placement="navigation-bar-trailing"],
+  .navigation-stack > [role="toolbar"] > [data-toolbar-placement="top-bar-trailing"] {
+    grid-column: 3;
+    justify-self: end;
+  }
+
+  .navigation-stack > .toolbar-item {
+    justify-content: flex-end;
+  }
+
+  /* The bottom bar (ToolbarItemPlacement.bottomBar): its items share the width, as iOS's bottom toolbar does, and the
+     bar stays at the foot of the screen. Its material is the one `.bar` names. */
+  .navigation-stack > .navigation-bottom-bar {
+    position: sticky;
+    bottom: 0px;
+    z-index: 20;
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: space-evenly;
+    gap: calc(var(--spacing) * 2);
+    padding-inline: calc(var(--spacing) * 3);
+    padding-block: calc(var(--spacing) * 2);
+    border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+    background: color-mix(in srgb, Canvas 58%, transparent);
+    -webkit-backdrop-filter: blur(14px) saturate(180%);
+    backdrop-filter: blur(14px) saturate(180%);
+  }
+
+  /* Items the layout host pinned into the navigation bar. */
+  .navigation-stack > .toolbar-item[data-toolbar-resolved="bar"] {
+    z-index: 20;
+    border-bottom: 0;
+    background: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    transform: none;
+  }
+
+  /* The pushed screen's back button: a round, bold chevron with a 44pt target, as in the native bar. */
+  .navigation-stack > .toolbar-item button[aria-label="Back"] {
+    width: 44px;
+    height: 44px;
+    margin: -4px 0 0 -4px;
+    padding: 0;
+    border-radius: 9999px;
+    border: 1px solid rgb(0 0 0 / 0.08);
+    background: rgb(255 255 255 / 0.72);
+    color: var(--tab-ink, #000);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+    font-size: 1.125rem;
+    font-weight: 700;
+    justify-content: center;
+  }
+  .navigation-stack > .toolbar-item button[aria-label="Back"] .symbol-icon {
+    width: 1.1em;
+    height: 1.1em;
+    stroke-width: 2.5;
+  }
+
+  /* A bar's buttons are borderless and a labelled one shows only its icon, tinted, like SwiftUI's toolbar label style. */
+  .navigation-stack > .toolbar-item .push-button {
+    border-color: transparent;
+    background-color: transparent;
+    padding-inline: calc(var(--spacing) * 2);
+    --shadow-layer: 0 0 #0000;
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+    color: var(--tint-color, inherit);
+  }
+  .navigation-stack > .toolbar-item .icon-label > .symbol-icon ~ :not(.symbol-icon),
+  .navigation-stack > .toolbar-item .icon-label > :not(.symbol-icon):has(~ .symbol-icon) {
+    display: none;
+  }
+
+  /* An inline title (and a pushed screen's automatic one, and any sheet's) is centred in the bar. When the bar has a
+     leading or trailing item, the title keeps the same 88px inset (a bar item is at most about 84px wide) on both
+     sides, so it stays centred and is truncated instead of running under a bar item. */
+  .navigation-stack:is([data-navigation-title-display-mode="inline"], [data-navigation-title-display-mode="automatic"]:not([data-navigation-depth="0"]))::before,
+  .sheet-panel .navigation-stack[data-navigation-title]::before {
+    display: block;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    line-height: 3rem;
+    justify-content: center;
+    text-align: center;
+  }
+  .navigation-stack:is([data-navigation-title-display-mode="inline"], [data-navigation-title-display-mode="automatic"]:not([data-navigation-depth="0"])):has(> .toolbar-item:is([data-toolbar-placement="navigation-bar-leading"], [data-toolbar-placement="navigation-bar-trailing"], [data-toolbar-placement="top-bar-leading"], [data-toolbar-placement="top-bar-trailing"]))::before,
+  .sheet-panel .navigation-stack:has(> .toolbar-item:is([data-toolbar-placement="navigation-bar-leading"], [data-toolbar-placement="navigation-bar-trailing"], [data-toolbar-placement="top-bar-leading"], [data-toolbar-placement="top-bar-trailing"]))::before {
+    padding-inline: 5.5rem;
+  }
+
+  /* A large title sits below the bar row when the bar has items: the items share that row, the title takes the rest. */
+  .navigation-stack[data-navigation-title-display-mode="large"]:has(> .toolbar-item:is([data-toolbar-placement="navigation-bar-leading"], [data-toolbar-placement="navigation-bar-trailing"], [data-toolbar-placement="top-bar-leading"], [data-toolbar-placement="top-bar-trailing"]))::before {
+    min-height: 7rem;
+    padding-top: 3rem;
+  }
+
+  /* A hidden navigation bar reserves no space: no title bar, no items, and the screen starts at the top. */
+  main.navigation-stack[data-navigation-bar-hidden="true"][data-navigation-depth]::before,
+  main.navigation-stack[data-navigation-bar-hidden="true"]:not([data-navigation-depth])::before {
+    display: none;
+  }
+
+  .navigation-stack > .toolbar-group {
+    justify-content: flex-end;
+  }
+
+  .navigation-root,
+  .navigation-destination,
+  .navigation-presented {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .navigation-root > *,
+  .navigation-destination > *,
+  .navigation-presented > * {
+    min-height: 0;
+  }
+
+  /* A navigation destination receives the size proposed by the stack. Keep
+     that proposal intact for SwiftUI containers (and semantic form/list
+     roots), while leaving intrinsically-sized leaf views intrinsic. */
+  .navigation-root > .vstack,
+  .navigation-root > .hstack,
+  .navigation-root > .zstack,
+  .navigation-root > .scroll-view,
+  .navigation-root > .list-view,
+  .navigation-root > form,
+  .navigation-destination > .vstack,
+  .navigation-destination > .hstack,
+  .navigation-destination > .zstack,
+  .navigation-destination > .scroll-view,
+  .navigation-destination > .list-view,
+  .navigation-destination > form,
+  .navigation-presented > .vstack,
+  .navigation-presented > .hstack,
+  .navigation-presented > .zstack,
+  .navigation-presented > .scroll-view,
+  .navigation-presented > .list-view,
+  .navigation-presented > form {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .navigation-root > .frame-box > .vstack > .scroll-view,
+  .navigation-root > .frame-box > .vstack > .presentation-host,
+  .navigation-root > .vstack > .scroll-view,
+  .navigation-root > .vstack > .presentation-host {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .navigation-root > .frame-box > .vstack {
+    align-self: stretch;
+    justify-self: stretch;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .presentation-host > .scroll-view {
+    align-self: stretch;
+    justify-self: stretch;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .navigation-root > .scroll-view,
+  .navigation-destination > .scroll-view,
+  .navigation-presented > .scroll-view {
+    flex: 1 1 auto;
+  }
+
+  .navigation-destination {
+    width: 100%;
+  }
+
+  /* Keep the complete navigation Fiber chain mounted for state retention,
+     while exposing only the active screen to the browser and assistive
+     technology. */
+  .navigation-root[aria-hidden="true"]:not([data-navigation-motion="covered"]),
+  .navigation-destination[data-navigation-inactive="true"]:not([data-navigation-motion="covered"]) {
+    display: none;
+  }
+
+  .navigation-split-view {
+    display: grid;
+    min-height: 0px;
+    gap: calc(var(--spacing) * 4);
+  }
+
+  .navigation-split-view[data-column-count="2"] {
+    grid-template-columns: minmax(180px, 280px) minmax(0, 1fr);
+  }
+
+  .navigation-split-view[data-column-count="3"] {
+    grid-template-columns: minmax(180px, 240px) minmax(180px, 280px) minmax(0, 1fr);
+  }
+
+  .navigation-column {
+    min-width: 0px;
+  }
+
+  .navigation-column[data-column-hidden="true"] {
+    display: none;
+  }
+
+  .navigation-sidebar,
+  .navigation-content {
+    border-color: var(--color-swu-border);
+  }
+
+  .navigation-sidebar {
+    border-right-style: solid;
+    border-right-width: 1px;
+  }
+
+  .tab-view {
+    display: flex;
+    min-height: 0px;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .tab-view > :first-child {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+  }
+
+  .tab-body {
+    display: flex;
+    min-height: 0;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .tab-panel {
+    min-height: 0;
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: auto;
+  }
+
+  .tab-panel[data-tab-hidden="true"] {
+    display: none;
+  }
+
+  /* iOS 18's `.sidebarAdaptable` is one declaration in application code.
+     Its browser chrome (sidebar, rail and mobile panel) is styled in the
+     "TabView .sidebarAdaptable" block of the second components layer. */
+
+  .tab-view[data-enter-animation="true"] > :first-child {
+    animation: swu-fade-in 160ms ease-out;
+  }
+
+  /* TabView (automatic) -----------------------------------------------------
+     iOS 26's tab bar: a capsule floating above the bottom edge, inset from the sides. `.tab-bar` is the row the layout
+     gives the bar (its box is the layout's); the capsule, `.tab-list`, is centered in it. A compact width spreads the
+     tabs over the capsule with the icon above the title, as on iPhone; a regular width keeps the capsule as wide as its
+     tabs with the title beside the icon. On a phone each tab is 88px wide, as on iOS, so a few tabs make a capsule
+     narrower than the screen; more tabs share the width and shrink. */
+  .tab-bar {
+    display: flex;
+    justify-content: center;
+    z-index: 10;
+    padding: 6px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    /* The row is wider than the capsule; only the capsule takes the pointer. */
+    pointer-events: none;
+  }
+
+  .tab-list:not(.tab-sidebar-list) {
+    display: flex;
+    align-items: stretch;
+    gap: 2px;
+    max-width: min(100%, 480px);
+    padding: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-radius: 9999px;
+    background: light-dark(rgb(250 250 250 / 0.78), rgb(38 38 40 / 0.78));
+    -webkit-backdrop-filter: blur(22px) saturate(1.8);
+    backdrop-filter: blur(22px) saturate(1.8);
+    box-shadow:
+      0 8px 24px rgb(0 0 0 / 0.12),
+      inset 0 0 0 1px light-dark(rgb(255 255 255 / 0.6), rgb(255 255 255 / 0.08)),
+      0 0 0 1px light-dark(rgb(0 0 0 / 0.06), rgb(0 0 0 / 0.5));
+    pointer-events: auto;
+  }
+
+  .tab-list:not(.tab-sidebar-list)::-webkit-scrollbar { display: none; }
+
+  .tab-list:not(.tab-sidebar-list) [role="tab"] {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    width: 88px;
+    min-width: 0;
+    min-height: 54px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 4px 8px;
+    border: 0;
+    border-radius: 9999px;
+    background: transparent;
+    font-size: 11px;
+    line-height: 1.2;
+    font-weight: var(--font-weight-medium);
+    color: var(--color-swu-foreground);
+    cursor: pointer;
+    outline: none;
+    transition: background-color 150ms var(--ease-out), color 150ms var(--ease-out);
+    &:hover {
+      @media (hover: hover) {
+        background-color: rgb(120 120 128 / 0.08);
+      }
+    }
+    &:focus-visible {
+      box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--tint-color, var(--color-swu-primary)) 60%, transparent);
+    }
+  }
+
+  /* A symbol is drawn at 1em: the icon sets its own size, not the 11px of the title. */
+  .tab-list:not(.tab-sidebar-list) [role="tab"] .tab-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    flex: none;
+    font-size: 1.375rem;
+  }
+
+  .tab-list:not(.tab-sidebar-list) [role="tab"] .tab-title {
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tab-list:not(.tab-sidebar-list) [role="tab"] > .tab-badge {
+    position: absolute;
+    top: 2px;
+    right: calc(50% - 22px);
+    margin-left: 0;
+  }
+
+  /* The automatic bar has no room for section titles; iOS shows only the tabs. */
+  .tab-list:not(.tab-sidebar-list) .tab-section-header { display: none; }
+
+  @media (min-width: 768px) {
+    .tab-list:not(.tab-sidebar-list) {
+      max-width: 100%;
+    }
+
+    .tab-list:not(.tab-sidebar-list) [role="tab"] {
+      flex: 0 0 auto;
+      width: auto;
+      min-height: 44px;
+      flex-direction: row;
+      gap: 6px;
+      padding: 4px 18px;
+      font-size: 15px;
+    }
+
+    .tab-list:not(.tab-sidebar-list) [role="tab"] .tab-icon {
+      width: 1.25rem;
+      height: 1.25rem;
+      font-size: 1.125rem;
+    }
+
+    .tab-list:not(.tab-sidebar-list) [role="tab"] > .tab-badge {
+      position: static;
+    }
+  }
+
+  .tab-list:not(.tab-sidebar-list) [role="tab"][disabled],
+  .tab-list:not(.tab-sidebar-list) [role="tab"][aria-disabled="true"] {
+    pointer-events: none;
+    cursor: not-allowed;
+    opacity: 45%;
+  }
+
+  .tab-badge {
+    margin-left: calc(var(--spacing) * 1.5);
+    display: inline-flex;
+    min-width: calc(var(--spacing) * 5);
+    align-items: center;
+    justify-content: center;
+    border-radius: calc(infinity * 1px);
+    background-color: var(--color-swu-primary);
+    padding-inline: calc(var(--spacing) * 1.5);
+    font-size: 0.7rem;
+    --leading: calc(var(--spacing) * 5);
+    line-height: calc(var(--spacing) * 5);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-swu-primary-foreground);
+  }
+
+  /* `.badge("•")` marks activity rather than a count. */
+  .tab-badge[data-badge-style="dot"] {
+    width: 8px;
+    min-width: 0;
+    height: 8px;
+    padding: 0;
+    border-radius: 50%;
+    background: var(--tab-ribbon, linear-gradient(90deg, #63cdf2 0%, #a688f2 38%, #f08bc2 70%, #f7c18a 100%));
+  }
+
+  .tab-section-header {
+    align-self: center;
+    padding-inline: calc(var(--spacing) * 2);
+    font-size: var(--text-xs);
+    line-height: var(--leading, var(--text-xs--line-height));
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: var(--tracking-wide);
+    color: var(--color-swu-muted-foreground);
+    text-transform: uppercase;
+  }
+
+  .tab-list:not(.tab-sidebar-list) [role="tab"][data-tab-role="search"] {
+    order: 1000;
+  }
+
+  /* The selected tab: a tinted capsule inside the bar, as on iOS 26. */
+  .tab-list:not(.tab-sidebar-list) [role="tab"][aria-selected="true"] {
+    background-color: light-dark(rgb(120 120 128 / 0.14), rgb(120 120 128 / 0.28));
+    color: var(--tint-color, var(--color-swu-primary));
+  }
+
+  .presentation-root {
+    z-index: 50;
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: var(--color-swu-popover);
+    padding: calc(var(--spacing) * 6);
+    color: var(--color-swu-popover-foreground);
+    --shadow-layer: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+    box-shadow: var(--shadow-layer, 0 0 #0000);
+    isolation: isolate;
+    box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.45), 0 24px 48px rgb(0 0 0 / 0.18);
+  }
+
+  .presentation-root[data-enter-animation="true"] {
+    animation: swu-alert-in 400ms var(--swu-ease-present);
+  }
+
+  /* SwiftUI's `.automatic` drag indicator appears only on a sheet that can
+     be resized between several detents. */
+  .sheet-panel[data-presentation-drag-indicator="hidden"]::before,
+  .sheet-panel:not([data-presentation-resizable="true"]):not([data-presentation-drag-indicator="visible"])::before {
+    display: none;
+  }
+
+  /* Interactive presentation detents are driven by the browser controller;
+     the semantic marker keeps the sheet's scroll surface native while the
+     controller temporarily captures a vertical gesture only after intent is
+     clear. `will-change` is limited to opted-in sheets so ordinary dialogs
+     stay cheap. */
+  .sheet-panel[data-presentation-detents] {
+    touch-action: pan-y;
+    overscroll-behavior: contain;
+    will-change: height;
+  }
+
+  .sheet-panel[data-presentation-detents]::before { cursor: grab; }
+
+  .sheet-panel[data-presentation-detents] > .presentation-content {
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  .sheet-panel[data-presentation-detents]:focus-visible {
+    outline: 2px solid var(--color-swu-ring);
+    outline-offset: -2px;
+  }
+
+  /* A sheet rises from below the screen as UIKit presents it, and the page behind dims as it comes. */
+  .sheet-panel[data-enter-animation="true"] {
+    animation: swu-sheet-in 500ms var(--swu-ease-present);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sheet-panel[data-presentation-detents] { transition-duration: 0ms !important; }
+  }
+
+  /* `presentationDetents`: a compact bottom sheet takes the selected
+     detent's height (Swift publishes it as a custom property). */
+  @media (max-width: 767px) {
+    .sheet-panel[data-presentation-detents] {
+      height: var(--presentation-detent-height, auto);
+      max-height: calc(100dvh - 24px);
+    }
+  }
+
+  /* SwiftUI gives a full-screen cover's content the whole screen, edge to edge: the content box
+     fills the cover, so its layout root is offered the cover's height, and has no sheet padding. */
+  .full-screen-cover {
+    position: fixed;
+    inset: 0px;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+    border-radius: 0;
+    border-style: solid;
+    border-width: 0px;
+    padding: 0px;
+  }
+
+  .full-screen-cover > .presentation-content {
+    padding: 0px;
+  }
+
+  .full-screen-cover[data-enter-animation="true"] {
+    animation: swu-cover-in 500ms var(--swu-ease-present);
+  }
+
+  .popover-card {
+    position: absolute;
+    top: calc(var(--spacing) * 4);
+    right: calc(var(--spacing) * 4);
+    transform-origin: top right;
+  }
+
+  .popover-card::before {
+    content: "";
+    position: absolute;
+    top: -0.375rem;
+    right: 1.25rem;
+    width: 0.75rem;
+    height: 0.75rem;
+    transform: rotate(45deg);
+    border-top: 1px solid var(--color-swu-border);
+    border-left: 1px solid var(--color-swu-border);
+    background: var(--color-swu-popover);
+  }
+
+  .popover-card[data-enter-animation="true"] {
+    animation: swu-popover-in 300ms var(--swu-ease-present);
+  }
+
+  .alert-panel,
+  .confirmation-dialog {
+    backdrop-filter: blur(2px);
+  }
+
+  /* An alert settles from a little larger than its size, fading in, as UIKit's does. */
+  .alert-panel[data-enter-animation="true"],
+  .confirmation-dialog[data-enter-animation="true"] {
+    animation: swu-alert-in 400ms var(--swu-ease-present);
+  }
+
+  .presentation-root h2 {
+    margin-bottom: calc(var(--spacing) * 3);
+    font-size: var(--text-lg);
+    line-height: var(--leading, var(--text-lg--line-height));
+    font-weight: var(--font-weight-semibold);
+  }
+
+  
+  .backdrop-layer,
+  .overlay-layer {
+    position: relative;
+    min-width: 0px;
+    display: grid;
+    grid-template-areas: "layer-area";
+  }
+
+  .backdrop-layer > *,
+  .overlay-layer > *{
+    grid-area: layer-area;
+    min-width: 0;
+  }
+
+  .backdrop-layer > :first-child {
+    z-index: 0;
+    pointer-events: none;
+    /* A background is proposed the size of the view it decorates and never changes it. */
+    contain: size;
+  }
+
+  .backdrop-layer > :last-child,
+  .overlay-layer > :first-child {
+    z-index: 1;
+  }
+
+  .overlay-layer > :last-child {
+    z-index: 2;
+  }
+
+  /* A sheet belongs above decorations of its presenting view. Lift the
+     containing paint branch through nested background/overlay contexts so
+     a trailing overlay cannot cover a modal or its backdrop. */
+  .backdrop-layer > :has(.presentation-root),
+  .overlay-layer > :has(.presentation-root) {
+    z-index: 50;
+  }
+
+  .overlay-layer[data-enter-animation="true"] > :last-child,
+  .overlay-layer > :last-child[data-enter-animation="true"] {
+    animation: swu-fade-in 180ms ease-out;
+  }
+
+  /* A push, as UIKit plays it: the new screen slides in from the trailing edge over the one it covers, which moves a
+     third of the way out behind it; a pop plays it backwards. The screen underneath is the transition host's
+     (`data-navigation-motion`, transition-host.js): it shows at the box of the screen on top while the push plays.
+     Both are painted with the color behind the stack, so neither shows through the other. */
+  .navigation-destination[data-enter-animation="true"]:not([data-navigation-inactive="true"]) {
+    animation: swu-navigation-push 500ms var(--swu-ease-present);
+    background-color: var(--motion-surface, var(--color-swu-background));
+    box-shadow: -0.5rem 0 1.5rem rgb(0 0 0 / 0.08);
+  }
+
+  [data-navigation-motion="covered"] {
+    position: absolute;
+    left: var(--motion-left);
+    top: var(--motion-top);
+    width: var(--motion-width);
+    height: var(--motion-height);
+    margin: 0;
+    box-sizing: border-box;
+    pointer-events: none;
+    background-color: var(--motion-surface, var(--color-swu-background));
+    animation: swu-navigation-cover 500ms var(--swu-ease-present) both;
+  }
+
+  [data-navigation-motion="revealed"] {
+    background-color: var(--motion-surface, var(--color-swu-background));
+    animation: swu-navigation-reveal 500ms var(--swu-ease-present);
+  }
+
+  /* The screens slide inside the stack: what passes its edges is not drawn, and does not make the page scroll. */
+  .navigation-stack:has(> [data-navigation-motion]) {
+    overflow: clip;
+  }
+
+  .navigation-root:dir(rtl),
+  .navigation-destination:dir(rtl) {
+    --motion-direction: -1;
+  }
+
+  /* A dismissed surface leaves the way UIKit dismisses it, and stays where it ends until it is removed
+     (transition-host.js, playExit): a sheet or a cover goes back down, an alert or a popover fades out, a popped
+     screen slides back to the trailing edge. */
+  .presentation-root[data-exit-animation="true"],
+  .alert-panel[data-exit-animation="true"],
+  .confirmation-dialog[data-exit-animation="true"] {
+    animation: swu-fade-out 250ms ease-out both;
+  }
+
+  .sheet-panel[data-exit-animation="true"] {
+    animation: swu-sheet-out 400ms var(--swu-ease-present) both;
+  }
+
+  .full-screen-cover[data-exit-animation="true"] {
+    animation: swu-cover-out 400ms var(--swu-ease-present) both;
+  }
+
+  .popover-card[data-exit-animation="true"] {
+    animation: swu-fade-out 200ms ease-out both;
+  }
+
+  .navigation-destination[data-exit-animation="true"] {
+    background-color: var(--motion-surface, var(--color-swu-background));
+    box-shadow: -0.5rem 0 1.5rem rgb(0 0 0 / 0.08);
+    animation: swu-navigation-pop 500ms var(--swu-ease-present) both;
+  }
+
+  .searchable {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--spacing) * 3);
+  }
+
+  .search-input {
+    max-width: 100%;
+  }
+
+  .toolbar-item,
+  .toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+  }
+
+  .toolbar-group {
+    flex-wrap: wrap;
+  }
+
+  .view-that-fits {
+    position: relative;
+    width: 100%;
+  }
+
+  .view-that-fits-candidate {
+    width: 100%;
+  }
+
+  .view-that-fits-candidate:not([data-fit-selected="true"]) {
+    display: none;
+  }
+
+  .scroll-view-reader {
+    display: contents;
+  }
+
+  /* `.redacted` marks a subtree the reasons apply to. `@scope ... to (.unredacted)` ends every rule below at an
+     `.unredacted` node, so an opted-out subtree paints as it would without the modifier. The placeholder reason
+     (`.redacted-placeholder`) turns text into a neutral bar and shapes and images into neutral blocks; the privacy
+     reason (`.redacted-privacy`) blurs the subtree. A filter cannot be undone below its element, so a privacy blur
+     also covers an `.unredacted` child. */
+  .redacted {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  @scope (.redacted) to (.unredacted) {
+    * {
+      pointer-events: none;
+    }
+  }
+
+  .redacted-privacy {
+    filter: blur(5px);
+  }
+
+  @scope (.redacted-placeholder) to (.unredacted) {
+    :is(span, a, p, h1, h2, h3, h4, h5, h6, label, li, td, th, dt, dd, code, em, strong, b, i):not(:has(*)) {
+      color: transparent;
+      background-color: var(--color-swu-muted);
+      border-radius: 0.25em;
+      box-decoration-break: clone;
+      -webkit-box-decoration-break: clone;
+      animation: swu-redaction-pulse 1.6s ease-in-out infinite;
+    }
+
+    [data-shape], [data-image-paint], img, svg, video, canvas {
+      background-color: var(--color-swu-muted);
+      /* A flat neutral block whatever the fill or picture is: contrast(0) turns every opaque pixel mid-grey. */
+      filter: grayscale(1) contrast(0) brightness(1.1);
+      animation: swu-redaction-pulse 1.6s ease-in-out infinite;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      :is(span, a, p, h1, h2, h3, h4, h5, h6, label, li, td, th, dt, dd, code, em, strong, b, i):not(:has(*)),
+      [data-shape], [data-image-paint], img, svg, video, canvas {
+        animation: none;
+      }
+    }
+  }
+
+  @keyframes swu-redaction-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+  }
+
+  .safe-area-inset {
+    --safe-area-spacing: 0px;
+  }
+
+  .safe-area-inset[data-safe-area-edge="top"] {
+    padding-top: calc(env(safe-area-inset-top, 0px) + var(--safe-area-spacing));
+  }
+
+  .safe-area-inset[data-safe-area-edge="bottom"] {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--safe-area-spacing));
+  }
+
+  .safe-area-inset[data-safe-area-edge="leading"] {
+    padding-left: calc(env(safe-area-inset-left, 0px) + var(--safe-area-spacing));
+  }
+
+  .safe-area-inset[data-safe-area-edge="trailing"] {
+    padding-right: calc(env(safe-area-inset-right, 0px) + var(--safe-area-spacing));
+  }
+
+  /* A Canvas has no background of its own, as in SwiftUI: an opaque fill here would hide a canvas stacked beneath
+     it, such as a crop overlay drawn over a photo. */
+  .draw-canvas {
+    display: block;
+    width: 100%;
+    border-radius: var(--radius-lg);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-swu-border);
+  }
+
+  .mesh-gradient {
+    display: block;
+    width: 100%;
+    image-rendering: auto;
+  }
+
+  .mapkit-view,
+  .web-view,
+  .data-chart {
+    display: block;
+    min-height: calc(var(--spacing) * 40);
+    width: 100%;
+    border-radius: var(--radius-lg);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: var(--color-swu-muted);
+  }
+
+  .mapkit-view {
+    min-height: calc(var(--spacing) * 64);
+    background-image: linear-gradient(135deg, var(--color-swu-muted), var(--color-swu-background));
+  }
+
+  .web-view {
+    min-height: calc(var(--spacing) * 96);
+    background-color: var(--color-swu-surface);
+  }
+
+  .data-chart {
+    padding: calc(var(--spacing) * 4);
+  }
+
+  .responsive-compact {
+    display: block;
+  }
+
+  .responsive-regular {
+    display: none;
+  }
+
+  .responsive-switch {
+    width: 100%;
+  }
+}
+
+/*
+ * Starting Point UI-compatible semantic layer
+ *
+ * SwiftUIWeb's views intentionally emit the semantic class vocabulary defined
+ * above so the renderer remains the source of truth. These short aliases are kept in the
+ * web design-system layer: they make future primitives
+ * feel native to the same component system without coupling application code
+ * to long utility class lists. Every rule below is backed by a native HTML
+ * element and the same semantic tokens used by the SwiftUI-facing renderer.
+ */
+@layer components {
+  /* Shared component aliases ------------------------------------------------ */
+  .btn,
+  .push-button {
+    display: inline-flex;
+    min-height: calc(var(--spacing) * 9);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--spacing) * 2);
+    border-radius: var(--radius-md);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-swu-primary);
+    background-color: var(--color-swu-primary);
+    padding-inline: calc(var(--spacing) * 3);
+    padding-block: calc(var(--spacing) * 2);
+    font-size: var(--text-sm);
+    --leading: 1;
+    line-height: 1;
+    font-weight: var(--font-weight-medium);
+    color: var(--color-swu-primary-foreground);
+    --shadow-layer: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+    transition-property: background-color, border-color, color, box-shadow, opacity, transform;
+    transition-duration: 150ms;
+    --ease: var(--ease-out);
+    transition-timing-function: var(--ease-out);
+    --outline-line: none;
+    outline-style: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .btn:hover:not(:disabled),
+  .push-button:hover:not(:disabled) {
+    opacity: 90%;
+  }
+
+  .btn:focus-visible,
+  .push-button:focus-visible {
+    --ring-layer: 0 0 0 calc(3px + 0px) color-mix(in oklab, var(--color-swu-ring) 20%, transparent);
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+    outline-style: var(--outline-line, solid);
+    outline-width: 2px;
+    outline-offset: 2px;
+    outline-color: var(--color-swu-ring);
+  }
+
+  .btn:disabled,
+  .push-button:disabled {
+    cursor: not-allowed;
+    opacity: 50%;
+  }
+
+  /* A custom SwiftUI ButtonStyle owns the label's entire visual surface.
+     Keep the semantic <button> for keyboard/accessibility, but remove the
+     automatic design-system chrome from its wrapper so the style is not
+     rendered inside an unexpected gray card. */
+  .button-plain,
+  .button-borderless,
+  .button-custom {
+    min-height: 0px;
+    border-style: solid;
+    border-width: 0px;
+    background-color: transparent;
+    padding: 0px;
+    color: inherit;
+    --shadow-layer: 0 0 #0000;
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+    text-align: inherit;
+    border-radius: 0;
+  }
+
+  .button-plain:hover:not(:disabled),
+  .button-plain:focus-visible,
+  .button-borderless:hover:not(:disabled),
+  .button-borderless:focus-visible,
+  .button-custom:hover:not(:disabled),
+  .button-custom:focus-visible {
+    background-color: transparent;
+  }
+
+  /* Plain, borderless and custom buttons draw no chrome of their own. Their
+     corners are the label's visible shape, set inline by Button as
+     border-radius, so the focus ring, hover fill and hit testing follow that
+     shape. A control with no declared shape stays a rectangle and paints no
+     fill: SwiftUI's plain styles dim the label instead. Custom styles dim or
+     highlight through their own body, so the framework adds no opacity. */
+  .button-plain:hover:not(:disabled),
+  .button-borderless:hover:not(:disabled),
+  .button-custom:hover:not(:disabled) {
+    opacity: 1;
+  }
+
+  .button-plain[data-visible-shape]:hover:not(:disabled),
+  .button-borderless[data-visible-shape]:hover:not(:disabled) {
+    background-color: var(--color-swu-accent);
+    color: var(--color-swu-accent-foreground);
+  }
+
+  .button-plain:not(:disabled):active,
+  .button-borderless:not(:disabled):active {
+    opacity: 0.6;
+  }
+
+  .push-button:not(:disabled) {
+    cursor: pointer;
+  }
+
+  .push-button:disabled,
+  .push-button:disabled * {
+    cursor: not-allowed;
+  }
+
+  /* A shaped control hit-tests only its visible shape. Its descendants are
+     transparent to the pointer, and a pseudo-element with the same corner
+     radius takes the pointer instead, so the corners outside the shape and
+     any glow painted beyond it fall through to what lies beneath. The
+     pseudo-element belongs to the button, so events, hover, press and the
+     cursor (inherited from the button, including not-allowed) still apply. */
+  .push-button[data-visible-shape],
+  .paste-button[data-visible-shape] {
+    position: relative;
+    pointer-events: none;
+  }
+
+  .push-button[data-visible-shape] *,
+  .paste-button[data-visible-shape] * {
+    pointer-events: none;
+  }
+
+  .push-button[data-visible-shape]::before,
+  .paste-button[data-visible-shape]::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    clip-path: var(--shape-clip, inset(0));
+    pointer-events: auto;
+  }
+
+  
+  .button-bordered,
+  .push-button[data-button-style="bordered"] {
+    border-color: var(--color-swu-border);
+    background-color: var(--color-swu-background);
+    color: var(--color-swu-foreground);
+    --shadow-layer: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+  }
+
+  
+  .button-bordered:hover:not(:disabled),
+  .push-button[data-button-style="bordered"]:hover:not(:disabled) {
+    background-color: var(--color-swu-accent);
+    color: var(--color-swu-accent-foreground);
+    opacity: 100%;
+  }
+
+  
+  .push-button[data-button-style="secondary"] {
+    border-color: var(--color-swu-secondary);
+    background-color: var(--color-swu-secondary);
+    color: var(--color-swu-secondary-foreground);
+  }
+
+  
+  .button-plain,
+  .button-borderless,
+  .push-button[data-button-style="plain"],
+  .push-button[data-button-style="borderless"] {
+    border-color: transparent;
+    background-color: transparent;
+    color: var(--color-swu-foreground);
+    --shadow-layer: 0 0 #0000;
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+  }
+
+  
+
+  /* Borderless buttons use the tint for their label, whatever the generic ghost rules above set. */
+  .button-borderless[data-tint],
+  .push-button[data-button-style="borderless"][data-tint] {
+    color: var(--tint-color);
+  }
+  .button-borderless[data-tint]:hover:not(:disabled) {
+    background-color: transparent;
+    color: var(--tint-color);
+  }
+
+  
+  .button-link,
+  .push-button[data-button-style="link"] {
+    border-color: transparent;
+    background-color: transparent;
+    padding-inline: var(--spacing);
+    color: var(--color-swu-primary);
+    text-underline-offset: 4px;
+    --shadow-layer: 0 0 #0000;
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+  }
+
+  
+  .button-link:hover:not(:disabled),
+  .push-button[data-button-style="link"]:hover:not(:disabled) {
+    text-decoration-line: underline;
+    opacity: 100%;
+  }
+
+  
+  .push-button[data-role="destructive"] {
+    border-color: var(--color-swu-destructive);
+    background-color: var(--color-swu-destructive);
+    color: var(--color-white);
+  }
+
+  
+
+  
+  
+  
+
+  /* Form language ----------------------------------------------------------- */
+  .field {
+    display: grid;
+    min-width: 0px;
+    gap: calc(var(--spacing) * 1.5);
+  }
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  .label,
+  .picker-label,
+  .date-picker-label {
+    font-size: var(--text-sm);
+    --leading: var(--leading-tight);
+    line-height: var(--leading-tight);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-swu-foreground);
+  }
+
+  /* SwiftUI Label inherits the surrounding font and foreground, including
+     a custom button style. Form labels retain their independent typography. */
+  .icon-label { font: inherit; color: inherit; }
+
+  .input,
+  .textarea,
+  .select,
+  .field-input,
+  .text-area,
+  .select-menu {
+    min-height: calc(var(--spacing) * 9);
+    width: 100%;
+    border-radius: var(--radius-md);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-swu-input);
+    background-color: var(--color-swu-background);
+    padding-inline: calc(var(--spacing) * 3);
+    padding-block: calc(var(--spacing) * 2);
+    font-size: var(--text-sm);
+    line-height: var(--leading, var(--text-sm--line-height));
+    color: var(--color-swu-foreground);
+    --shadow-layer: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+    transition-property: background-color, border-color, box-shadow, color;
+    transition-duration: 150ms;
+    --ease: var(--ease-out);
+    transition-timing-function: var(--ease-out);
+    outline-style: none;
+    &::placeholder {
+      color: var(--color-swu-muted-foreground);
+    }
+  }
+
+  .input:hover:not(:disabled),
+  .textarea:hover:not(:disabled),
+  .select:hover:not(:disabled),
+  .field-input:hover:not(:disabled),
+  .text-area:hover:not(:disabled),
+  .select-menu:hover:not(:disabled) {
+    border-color: color-mix(in oklab, var(--color-swu-foreground) 25%, transparent);
+  }
+
+  .input:focus,
+  .textarea:focus,
+  .select:focus,
+  .field-input:focus,
+  .text-area:focus,
+  .select-menu:focus {
+    border-color: var(--color-swu-ring);
+    --ring-layer: 0 0 0 calc(3px + 0px) var(--ring-color, currentcolor);
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+    --ring-color: color-mix(in oklab, var(--color-swu-ring) 20%, transparent);
+  }
+
+  .input[aria-invalid="true"],
+  .textarea[aria-invalid="true"],
+  .select[aria-invalid="true"] {
+    border-color: var(--color-swu-destructive);
+    --ring-color: color-mix(in oklab, var(--color-swu-destructive) 20%, transparent);
+  }
+
+  .input:disabled,
+  .textarea:disabled,
+  .select:disabled,
+  .field-input:disabled,
+  .text-area:disabled,
+  .select-menu:disabled {
+    cursor: not-allowed;
+    opacity: 50%;
+  }
+
+  .textarea,
+  .text-area {
+    min-height: calc(var(--spacing) * 20);
+    resize: none;
+    overflow: auto;
+    --leading: var(--leading-relaxed);
+    line-height: var(--leading-relaxed);
+    field-sizing: fixed;
+  }
+
+  .select,
+  .select-menu {
+    cursor: pointer;
+    appearance: none;
+    padding-right: calc(var(--spacing) * 9);
+  }
+
+  /* Chrome-less controls. `.textFieldStyle(.plain)`, a TextEditor with
+     `.scrollContentBackground(.hidden)`, a menu Picker with `.labelsHidden()`
+     and a compact DatePicker with `.labelsHidden()` emit
+     data-field-chrome="plain": the native control keeps its semantics but has
+     no framework border, background, padding, radius or max width. It fills
+     the box assigned by semantic layout and inherits font and color, so an
+     application draws the field chrome with ordinary SwiftUI modifiers. */
+  .field-input[data-field-chrome="plain"],
+  .text-area[data-field-chrome="plain"],
+  .select-menu[data-field-chrome="plain"],
+  .date-input[data-field-chrome="plain"],
+  .field-input[data-field-chrome="plain"]:hover:not(:disabled),
+  .text-area[data-field-chrome="plain"]:hover:not(:disabled),
+  .select-menu[data-field-chrome="plain"]:hover:not(:disabled),
+  .field-input[data-field-chrome="plain"]:focus,
+  .text-area[data-field-chrome="plain"]:focus,
+  .select-menu[data-field-chrome="plain"]:focus,
+  .date-input[data-field-chrome="plain"]:focus {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    outline: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-align: inherit;
+  }
+
+  /* A multi-line field's line limits (`lineLimit(2...5)`) are in lines of text: the control's block padding and border (none when
+     it is plain) are added to the heights, and a field with a limit starts at its lower bound rather than at the base height. */
+  .text-area {
+    --field-chrome: calc(var(--spacing) * 4 + 2px);
+  }
+  .text-area[data-field-chrome="plain"] {
+    --field-chrome: 0px;
+  }
+  .text-area[data-lines-min] {
+    min-height: calc(var(--lines-min) * 1lh + var(--field-chrome));
+  }
+  .text-area[data-lines-max] {
+    max-height: calc(var(--lines-max) * 1lh + var(--field-chrome));
+    overflow-y: auto;
+  }
+
+  .field-input[data-field-chrome="plain"]::placeholder,
+  .text-area[data-field-chrome="plain"]::placeholder {
+    color: var(--field-placeholder-color, color-mix(in srgb, currentColor 55%, transparent));
+  }
+
+  .text-area[data-field-chrome="plain"] {
+    height: 100%;
+    resize: none;
+  }
+
+  .select-menu[data-field-chrome="plain"] {
+    height: 100%;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: none;
+  }
+
+  .date-input[data-field-chrome="plain"] {
+    height: 100%;
+    cursor: text;
+  }
+
+  .picker-control[data-field-chrome="plain"],
+  .date-picker[data-field-chrome="plain"] {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    width: 100%;
+    max-width: none;
+    gap: 0;
+    color: inherit;
+    font: inherit;
+  }
+
+  .picker-control[data-field-chrome="plain"] > .select-menu,
+  .date-picker[data-field-chrome="plain"] > .date-input {
+    flex: 1 1 auto;
+  }
+
+  .select-menu[data-field-chrome="plain"]:focus-visible,
+  .date-input[data-field-chrome="plain"]:focus-visible {
+    outline: 2px solid var(--layout-focus-ring-color, var(--color-swu-ring));
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Checkbox remains distinct from the switch role. The native input keeps
+     keyboard/form semantics while the check indicator is painted with CSS. */
+  input[type="checkbox"]:not([role="switch"]),
+  .checkbox {
+    width: calc(var(--spacing) * 4);
+    height: calc(var(--spacing) * 4);
+    cursor: pointer;
+    appearance: none;
+    border-radius: 0.25rem;
+    border-style: var(--border-line, solid);
+    border-width: 1px;
+    border-color: var(--color-swu-input);
+    background-color: var(--color-swu-background);
+    vertical-align: middle;
+    transition-property: background-color, border-color, box-shadow;
+    transition-timing-function: var(--ease, var(--default-transition-timing-function));
+    transition-duration: 150ms;
+    --outline-line: none;
+    outline-style: none;
+  }
+
+  input[type="checkbox"]:not([role="switch"]):checked,
+  .checkbox:checked {
+    border-color: var(--color-swu-primary);
+    background-color: var(--color-swu-primary);
+    background-image: linear-gradient(45deg, transparent 45%, currentColor 45% 55%, transparent 55%), linear-gradient(-45deg, transparent 45%, currentColor 45% 55%, transparent 55%);
+    background-position: 36% 55%, 64% 55%;
+    background-size: 0.4rem 0.75rem, 0.4rem 0.75rem;
+    background-repeat: no-repeat;
+    color: var(--color-swu-primary-foreground);
+  }
+
+  input[type="checkbox"]:not([role="switch"]):focus-visible,
+  .checkbox:focus-visible {
+    border-color: var(--color-swu-ring);
+    --ring-layer: var(--ring-inset, ) 0 0 0 calc(3px + 0px) var(--ring-color, currentcolor);
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+    --ring-color: color-mix(in oklab, var(--color-swu-ring) 20%, transparent);
+  }
+
+  .switch,
+  .check-input {
+    position: relative;
+    display: inline-block;
+    height: calc(var(--spacing) * 6);
+    width: calc(var(--spacing) * 11);
+    flex-shrink: 0;
+    cursor: pointer;
+    appearance: none;
+    border-radius: calc(infinity * 1px);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: var(--color-swu-muted);
+    padding: 0px;
+    vertical-align: middle;
+    transition-property: background-color, border-color, box-shadow;
+    transition-duration: 150ms;
+    --ease: var(--ease-out);
+    transition-timing-function: var(--ease-out);
+    outline-style: none;
+  }
+
+  /* Toggle uses the same compact switch language as Starting Point while
+     retaining a native checkbox for form semantics and keyboard support. */
+  .switch::after,
+  .check-input::after {
+    content: "";
+    position: absolute;
+    /* The offsets are measured from inside the 1px border, so the knob sits 1px from the track on every side. */
+    top: 1px;
+    left: 1px;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 9999px;
+    background: var(--color-swu-primary-foreground);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.24);
+    transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* SwiftUI's `.tint(_:)` colors an enabled switch in its subtree. */
+  .switch:checked,
+  .check-input:checked {
+    border-color: var(--color-swu-primary);
+    background-color: var(--color-swu-primary);
+  }
+
+  .switch:checked::after,
+  .check-input:checked::after {
+    transform: translateX(1.25rem);
+  }
+
+  /* Switch geometry is overridable. Defaults reproduce the 44×24 switch;
+     for example a 42×24 switch with an 18px knob uses
+     --switch-width:42px; --switch-knob-size:18px;
+     --switch-knob-inset:3px; --switch-knob-travel:18px;
+     --switch-border-width:0px. `.tint(_:)` still colors the on state. */
+  .check-input {
+    width: var(--switch-width, 2.75rem);
+    height: var(--switch-height, 1.5rem);
+    border-width: var(--switch-border-width, 1px);
+    background-color: var(--switch-track, var(--color-swu-muted));
+  }
+
+  .check-input::after {
+    /* The inset is from the outer edge of the track, so the border is taken off (an absolute offset starts inside it). */
+    top: calc(var(--switch-knob-inset, 2px) - var(--switch-border-width, 1px));
+    left: calc(var(--switch-knob-inset, 2px) - var(--switch-border-width, 1px));
+    width: var(--switch-knob-size, 1.25rem);
+    height: var(--switch-knob-size, 1.25rem);
+    background: var(--switch-knob, var(--color-swu-primary-foreground));
+  }
+
+  .check-input:checked {
+    background-color: var(--switch-track-on, var(--color-swu-primary));
+  }
+
+  .check-input:checked::after {
+    transform: translateX(var(--switch-knob-travel, 1.25rem));
+  }
+
+  .switch:focus-visible,
+  .check-input:focus-visible {
+    border-color: var(--color-swu-ring);
+    --ring-layer: 0 0 0 calc(3px + 0px) var(--ring-color, currentcolor);
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+    --ring-color: color-mix(in oklab, var(--color-swu-ring) 20%, transparent);
+  }
+
+  
+  
+  
+
+  .slider,
+  .slider-control {
+    height: calc(var(--spacing) * 5);
+    width: 100%;
+    max-width: var(--container-md);
+    cursor: pointer;
+    appearance: none;
+    border-radius: var(--radius-lg);
+    background-color: transparent;
+    outline-style: none;
+  }
+
+  .slider::-webkit-slider-runnable-track,
+  .slider-control::-webkit-slider-runnable-track {
+    height: 0.375rem;
+    border-radius: 9999px;
+    background: linear-gradient(to right, var(--color-swu-primary) 0 var(--val, var(--slider-value, 0%)), var(--color-swu-muted) var(--val, var(--slider-value, 0%)) 100%);
+  }
+
+  .slider::-webkit-slider-thumb,
+  .slider-control::-webkit-slider-thumb {
+    width: 1.125rem;
+    height: 1.125rem;
+    margin-top: -0.375rem;
+    appearance: none;
+    border: 2px solid var(--color-swu-background);
+    border-radius: 9999px;
+    background: var(--color-swu-primary);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.24);
+    transition: transform 150ms ease-out, box-shadow 150ms ease-out;
+  }
+
+  .slider:hover::-webkit-slider-thumb,
+  .slider:focus-visible::-webkit-slider-thumb,
+  .slider-control:hover::-webkit-slider-thumb,
+  .slider-control:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-swu-ring) 18%, transparent), 0 1px 3px rgb(0 0 0 / 0.24);
+  }
+
+  .slider::-moz-range-track,
+  .slider-control::-moz-range-track {
+    height: 0.375rem;
+    border-radius: 9999px;
+    background: linear-gradient(to right, var(--color-swu-primary) 0 var(--val, var(--slider-value, 0%)), var(--color-swu-muted) var(--val, var(--slider-value, 0%)) 100%);
+  }
+
+  .slider::-moz-range-progress,
+  .slider-control::-moz-range-progress {
+    height: 0.375rem;
+    border-radius: 9999px;
+    background: var(--color-swu-primary);
+  }
+
+  .slider::-moz-range-thumb,
+  .slider-control::-moz-range-thumb {
+    width: 1.125rem;
+    height: 1.125rem;
+    border: 2px solid var(--color-swu-background);
+    border-radius: 9999px;
+    background: var(--color-swu-primary);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.24);
+  }
+
+  .slider:disabled,
+  .slider-control:disabled {
+    cursor: not-allowed;
+    opacity: 50%;
+  }
+
+  
+
+  
+
+  
+
+  /* Cards, feedback, and content primitives ------------------------------- */
+  .card,
+  .group-box {
+    border-radius: var(--radius-lg);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: var(--color-swu-card);
+    color: var(--color-swu-card-foreground);
+    --shadow-layer: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+  }
+
+  
+
+  
+  
+  
+  
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: calc(infinity * 1px);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: var(--color-swu-muted);
+    padding-inline: calc(var(--spacing) * 2);
+    padding-block: calc(var(--spacing) * 0.5);
+    font-size: var(--text-xs);
+    line-height: var(--leading, var(--text-xs--line-height));
+    font-weight: var(--font-weight-medium);
+    color: var(--color-swu-foreground);
+  }
+
+  
+  
+  
+  
+
+  .avatar {
+    position: relative;
+    display: inline-flex;
+    width: calc(var(--spacing) * 9);
+    height: calc(var(--spacing) * 9);
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: calc(infinity * 1px);
+    background-color: var(--color-swu-muted);
+    font-size: var(--text-xs);
+    line-height: var(--text-xs--line-height);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-swu-muted-foreground);
+  }
+
+  
+  
+
+  .item {
+    display: flex;
+    min-width: 0px;
+    align-items: center;
+    gap: calc(var(--spacing) * 3);
+    border-radius: var(--radius-md);
+    padding-inline: calc(var(--spacing) * 3);
+    padding-block: calc(var(--spacing) * 2);
+  }
+
+  .item:hover {
+    background-color: var(--color-swu-accent);
+  }
+  .item-media {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+  }
+  .item-content {
+    display: grid;
+    min-width: 0px;
+    flex: 1;
+    gap: calc(var(--spacing) * 0.5);
+  }
+  .item-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-swu-foreground);
+  }
+  .item-description {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--text-xs);
+    line-height: var(--leading, var(--text-xs--line-height));
+    color: var(--color-swu-muted-foreground);
+  }
+
+  .alert {
+    display: grid;
+    gap: var(--spacing);
+    border-radius: var(--radius-lg);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: var(--color-swu-card);
+    padding-inline: calc(var(--spacing) * 4);
+    padding-block: calc(var(--spacing) * 3);
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    color: var(--color-swu-card-foreground);
+    --shadow-layer: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+  }
+
+  
+  
+  
+
+  .empty {
+    display: grid;
+    min-height: calc(var(--spacing) * 48);
+    place-items: center;
+    border-radius: var(--radius-lg);
+    border-width: 1px;
+    --border-line: dashed;
+    border-style: dashed;
+    border-color: var(--color-swu-border);
+    background-color: color-mix(in oklab, var(--color-swu-muted) 30%, transparent);
+    padding: calc(var(--spacing) * 6);
+    text-align: center;
+  }
+
+  
+  
+
+  .skeleton {
+    animation: var(--animate-pulse);
+    border-radius: var(--radius-md);
+    background-color: var(--color-swu-muted);
+  }
+
+  
+
+  
+
+  .separator,
+  .divider-line {
+    height: 1px;
+    width: 100%;
+    border-style: solid;
+    border-width: 0px;
+    background-color: var(--color-swu-border);
+  }
+
+  /* Lists, tables, menus, and disclosure ---------------------------------- */
+  .list,
+  .list-view {
+    :where(& > :not(:last-child)) {
+      border-bottom-style: solid;
+      border-top-style: solid;
+      border-top-width: calc(1px * 0);
+      border-bottom-width: calc(1px * calc(1 - 0));
+      border-color: var(--color-swu-border);
+    }
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: var(--color-swu-card);
+  }
+
+  /* A list is a scroll view: the clip above is for its rounded corners and must not turn off its vertical scrolling. */
+  .list-view.scroll-vertical {
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .list > *,
+  .list-view > *,
+  .list li,
+  .list-view li {
+    min-width: 0px;
+    padding-inline: calc(var(--spacing) * 4);
+    padding-block: calc(var(--spacing) * 3);
+  }
+
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+  }
+
+  .table th {
+    border-bottom-style: var(--border-line, solid);
+    border-bottom-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: color-mix(in oklab, var(--color-swu-muted) 50%, transparent);
+    padding-inline: calc(var(--spacing) * 3);
+    padding-block: calc(var(--spacing) * 2);
+    font-size: var(--text-xs);
+    line-height: var(--leading, var(--text-xs--line-height));
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: var(--tracking-wide);
+    color: var(--color-swu-muted-foreground);
+    text-transform: uppercase;
+  }
+
+  .table td {
+    border-bottom-style: var(--border-line, solid);
+    border-bottom-width: 1px;
+    border-color: var(--color-swu-border);
+    padding-inline: calc(var(--spacing) * 3);
+    padding-block: calc(var(--spacing) * 3);
+    color: var(--color-swu-foreground);
+  }
+
+  .table tbody tr:hover {
+    background-color: color-mix(in oklab, var(--color-swu-accent) 60%, transparent);
+  }
+
+  .dropdown,
+  .menu-popup > [role="menu"] {
+    z-index: 30;
+    min-width: calc(var(--spacing) * 40);
+    border-radius: var(--radius-md);
+    border-style: var(--border-line, solid);
+    border-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: var(--color-swu-popover);
+    padding: var(--spacing);
+    color: var(--color-swu-popover-foreground);
+    --shadow-layer: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    --ring-layer: var(--ring-inset, ) 0 0 0 calc(1px + 0px) var(--ring-color, currentcolor);
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+    --ring-color: color-mix(in oklab, var(--color-black) 5%, transparent);
+  }
+
+  
+  .menu-popup > [role="menu"] button {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    border-radius: var(--radius-sm);
+    /* An item is not a prominent button: no fill, no border, no shadow, as in the context menu. */
+    border-width: 0px;
+    background-color: transparent;
+    --shadow-layer: 0 0 #0000;
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+    padding-inline: calc(var(--spacing) * 3);
+    padding-block: calc(var(--spacing) * 2);
+    text-align: left;
+    font-size: var(--text-sm);
+    line-height: var(--leading, var(--text-sm--line-height));
+    color: var(--color-swu-popover-foreground);
+    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke;
+    transition-timing-function: var(--ease, var(--default-transition-timing-function));
+    transition-duration: 100ms;
+    --outline-line: none;
+    outline-style: none;
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-swu-accent);
+        color: var(--color-swu-accent-foreground);
+      }
+    }
+    &:focus-visible {
+      background-color: var(--color-swu-accent);
+    }
+  }
+
+  
+  
+  
+  
+
+  
+  .disclosure-group {
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: var(--color-swu-card);
+    color: var(--color-swu-card-foreground);
+    --shadow-layer: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+  }
+
+  
+  .disclosure-summary {
+    display: flex;
+    width: 100%;
+    cursor: pointer;
+    list-style-type: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--spacing) * 3);
+    padding-inline: calc(var(--spacing) * 4);
+    padding-block: calc(var(--spacing) * 3);
+    text-align: left;
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-swu-foreground);
+    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke;
+    transition-timing-function: var(--ease, var(--default-transition-timing-function));
+    transition-duration: 150ms;
+    outline-style: none;
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-swu-accent);
+      }
+    }
+    &:focus-visible {
+      --ring-layer: var(--ring-inset, ) 0 0 0 calc(3px + 0px) color-mix(in oklab, var(--color-swu-ring) 20%, transparent);
+      box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+      --ring-inset: inset;
+    }
+  }
+
+  
+  .disclosure-content {
+    border-top-style: solid;
+    border-top-width: 1px;
+    border-color: var(--color-swu-border);
+    padding-inline: calc(var(--spacing) * 4);
+    padding-block: calc(var(--spacing) * 3);
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    color: var(--color-swu-muted-foreground);
+  }
+
+  /* Tabs -------------------------------------------------------------------- */
+  .tabs,
+  .tab-view {
+    min-width: 0px;
+  }
+
+  .tabs-list {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing);
+    border-radius: var(--radius-md);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: color-mix(in oklab, var(--color-swu-muted) 60%, transparent);
+    padding: var(--spacing);
+  }
+
+  /* TabView .sidebarAdaptable ----------------------------------------------
+     The browser host (Tools/tab-shell.js) sets data-tab-layout to
+     `sidebar`, `rail` or `mobile` from configurable breakpoints and
+     data-tab-sidebar-expanded / data-tab-mobile-open from user interaction.
+     The layout code lays out only the tab content; this chrome is browser-owned and the
+     semantic host reads --tab-sidebar-width / --tab-bottom-inset to
+     propose the remaining area to the Swift content.
+
+     Every color and size is a custom property with a framework-token
+     fallback, so an application stylesheet restyles the shell by setting:
+       --tab-background     page background, FAB icon, FAB badge ring
+       --tab-panel          sidebar and mobile panel surface
+       --tab-line           separators and borders
+       --tab-ink            primary text, hover text, FAB and tooltip fill
+       --tab-ink-secondary  tab label text
+       --tab-muted          toggle icon
+       --tab-soft           section titles
+       --tab-sunk           hover background
+       --tab-accent         selected tab text, focus ring
+       --tab-accent-soft    selected tab background
+       --tab-warn           badge text
+       --tab-warn-background badge fill
+       --tab-ribbon         activity dot (`.badge("•")`) paint
+       --tab-overlay        mobile backdrop color
+       --tab-shadow         tooltip shadow
+       --tab-shadow-lg      mobile panel shadow
+       --tab-fab-shadow     floating menu button shadow
+       --tab-sidebar-expanded-width (248px), --tab-sidebar-rail-width (72px)
+       --tab-content-clearance  mobile bottom clearance after the last content
+       --tab-sidebar-footer-display  footer display in sidebar/rail (none) */
+  .tab-view[data-tab-style="sidebar-adaptable"] {
+    --tab-sidebar-width: 0px;
+    --tab-bottom-inset: 0px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+    padding-inline-start: var(--tab-sidebar-width);
+    padding-bottom: var(--tab-bottom-inset);
+    background: var(--tab-background, transparent);
+  }
+
+  .tab-view[data-tab-style="sidebar-adaptable"][data-tab-layout="rail"],
+  .tab-view[data-tab-style="sidebar-adaptable"][data-tab-layout="sidebar"] {
+    --tab-sidebar-width: var(--tab-sidebar-rail-width, 72px);
+  }
+
+  .tab-view[data-tab-style="sidebar-adaptable"][data-tab-layout="rail"][data-tab-sidebar-expanded="true"],
+  .tab-view[data-tab-style="sidebar-adaptable"][data-tab-layout="sidebar"][data-tab-sidebar-expanded="true"] {
+    --tab-sidebar-width: var(--tab-sidebar-expanded-width, 248px);
+  }
+
+  .tab-view[data-tab-style="sidebar-adaptable"] > .tab-body {
+    order: 1;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .tab-view[data-tab-style="sidebar-adaptable"] > .tab-sidebar {
+    position: absolute;
+    z-index: 30;
+    inset: 0 auto 0 0;
+    display: flex;
+    width: var(--tab-sidebar-width);
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid var(--tab-line, var(--color-swu-border));
+    background: var(--tab-panel, var(--color-swu-surface));
+    color: var(--tab-ink, var(--color-swu-foreground));
+    transition: width 0.22s ease;
+  }
+
+  /* Sidebar customization content only exists in the adaptable shell. */
+  .tab-view:not([data-tab-style="sidebar-adaptable"]) [data-tab-sidebar-content],
+  .tab-view[data-tab-style="sidebar-adaptable"]:not([data-tab-layout]) > .tab-sidebar,
+  .tab-mobile-toggle,
+  .tab-mobile-backdrop {
+    display: none;
+  }
+
+  /* Header row: application header content plus the collapse toggle. */
+  .tab-sidebar > .tab-sidebar-header {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    height: var(--tab-header-height, 64px);
+    padding: 0 12px 0 16px;
+  }
+
+  .tab-sidebar-header-content {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .tab-sidebar-toggle {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--tab-muted, var(--color-swu-muted-foreground));
+    cursor: pointer;
+  }
+
+  .tab-sidebar-toggle:hover {
+    background: var(--tab-sunk, var(--color-swu-accent));
+    color: var(--tab-ink, var(--color-swu-foreground));
+  }
+
+  .tab-sidebar-toggle:focus-visible,
+  .tab-sidebar-list > [role="tab"]:focus-visible,
+  .tab-view[data-tab-style="sidebar-adaptable"] > .tab-mobile-toggle:focus-visible {
+    outline: 2px solid var(--tab-accent, var(--color-swu-ring));
+    outline-offset: 2px;
+  }
+
+  .tab-sidebar-toggle > .symbol-icon {
+    font-size: 18px;
+  }
+
+  .tab-sidebar-toggle-logo {
+    display: none;
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+  }
+
+  /* Tabs */
+  .tab-sidebar > .tab-sidebar-list {
+    position: static;
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 6px 12px 12px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .tab-sidebar-list > [role="tab"] {
+    position: relative;
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+    height: var(--tab-item-height, 40px);
+    margin: 0;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--tab-ink-secondary, var(--color-swu-foreground));
+    font: inherit;
+    font-size: var(--tab-item-font-size, 14px);
+    font-weight: 500;
+    line-height: 1.5;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+    outline: none;
+    transition: background-color 0.15s, color 0.15s;
+  }
+
+  .tab-sidebar-list > [role="tab"]:hover {
+    background: var(--tab-sunk, var(--color-swu-accent));
+    color: var(--tab-ink, var(--color-swu-foreground));
+  }
+
+  .tab-sidebar-list > [role="tab"][aria-selected="true"] {
+    background: var(--tab-accent-soft, var(--color-swu-accent));
+    color: var(--tab-accent, var(--color-swu-accent-foreground));
+    font-weight: 600;
+  }
+
+  .tab-sidebar-list > [role="tab"][disabled],
+  .tab-sidebar-list > [role="tab"][aria-disabled="true"] {
+    pointer-events: none;
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .tab-sidebar-list > [role="tab"][data-tab-role="search"] {
+    order: 1000;
+  }
+
+  .tab-sidebar-list .tab-icon {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+  }
+
+  .tab-sidebar-list .tab-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .tab-sidebar-list .tab-badge,
+  .tab-view[data-tab-style="sidebar-adaptable"] .tab-mobile-badge {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    min-width: 20px;
+    height: 20px;
+    margin: 0 0 0 auto;
+    padding: 0 6px;
+    border-radius: 10px;
+    background: var(--tab-warn-background, var(--color-swu-primary));
+    color: var(--tab-warn, var(--color-swu-primary-foreground));
+    font-size: 11.5px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  /* `.badge("•")` is an activity indicator, not a count. */
+  .tab-sidebar-list .tab-badge[data-badge-style="dot"] {
+    width: 8px;
+    min-width: 0;
+    height: 8px;
+    padding: 0;
+    border-radius: 50%;
+    background: var(--tab-ribbon, linear-gradient(90deg, #63cdf2 0%, #a688f2 38%, #f08bc2 70%, #f7c18a 100%));
+    animation: swu-tab-activity-pulse 1.6s ease-in-out infinite;
+  }
+
+  .tab-sidebar-list > .tab-section-header {
+    display: block;
+    align-self: stretch;
+    min-height: 0;
+    margin: 18px 0 0;
+    padding: 0 10px 6px;
+    overflow: hidden;
+    border: 0;
+    color: var(--tab-soft, var(--color-swu-muted-foreground));
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: normal;
+    line-height: 1.5;
+    text-align: left;
+    text-overflow: ellipsis;
+    text-transform: none;
+    white-space: nowrap;
+  }
+
+  .tab-sidebar-list > .tab-section-header:first-child {
+    margin-top: 4px;
+  }
+
+  /* Footer: shown in the mobile panel; opt-in elsewhere. */
+  .tab-sidebar > .tab-sidebar-footer-content {
+    display: var(--tab-sidebar-footer-display, none);
+    flex: none;
+    min-width: 0;
+    padding: 12px;
+    border-top: 1px solid var(--tab-line, var(--color-swu-border));
+  }
+
+  /* Bottom bar (for example the signed-in user). */
+  .tab-sidebar > .tab-sidebar-bottom-bar-content {
+    display: block;
+    flex: none;
+    min-width: 0;
+    padding: 12px;
+    overflow: hidden;
+    border-top: 1px solid var(--tab-line, var(--color-swu-border));
+    white-space: nowrap;
+  }
+
+  /* Collapsed rail */
+  .tab-view[data-tab-sidebar-expanded="false"] .tab-sidebar-header {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .tab-view[data-tab-sidebar-expanded="false"] .tab-sidebar-header-content {
+    display: none;
+  }
+
+  .tab-view[data-tab-sidebar-expanded="false"] .tab-sidebar-toggle {
+    width: 44px;
+    height: 44px;
+  }
+
+  .tab-view[data-tab-sidebar-expanded="false"] .tab-sidebar-toggle[data-tab-has-logo="true"] > .tab-sidebar-toggle-logo {
+    display: block;
+  }
+
+  .tab-view[data-tab-sidebar-expanded="false"] .tab-sidebar-toggle[data-tab-has-logo="true"] > .tab-sidebar-toggle-icon,
+  .tab-view[data-tab-sidebar-expanded="false"] .tab-sidebar-toggle[data-tab-has-logo="true"]:hover > .tab-sidebar-toggle-logo,
+  .tab-view[data-tab-sidebar-expanded="false"] .tab-sidebar-toggle[data-tab-has-logo="true"]:focus-visible > .tab-sidebar-toggle-logo {
+    display: none;
+  }
+
+  .tab-view[data-tab-sidebar-expanded="false"] .tab-sidebar-toggle[data-tab-has-logo="true"]:hover > .tab-sidebar-toggle-icon,
+  .tab-view[data-tab-sidebar-expanded="false"] .tab-sidebar-toggle[data-tab-has-logo="true"]:focus-visible > .tab-sidebar-toggle-icon {
+    display: inline-flex;
+  }
+
+  .tab-view[data-tab-sidebar-expanded="false"] .tab-sidebar-list > [role="tab"] {
+    justify-content: center;
+    gap: 0;
+    width: 44px;
+    margin: 0 auto;
+    padding: 0;
+  }
+
+  .tab-view[data-tab-sidebar-expanded="false"] .tab-sidebar-list .tab-title {
+    display: none;
+  }
+
+  .tab-view[data-tab-sidebar-expanded="false"] .tab-sidebar-list > [data-tab-has-icon="false"]::before {
+    content: attr(data-tab-fallback);
+    font-size: 0.85rem;
+    font-weight: 650;
+  }
+
+  .tab-view[data-tab-sidebar-expanded="false"] .tab-sidebar-list > .tab-section-header {
+    height: 1px;
+    margin: 14px 8px;
+    padding: 0;
+    background: var(--tab-line, var(--color-swu-border));
+    color: transparent;
+    font-size: 0;
+    line-height: 0;
+  }
+
+  .tab-view[data-tab-sidebar-expanded="false"] .tab-sidebar-list .tab-badge {
+    position: absolute;
+    top: 3px;
+    right: 1px;
+    min-width: 16px;
+    height: 16px;
+    margin: 0;
+    padding: 0 4px;
+    font-size: 10px;
+  }
+
+  .tab-view[data-tab-sidebar-expanded="false"] .tab-sidebar-list .tab-badge[data-badge-style="dot"] {
+    top: 7px;
+    right: 7px;
+    width: 8px;
+    min-width: 0;
+    height: 8px;
+    padding: 0;
+  }
+
+  .tab-view[data-tab-sidebar-expanded="false"] .tab-sidebar-bottom-bar-content .hstack {
+    justify-content: center;
+  }
+
+  .tab-view[data-tab-sidebar-expanded="false"] .tab-sidebar-bottom-bar-content .hstack > :not(:first-child) {
+    display: none;
+  }
+
+  /* Tooltip for the collapsed rail (appended to <body> by the host). */
+  .tab-tooltip {
+    position: fixed;
+    z-index: 80;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: var(--tab-tooltip-background, var(--tab-ink, var(--color-swu-foreground)));
+    box-shadow: var(--tab-shadow, 0 1px 2px rgb(0 0 0 / 0.05), 0 8px 28px rgb(0 0 0 / 0.07));
+    color: var(--tab-tooltip-foreground, var(--tab-background, var(--color-swu-background)));
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  .tab-tooltip[hidden] {
+    display: none;
+  }
+
+  /* Mobile: floating menu button + panel over a blurred backdrop. */
+  .tab-view[data-tab-layout="mobile"] > .tab-sidebar {
+    position: fixed;
+    z-index: 71;
+    inset: auto 12px calc(92px + env(safe-area-inset-bottom, 0px)) 12px;
+    width: auto;
+    max-height: calc(100dvh - 130px - env(safe-area-inset-bottom, 0px) - env(safe-area-inset-top, 0px));
+    padding: 10px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 0;
+    border-radius: 22px;
+    box-shadow: var(--tab-shadow-lg, 0 24px 64px rgb(20 16 40 / 0.22));
+    transform: translateY(16px) scale(0.97);
+    transform-origin: bottom right;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform 0.2s ease, opacity 0.2s ease, visibility 0s linear 0.2s;
+  }
+
+  .tab-view[data-tab-layout="mobile"][data-tab-mobile-open="true"] > .tab-sidebar {
+    transform: none;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+  }
+
+  .tab-view[data-tab-layout="mobile"] .tab-sidebar-header,
+  .tab-view[data-tab-layout="mobile"] .tab-sidebar > .tab-sidebar-bottom-bar-content {
+    display: none;
+  }
+
+  .tab-view[data-tab-layout="mobile"] .tab-sidebar > .tab-sidebar-list {
+    flex: none;
+    padding: 0;
+    overflow: visible;
+  }
+
+  .tab-view[data-tab-layout="mobile"] .tab-sidebar-list > [role="tab"] {
+    height: 48px;
+    font-size: 15.5px;
+  }
+
+  .tab-view[data-tab-layout="mobile"] .tab-sidebar-list > .tab-section-header {
+    margin-top: 12px;
+  }
+
+  .tab-view[data-tab-layout="mobile"] .tab-sidebar > .tab-sidebar-footer-content {
+    display: block;
+    margin-top: 10px;
+    padding: 10px 4px 4px;
+  }
+
+  .tab-view[data-tab-layout="mobile"] > .tab-mobile-backdrop {
+    display: block;
+    position: fixed;
+    z-index: 70;
+    inset: 0;
+    background: var(--tab-overlay, rgb(18 16 28 / 0.42));
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+
+  .tab-view[data-tab-layout="mobile"][data-tab-mobile-open="true"] > .tab-mobile-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .tab-view[data-tab-layout="mobile"] > .tab-mobile-toggle {
+    position: fixed;
+    z-index: 72;
+    right: 18px;
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    display: grid;
+    place-items: center;
+    width: 60px;
+    height: 60px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--tab-ink, var(--color-swu-foreground));
+    box-shadow: var(--tab-fab-shadow, 0 10px 30px rgb(20 16 40 / 0.35));
+    color: var(--tab-background, var(--color-swu-background));
+    cursor: pointer;
+    transition: transform 0.2s ease, opacity 0.2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .tab-view[data-tab-layout="mobile"] > .tab-mobile-toggle[aria-expanded="true"] {
+    transform: rotate(90deg);
+  }
+
+  .tab-mobile-toggle > .symbol-icon {
+    grid-area: 1 / 1;
+    font-size: 24px;
+  }
+
+  .tab-mobile-toggle > .tab-mobile-close-icon,
+  .tab-mobile-toggle[aria-expanded="true"] > .tab-mobile-open-icon,
+  .tab-mobile-toggle[aria-expanded="true"] > .tab-mobile-badge {
+    display: none;
+  }
+
+  .tab-mobile-toggle[aria-expanded="true"] > .tab-mobile-close-icon {
+    display: inline-flex;
+  }
+
+  .tab-view[data-tab-style="sidebar-adaptable"] .tab-mobile-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    border: 2px solid var(--tab-background, var(--color-swu-background));
+  }
+
+  /* The floating button overlays content. Scroll owners inside the active
+     tab keep clearance after their last content so it is never covered. */
+  .tab-view[data-tab-layout="mobile"] .tab-panel[data-content-overflow]::after,
+  .tab-view[data-tab-layout="mobile"] .tab-panel .scroll-vertical[data-content-overflow]::after,
+  .tab-view[data-tab-layout="mobile"] .tab-panel .scroll-both[data-content-overflow]::after {
+    content: "";
+    position: absolute;
+    top: var(--content-extent, 100%);
+    left: 0;
+    width: 1px;
+    height: var(--tab-content-clearance, calc(96px + env(safe-area-inset-bottom, 0px)));
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  /* Mobile with up to five tabs: a floating bottom tab bar instead of the menu button. */
+  .tab-view[data-tab-layout="mobile"][data-tab-mobile-bar] > .tab-mobile-toggle,
+  .tab-view[data-tab-layout="mobile"][data-tab-mobile-bar] > .tab-mobile-backdrop {
+    display: none;
+  }
+  .tab-view[data-tab-layout="mobile"][data-tab-mobile-bar] > .tab-sidebar {
+    inset: auto 0 calc(14px + env(safe-area-inset-bottom, 0px)) 0;
+    width: fit-content;
+    max-width: calc(100% - 32px);
+    margin-inline: auto;
+    padding: 4px;
+    overflow: visible;
+    border-radius: 9999px;
+    /* The same glass as the automatic bar above: light, or dark in a dark scheme. */
+    background: light-dark(rgb(250 250 250 / 0.72), rgb(38 38 40 / 0.78));
+    -webkit-backdrop-filter: blur(22px) saturate(1.8);
+    backdrop-filter: blur(22px) saturate(1.8);
+    box-shadow:
+      0 8px 24px rgb(0 0 0 / 0.12),
+      inset 0 0 0 1px light-dark(rgb(255 255 255 / 0.6), rgb(255 255 255 / 0.08)),
+      0 0 0 1px light-dark(rgb(0 0 0 / 0.06), rgb(0 0 0 / 0.5));
+    transform: none;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: none;
+  }
+  .tab-view[data-tab-layout="mobile"][data-tab-mobile-bar] .tab-sidebar-list {
+    display: flex;
+    flex-direction: row;
+    gap: 2px;
+    width: auto;
+  }
+  .tab-view[data-tab-layout="mobile"][data-tab-mobile-bar] .tab-sidebar-list > [role="tab"] {
+    /* The tabs share the bar and shrink with it: four tabs must fit a 320px phone, so none keeps a minimum width, and a
+       label that still does not fit is cut with an ellipsis instead of pushing the last tab off the screen. */
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+    height: 56px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    padding: 4px;
+    overflow: hidden;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 500;
+    /* The page's own text color, not black: black on the dark glass of a dark scheme is unreadable. */
+    color: var(--color-swu-foreground);
+    position: relative;
+  }
+  /* A tab with no symbol has only its title: it is set larger than the 12px that sits under an icon, and centered. */
+  .tab-view[data-tab-layout="mobile"][data-tab-mobile-bar] .tab-sidebar-list > [role="tab"]:not(:has(> .tab-icon)) {
+    font-size: 14px;
+  }
+  .tab-view[data-tab-layout="mobile"][data-tab-mobile-bar] .tab-sidebar-list > [role="tab"][aria-selected="true"] {
+    background: rgb(120 120 128 / 0.14);
+    color: var(--tint-color, var(--color-swu-primary));
+  }
+  .tab-view[data-tab-layout="mobile"][data-tab-mobile-bar] .tab-sidebar-list > [role="tab"] > .tab-icon {
+    font-size: 26px;
+  }
+  .tab-view[data-tab-layout="mobile"][data-tab-mobile-bar] .tab-sidebar-list > [role="tab"] > :not(.tab-icon):not(.tab-badge) {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tab-view[data-tab-layout="mobile"][data-tab-mobile-bar] .tab-sidebar-list > [role="tab"] > .tab-badge {
+    position: absolute;
+    top: 2px;
+    right: calc(50% - 22px);
+  }
+
+  @keyframes swu-tab-activity-pulse {
+    50% { opacity: 0.45; }
+  }
+
+  /* Presentation surfaces -------------------------------------------------- */
+  .dialog,
+  .alert-panel,
+  .confirmation-dialog {
+    position: fixed;
+    inset: 0px;
+    z-index: 50;
+    margin: auto;
+    display: flex;
+    max-height: calc(100vh - 2rem);
+    width: calc(100% - 2rem);
+    max-width: var(--container-lg);
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: var(--color-swu-popover);
+    padding: 0px;
+    color: var(--color-swu-popover-foreground);
+    --shadow-layer: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+    box-shadow: var(--shadow-layer, 0 0 #0000);
+    isolation: isolate;
+    box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.45), 0 24px 48px rgb(0 0 0 / 0.18);
+  }
+
+  .dialog::backdrop { background: rgb(0 0 0 / 0.45); backdrop-filter: blur(3px); }
+
+  
+  .sheet-panel {
+    min-height: 0px;
+    flex: 1;
+  }
+
+  
+  .presentation-header {
+    display: grid;
+    flex-shrink: 0;
+    gap: var(--spacing);
+    border-bottom-style: solid;
+    border-bottom-width: 1px;
+    border-color: var(--color-swu-border);
+    padding-inline: calc(var(--spacing) * 6);
+    padding-block: calc(var(--spacing) * 5);
+  }
+
+  .dialog-title{
+    font-size: var(--text-base);
+    line-height: var(--leading, var(--text-base--line-height));
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: var(--tracking-tight);
+    color: var(--color-swu-foreground);
+  }
+  
+  
+  .sheet-content,
+  .presentation-content {
+    min-height: 0px;
+    flex: 1;
+    overflow-y: auto;
+    padding-inline: calc(var(--spacing) * 6);
+    padding-block: calc(var(--spacing) * 5);
+  }
+  
+
+  .presentation-header h2 {
+    margin: 0px;
+    font-size: var(--text-base);
+    line-height: var(--leading, var(--text-base--line-height));
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: var(--tracking-tight);
+  }
+  .presentation-content > * + * {
+    margin-top: calc(var(--spacing) * 4);
+  }
+  /* A sheet that hosts a NavigationStack fills the large detent, as in SwiftUI, instead of sizing to a content height
+     the layout engine measured before asynchronous content arrived. */
+  .sheet-panel:not([data-presentation-detents]):has(> .presentation-content > .navigation-stack) {
+    height: 92vh;
+  }
+  .sheet-panel:not([data-presentation-detents]) > .presentation-content > .navigation-stack {
+    height: 100% !important;
+    min-height: 100%;
+  }
+  .presentation-message {
+    font-size: var(--text-sm);
+    --leading: var(--leading-relaxed);
+    line-height: var(--leading-relaxed);
+    color: var(--color-swu-muted-foreground);
+  }
+  .presentation-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: calc(var(--spacing) * 2);
+  }
+  
+
+  .sheet,
+  .sheet-panel {
+    position: fixed;
+    inset-inline: 0px;
+    bottom: 0px;
+    z-index: 50;
+    display: flex;
+    max-height: 92vh;
+    width: 100%;
+    flex-direction: column;
+    overflow: hidden;
+    border-top-left-radius: var(--radius-xl);
+    border-top-right-radius: var(--radius-xl);
+    border-style: solid;
+    border-width: 1px;
+    border-bottom-style: solid;
+    border-bottom-width: 0px;
+    border-color: var(--color-swu-border);
+    background-color: var(--color-swu-popover);
+    padding: 0px;
+    color: var(--color-swu-popover-foreground);
+    --shadow-layer: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+    box-shadow: var(--shadow-layer, 0 0 #0000);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    isolation: isolate;
+    box-shadow: 0 -1rem 3rem rgb(0 0 0 / 0.14), 0 0 0 100vmax rgb(0 0 0 / 0.45);
+  }
+
+  .sheet::before,
+  .sheet-panel::before {
+    content: "";
+    position: absolute;
+    top: calc(var(--spacing) * 3);
+    left: calc(1 / 2 * 100%);
+    z-index: 10;
+    height: var(--spacing);
+    width: calc(var(--spacing) * 10);
+    translate: calc(calc(1 / 2 * 100%) * -1) var(--shift-y, 0);
+    border-radius: calc(infinity * 1px);
+    background-color: color-mix(in oklab, var(--color-swu-muted-foreground) 40%, transparent);
+  }
+
+  
+  
+  
+
+  
+  
+  
+
+  @media (min-width: 768px) {
+    /* On roomy viewports a sheet is a form sheet, as on iPad and macOS: centered over its presenter, sized to its
+       content (a minimum width keeps short sheets from collapsing), with the page dimmed behind. On phones it stays
+       a bottom drawer. `.sheet(isPresented:)` stays the public API; only this presentation surface changes. */
+    .sheet-panel:not(.sheet-left):not(.sheet-top):not(.sheet-bottom),
+    .sheet:not(.sheet-left):not(.sheet-top):not(.sheet-bottom) {
+      inset: 0px;
+      margin: auto;
+      height: fit-content;
+      max-height: 85vh;
+      width: min(36rem, 90vw);
+      min-width: min(25rem, 90vw);
+      border-radius: var(--radius-xl);
+      border-bottom-style: solid;
+      border-bottom-width: 1px;
+      box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 0.25), 0 0 0 100vmax rgb(0 0 0 / 0.45);
+      /* A form sheet rises from below the screen, as on iPad (swu-sheet-in). */
+      --motion-sheet-offset: 100vh;
+    }
+
+    /* A form sheet that hosts a NavigationStack is a tall panel, not a box sized to a content height measured before
+       its content arrived. */
+    .sheet-panel:not(.sheet-left):not(.sheet-top):not(.sheet-bottom):not([data-presentation-detents]):has(> .presentation-content > .navigation-stack) {
+      height: min(85vh, 56rem);
+      width: min(52rem, 85vw);
+    }
+
+    /* A form sheet has no grabber. */
+    .sheet-panel:not(.sheet-left):not(.sheet-top):not(.sheet-bottom)::before,
+    .sheet:not(.sheet-left):not(.sheet-top):not(.sheet-bottom)::before {
+      display: none;
+    }
+
+    .sheet-panel .presentation-content,
+    .sheet .sheet-content { scrollbar-gutter: stable; }
+  }
+
+  .popover,
+  .popover-card {
+    z-index: 40;
+    max-width: var(--container-md);
+    border-radius: var(--radius-lg);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: var(--color-swu-popover);
+    padding: 0px;
+    color: var(--color-swu-popover-foreground);
+    --shadow-layer: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+  }
+
+  
+
+  
+
+  .toast,
+  .toast-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: calc(var(--spacing) * 3);
+    border-radius: var(--radius-lg);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: var(--color-swu-popover);
+    padding-inline: calc(var(--spacing) * 4);
+    padding-block: calc(var(--spacing) * 3);
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    color: var(--color-swu-popover-foreground);
+    --shadow-layer: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
+  }
+
+  
+  
+
+  /* The JavaScript bridge marks opt-in surfaces closed before the first
+     interaction. Keeping the state selector here means a no-JS/static host
+     can still choose its own initial visibility with the same attribute. */
+  .dialog[data-sp-toggle][data-state="closed"],
+  .sheet[data-sp-toggle][data-state="closed"],
+  .popover[data-sp-toggle][data-state="closed"],
+  .dropdown[data-sp-toggle][data-state="closed"] {
+    display: none;
+  }
+
+  .dialog[data-sp-toggle][data-state="open"],
+  .sheet[data-sp-toggle][data-state="open"] {
+    display: flex;
+  }
+
+  .popover[data-sp-toggle][data-state="open"],
+  .dropdown[data-sp-toggle][data-state="open"] {
+    display: block;
+  }
+
+  /* Sidebar ---------------------------------------------------------------- */
+  
+
+  .sidebar {
+    z-index: 30;
+    display: flex;
+    height: 100vh;
+    width: var(--sidebar-width);
+    flex-shrink: 0;
+    flex-direction: column;
+    border-right-style: solid;
+    border-right-width: 1px;
+    border-color: var(--color-swu-border);
+    background-color: var(--color-swu-surface);
+    transition-property: width, transform;
+    transition-duration: 200ms;
+    --ease: var(--ease-out);
+    transition-timing-function: var(--ease-out);
+  }
+
+  .sidebar-header,
+  .sidebar-footer {
+    flex-shrink: 0;
+    padding: calc(var(--spacing) * 3);
+  }
+  .sidebar-footer {
+    border-top-style: solid;
+    border-top-width: 1px;
+    border-color: var(--color-swu-border);
+  }
+  .sidebar-content {
+    min-height: 0px;
+    flex: 1;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-inline: calc(var(--spacing) * 2);
+    padding-block: calc(var(--spacing) * 3);
+  }
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+  /* NavigationSplitView is SwiftUI's public sidebar API. Reuse the same
+     semantic language without requiring applications to construct a browser
+     sidebar or a DOM node themselves. */
+  .navigation-split-view {
+    min-width: 0px;
+    overflow: hidden;
+    border-radius: 0;
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-swu-border);
+  }
+
+  .navigation-split-view .navigation-sidebar {
+    display: flex;
+    min-height: 0px;
+    flex-direction: column;
+    overflow-y: auto;
+    background-color: var(--color-swu-surface);
+    padding-inline: calc(var(--spacing) * 2);
+    padding-block: calc(var(--spacing) * 3);
+  }
+
+  /* NavigationSplitView gives the sidebar its full column proposal. Preserve
+     that proposal through the frame/padding wrappers emitted by SwiftUI's
+     modifiers so a VStack Spacer can place footer content at the bottom. */
+  .navigation-split-view .navigation-sidebar > .frame-box {
+    align-self: stretch;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .navigation-split-view .navigation-sidebar > .frame-box > .padding-box {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    box-sizing: border-box;
+  }
+
+  .navigation-split-view .navigation-sidebar > .frame-box > .padding-box > .vstack {
+    flex: 1 1 auto;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .navigation-split-view .navigation-content,
+  .navigation-split-view .navigation-detail {
+    display: flex;
+    min-height: 0px;
+    min-width: 0px;
+    flex-direction: column;
+  }
+
+  /* A column may receive a frame wrapper when an application asks its
+     navigation detail for the full viewport proposal. Keep that wrapper and
+     its scroll root in the column's flex sizing chain instead of falling back
+     to the content's intrinsic height. */
+  .navigation-split-view .navigation-content > .frame-box,
+  .navigation-split-view .navigation-detail > .frame-box,
+  .navigation-split-view .navigation-content > .navigation-stack,
+  .navigation-split-view .navigation-detail > .navigation-stack {
+    min-height: 0px;
+    width: 100%;
+    min-width: 0px;
+    flex: 1;
+  }
+
+  .navigation-split-view .navigation-content > .frame-box > .navigation-stack,
+  .navigation-split-view .navigation-detail > .frame-box > .navigation-stack {
+    align-self: stretch;
+    justify-self: stretch;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+  }
+
+  /* A full-height frame around a ScrollView is the common SwiftUI spelling
+     for a pane-owned scroll region. Grid's top alignment otherwise leaves the
+     scroll node at its intrinsic content height. */
+  .frame-box > .scroll-view {
+    align-self: stretch;
+    justify-self: stretch;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .frame-box > .navigation-split-view {
+    align-self: stretch;
+    justify-self: stretch;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .navigation-split-view .navigation-sidebar + .navigation-content,
+  .navigation-split-view .navigation-sidebar + .navigation-detail {
+    border-left-style: solid;
+    border-left-width: 1px;
+    border-color: var(--color-swu-border);
+  }
+
+  
+  
+
+  /* Mobile uses a real off-canvas drawer; desktop keeps the column in flow. */
+  @media (max-width: 767px) {
+    
+    .sidebar { position: fixed; inset: 0 auto 0 0; width: var(--sidebar-width-mobile); transform: translateX(-100%); box-shadow: 1rem 0 2rem rgb(0 0 0 / 0.12); }
+    .sidebar[data-state="open"],
+    .sidebar.open{ transform: translateX(0); }
+    
+    
+  }
+
+  @media (min-width: 768px) {
+    .sidebar[data-state="collapsed"],
+    .sidebar.collapsed { width: var(--sidebar-width-icon); }
+    
+    
+  }
+}
+
+@layer utilities {
+  /* A bordered button tints its background, not its label: the tint at a quarter strength over what is behind. */
+  .button-bordered[data-tint],
+  .button-bordered[data-tint]:hover:not(:disabled) {
+    border-color: transparent;
+    background-color: color-mix(in srgb, var(--tint-color) 25%, transparent);
+  }
+
+  /* Local content-visibility helper. */
+  .content-auto {
+    content-visibility: auto;
+  }
+}
+
+/* Keep tablet portrait in the compact branch. iPad landscape and desktop
+   retain the full split layout, while phones and portrait tablets get the
+   same touch-first navigation surface. */
+@media (min-width: 960px) {
+  .responsive-compact {
+    display: none !important;
+  }
+
+  .responsive-regular {
+    display: block !important;
+  }
+}
+
+@media (max-width: 959px) {
+  .responsive-compact {
+    display: block !important;
+  }
+
+  .responsive-regular {
+    display: none !important;
+  }
+
+  .navigation-split-view {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .navigation-sidebar {
+    border-right-style: solid;
+    border-right-width: 0px;
+    border-bottom-style: solid;
+    border-bottom-width: 1px;
+  }
+
+  .navigation-split-view .navigation-content,
+  .navigation-split-view .navigation-detail {
+    border-top-style: solid;
+    border-top-width: 1px;
+    border-left-style: solid;
+    border-left-width: 0px;
+    border-color: var(--color-swu-border);
+  }
+}
+
+/* A compact NavigationSplitView is a push navigation: the sidebar is the root and the detail replaces it (the host
+   sets data-compact-detail when something in the sidebar is chosen; the back button clears it). */
+.compact-back { display: none; }
+
+@media (max-width: 700px) {
+  .navigation-split-view { display: block; grid-template-columns: none !important; width: 100% !important; max-width: 100vw; }
+  .navigation-split-view > .navigation-column { height: 100%; width: 100% !important; min-width: 0; border: 0; }
+  .navigation-split-view:not([data-compact-detail]) > .navigation-detail,
+  .navigation-split-view[data-compact-detail] > .navigation-sidebar,
+  .navigation-split-view[data-compact-detail] > .navigation-content { display: none; }
+  .navigation-split-view[data-compact-detail] > .navigation-detail { display: flex; flex-direction: column; }
+  .navigation-split-view .compact-back {
+    display: flex; align-items: center; gap: 0.25rem; align-self: flex-start; min-height: 44px; padding: 0 0.75rem;
+    border: 0; background: transparent; color: var(--tint-color, var(--color-swu-primary)); font: inherit; cursor: pointer;
+  }
+}
+
+/* Motion uses the same restrained, spring-like entry language across
+   transient surfaces. The browser host opts a surface into a keyframe with
+   data-enter-animation only when it is mounted or materially transitions;
+   ordinary Fiber state updates therefore keep the DOM visually stable. */
+@keyframes swu-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes swu-scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes swu-slide-up {
+  from { opacity: 0; transform: translateY(1rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes swu-popover-in {
+  from { opacity: 0; transform: scale(0.96) translateY(-0.25rem); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes swu-accordion-in {
+  from { opacity: 0; transform: translateY(-0.25rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes swu-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes swu-progress-indeterminate {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+@keyframes swu-fade-out {
+  to { opacity: 0; }
+}
+
+/* An alert, a dialog: from 1.15 times its size, fading in (with the dimming its shadow draws). */
+@keyframes swu-alert-in {
+  from { opacity: 0; transform: scale(1.15); }
+}
+
+/* A sheet from below the screen: its own height on a phone, the screen's for a centered form sheet. The page dims
+   behind it as it comes (the second shadow is the dimming). */
+@keyframes swu-sheet-in {
+  from { transform: translateY(var(--motion-sheet-offset, 100%)); box-shadow: 0 0 0 transparent, 0 0 0 100vmax transparent; }
+}
+
+@keyframes swu-sheet-out {
+  to { transform: translateY(var(--motion-sheet-offset, 100%)); box-shadow: 0 0 0 transparent, 0 0 0 100vmax transparent; }
+}
+
+/* A full-screen cover rises from the bottom edge, and goes back down. */
+@keyframes swu-cover-in {
+  from { transform: translateY(100%); box-shadow: 0 0 0 100vmax transparent, 0 0 0 transparent; }
+}
+
+@keyframes swu-cover-out {
+  to { transform: translateY(100%); box-shadow: 0 0 0 100vmax transparent, 0 0 0 transparent; }
+}
+
+@keyframes swu-navigation-push {
+  from { transform: translateX(calc(100% * var(--motion-direction, 1))); }
+}
+
+@keyframes swu-navigation-pop {
+  to { transform: translateX(calc(100% * var(--motion-direction, 1))); }
+}
+
+/* `--motion-shift` is a third of the screen's width (transition-host.js). */
+@keyframes swu-navigation-cover {
+  to { transform: translateX(calc(var(--motion-shift, 30%) * -1 * var(--motion-direction, 1))); }
+}
+
+@keyframes swu-navigation-reveal {
+  from { transform: translateX(calc(var(--motion-shift, 30%) * -1 * var(--motion-direction, 1))); }
+}
+
+.toast-banner[data-enter-animation="true"],
+[role="status"][data-enter-animation="true"],
+[aria-live="polite"][data-enter-animation="true"] {
+  animation: swu-slide-up 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tooltip-bubble,
+[data-tooltip] {
+  transform-origin: bottom center;
+}
+
+.tooltip-bubble[data-enter-animation="true"],
+[data-tooltip][data-enter-animation="true"] {
+  animation: swu-scale-in 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toast-banner[data-exit-animation="true"] {
+  animation: swu-slide-up 160ms cubic-bezier(0.7, 0, 0.84, 0) reverse both;
+}
+
+.tooltip-bubble[data-exit-animation="true"] {
+  animation: swu-scale-in 120ms cubic-bezier(0.7, 0, 0.84, 0) reverse both;
+}
+
+/* No rule for [data-animation]: an .animation(_:value:) eases only the commit in which its value changed, with the
+   transition the page sets for that commit (embedded-dom.js, armTransition). */
+/* No rule for [data-transition] either: a transition plays only when its view is inserted or removed in an animated
+   commit, from the states Swift publishes (transition-host.js). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+[data-lazy] {
+  contain-intrinsic-size: auto 160px;
+}
+
+/* Project compatibility primitives ------------------------------------- */
+.regular-grid {
+  display: grid;
+  min-width: 0px;
+}
+
+.grid-row {
+  display: grid;
+  min-width: 0px;
+  grid-template-columns: subgrid;
+}
+
+.grid-row > * {
+  min-width: 0px;
+}
+
+.shape-layer {
+  pointer-events: none;
+  min-height: 0px;
+  min-width: 0px;
+  display: block;
+  overflow: visible;
+}
+
+.mask-layer {
+  isolation: isolate;
+}
+
+.mask-layer > :first-child {
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+}
+
+/* A Color is a first-class SwiftUI primitive view as well as a ShapeStyle.
+   Keep its view hit-testable (unlike a shape paint used as decoration) while
+   allowing frames/containers to provide its proposed size. The unresolved
+   CSS value remains on the element so semantic colors follow color-scheme
+   and tint changes. */
+.color-well {
+  min-height: 0px;
+  min-width: 0px;
+  pointer-events: auto;
+}
+
+.share-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--spacing) * 2);
+}
+
+.content-unavailable {
+  display: flex;
+  min-height: calc(var(--spacing) * 40);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--spacing) * 3);
+  padding: calc(var(--spacing) * 6);
+  text-align: center;
+  color: var(--color-swu-muted-foreground);
+}
+
+.content-unavailable-icon {
+  font-size: 3rem;
+}
+
+/* `symbolEffect(_:isActive:)` indefinite effects. */
+[data-symbol-effect="pulse"][data-symbol-effect-active="true"],
+[data-symbol-effect="variable-color"][data-symbol-effect-active="true"] {
+  animation: swu-symbol-pulse 1.2s ease-in-out infinite;
+}
+
+[data-symbol-effect="bounce-down"][data-symbol-effect-active="true"] {
+  animation: swu-symbol-bounce-down 0.9s ease-in-out infinite;
+}
+
+[data-symbol-effect^="wiggle"][data-symbol-effect-active="true"] {
+  animation: swu-symbol-wiggle 1.4s ease-in-out infinite;
+}
+
+[data-symbol-effect="wiggle-counter-clockwise"][data-symbol-effect-active="true"] {
+  animation-direction: reverse;
+}
+
+[data-symbol-effect="rotate"][data-symbol-effect-active="true"] {
+  animation: swu-symbol-rotate 1.2s linear infinite;
+}
+
+[data-symbol-effect="rotate-counter-clockwise"][data-symbol-effect-active="true"] {
+  animation: swu-symbol-rotate 1.2s linear infinite reverse;
+}
+
+[data-symbol-effect^="breathe"][data-symbol-effect-active="true"] {
+  animation: swu-symbol-breathe 2.4s ease-in-out infinite;
+}
+
+/* `.disappear` hides the symbol while active and `.appear` (inactive) keeps it hidden until it turns on; both ease. */
+[data-symbol-effect^="disappear"],
+[data-symbol-effect^="appear"],
+[data-symbol-effect^="scale"] {
+  transition: opacity 0.3s ease-in-out, scale 0.3s ease-in-out;
+}
+
+[data-symbol-effect^="disappear"][data-symbol-effect-active="true"],
+[data-symbol-effect^="appear"][data-symbol-effect-active="false"] {
+  opacity: 0;
+  scale: 0.5;
+}
+
+[data-symbol-effect="scale-down"][data-symbol-effect-active="true"] {
+  scale: 0.8;
+}
+
+[data-symbol-effect="bounce"][data-symbol-effect-active="true"] {
+  animation: swu-symbol-bounce 0.9s ease-in-out infinite;
+}
+
+[data-symbol-effect="scale"][data-symbol-effect-active="true"] {
+  scale: 1.2;
+}
+
+@keyframes swu-symbol-pulse {
+  50% { opacity: 0.35; }
+}
+
+@keyframes swu-symbol-bounce {
+  30% { transform: translateY(-18%); }
+  60% { transform: translateY(0); }
+}
+
+@keyframes swu-symbol-bounce-down {
+  30% { translate: 0 14%; }
+  60% { translate: 0 0; }
+}
+
+@keyframes swu-symbol-wiggle {
+  0%, 50%, 100% { rotate: 0deg; }
+  10% { rotate: 14deg; }
+  20% { rotate: -10deg; }
+  30% { rotate: 6deg; }
+  40% { rotate: -3deg; }
+}
+
+@keyframes swu-symbol-rotate {
+  to { rotate: 360deg; }
+}
+
+@keyframes swu-symbol-breathe {
+  50% { scale: 1.15; }
+}
+
+.table-view {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
+}
+
+.table-view th,
+.table-view td {
+  border-bottom-style: var(--border-line, solid);
+  border-bottom-width: 1px;
+  border-color: var(--color-swu-border);
+  padding-inline: calc(var(--spacing) * 3);
+  padding-block: calc(var(--spacing) * 2);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.table-view th {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-swu-foreground);
+}
+
+.table-view th[data-sortable="true"] {
+  cursor: pointer;
+  user-select: none;
+}
+
+.table-view tr[data-selected="true"] {
+  background-color: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.table-view tbody tr[tabindex] {
+  cursor: default;
+}
+
+/* Table virtualization uses valid row-group children for its spacers. */
+.table-body > .lazy-spacer td {
+  height: auto;
+  padding: 0;
+  border: 0;
+  line-height: 0;
+}
+
+/* Protocol-owned state, not Showcase geometry overrides. */
+@layer components {
+  [data-layout-hidden] { display: none; }
+  /* A piece waiting for Swift's answer to its first measurement (Tools/embedded-dom.js, `data-measuring`): laid out, not shown. */
+  [data-measuring] { visibility: hidden !important; }
+  [data-scroll-disabled="true"] { overflow: hidden; touch-action: none; }
+  [data-scroll-target-behavior="paging"] { scroll-snap-type: both mandatory; }
+  [data-scroll-target-behavior="viewAligned"] { scroll-snap-type: both proximity; }
+  [data-scroll-target-behavior] [data-view-id] { scroll-snap-align: start; }
+  /* A fixed-size layout box (a lazy spacer) paints nothing and lets the pointer through. A control that is
+     itself a fixed-size leaf (a switch, a colour well) is the hit target. */
+  [data-layout-kind="size"]:not(input, button, select, textarea, a, label) { pointer-events: none; }
+}
+
+/* SwiftUI-shaped hover effects. These are intentionally independent of
+   button styling so custom controls and grouped descendants share the same
+   pointer, keyboard-focus, and reduced-motion behavior. */
+@layer components {
+  [data-hover-effect]:not([data-hover-disabled="true"]) {
+    transition:
+      scale var(--hover-duration, 160ms) var(--hover-timing, ease-out),
+      translate var(--hover-duration, 160ms) var(--hover-timing, ease-out),
+      rotate var(--hover-duration, 160ms) var(--hover-timing, ease-out),
+      opacity var(--hover-duration, 160ms) var(--hover-timing, ease-out),
+      filter var(--hover-duration, 160ms) var(--hover-timing, ease-out),
+      background-color var(--hover-duration, 160ms) var(--hover-timing, ease-out),
+      box-shadow var(--hover-duration, 160ms) var(--hover-timing, ease-out),
+      outline-color var(--hover-duration, 160ms) var(--hover-timing, ease-out);
+  }
+
+  [data-hover-effect="highlight"] {
+    border-radius: var(--hover-highlight-radius, 0.5rem);
+  }
+
+  [data-hover-effect="custom"] {
+    scale: var(--hover-rest-scale, 1 1);
+    translate: var(--hover-rest-translate, 0px 0px);
+    rotate: var(--hover-rest-rotate, 0rad);
+    transform-origin: var(--hover-rest-origin, center);
+  }
+
+  [data-hover-effect="custom"][data-hover-has-opacity="true"] {
+    opacity: var(--hover-rest-opacity, 1);
+  }
+
+  [data-hover-effect="custom"][data-hover-has-filter="true"] {
+    filter: var(--hover-rest-filter, none);
+  }
+
+  /* Keyboard focus is meaningful even on devices whose pointer cannot hover. */
+  [data-hover-enabled="true"][data-hover-effect="automatic"]:focus-visible {
+    outline: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+    outline-offset: 1px;
+  }
+
+  [data-hover-enabled="true"][data-hover-effect="highlight"]:focus-visible {
+    background-color: var(--color-swu-accent, color-mix(in srgb, currentColor 8%, transparent));
+    outline: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+    outline-offset: 1px;
+  }
+
+  [data-hover-enabled="true"][data-hover-effect="lift"]:focus-visible {
+    translate: 0 -2px;
+    scale: 1.015;
+    box-shadow: 0 8px 24px color-mix(in srgb, currentColor 16%, transparent);
+  }
+
+  [data-hover-enabled="true"][data-hover-effect="custom"]:focus-visible {
+    scale: var(--hover-active-scale, 1 1);
+    translate: var(--hover-active-translate, 0px 0px);
+    rotate: var(--hover-active-rotate, 0rad);
+    transform-origin: var(--hover-active-origin, center);
+  }
+
+  [data-hover-enabled="true"][data-hover-effect="custom"][data-hover-has-opacity="true"]:focus-visible {
+    opacity: var(--hover-active-opacity, 1);
+  }
+
+  [data-hover-enabled="true"][data-hover-effect="custom"][data-hover-has-filter="true"]:focus-visible {
+    filter: var(--hover-active-filter, none);
+  }
+
+  [data-list-row-hover-effect="automatic"]:has(:focus-visible),
+  [data-list-row-hover-effect="highlight"]:has(:focus-visible) {
+    outline: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+    outline-offset: 1px;
+  }
+
+  @media (hover: hover) {
+    [data-hover-enabled="true"][data-hover-effect="automatic"]:hover,
+    [data-hover-enabled="true"][data-hover-effect="automatic"][data-hover-group-active="true"] {
+      outline: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+      outline-offset: 1px;
+    }
+
+    [data-hover-enabled="true"][data-hover-effect="highlight"]:hover,
+    [data-hover-enabled="true"][data-hover-effect="highlight"][data-hover-group-active="true"] {
+      background-color: var(--color-swu-accent, color-mix(in srgb, currentColor 8%, transparent));
+    }
+
+    [data-hover-enabled="true"][data-hover-effect="lift"]:hover,
+    [data-hover-enabled="true"][data-hover-effect="lift"][data-hover-group-active="true"] {
+      translate: 0 -2px;
+      scale: 1.015;
+      box-shadow: 0 8px 24px color-mix(in srgb, currentColor 16%, transparent);
+    }
+
+    [data-hover-enabled="true"][data-hover-effect="custom"]:hover,
+    [data-hover-enabled="true"][data-hover-effect="custom"][data-hover-group-active="true"] {
+      scale: var(--hover-active-scale, 1 1);
+      translate: var(--hover-active-translate, 0px 0px);
+      rotate: var(--hover-active-rotate, 0rad);
+      transform-origin: var(--hover-active-origin, center);
+    }
+
+    [data-hover-enabled="true"][data-hover-effect="custom"][data-hover-has-opacity="true"]:hover,
+    [data-hover-enabled="true"][data-hover-effect="custom"][data-hover-has-opacity="true"][data-hover-group-active="true"] {
+      opacity: var(--hover-active-opacity, 1);
+    }
+
+    [data-hover-enabled="true"][data-hover-effect="custom"][data-hover-has-filter="true"]:hover,
+    [data-hover-enabled="true"][data-hover-effect="custom"][data-hover-has-filter="true"][data-hover-group-active="true"] {
+      filter: var(--hover-active-filter, none);
+    }
+
+    [data-list-row-hover-effect="automatic"]:hover {
+      outline: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+      outline-offset: 1px;
+    }
+
+    [data-list-row-hover-effect="highlight"]:hover {
+      background-color: var(--color-swu-accent, color-mix(in srgb, currentColor 8%, transparent));
+    }
+  }
+
+  [data-list-row-hover-disabled="true"]:hover,
+  [data-list-row-hover-disabled="true"]:has(:focus-visible) {
+    outline: none;
+    box-shadow: none;
+    translate: none;
+    scale: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-hover-effect], [data-list-row-hover-effect] { transition-duration: 0ms !important; }
+  }
+}
+
+/* Registered so the semantic layout host reads resolved pixel values even
+   when an application sets the sidebar widths in other length units. */
+@property --tab-sidebar-width {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+@property --tab-bottom-inset {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+/* Browser-handled hover feedback (Sources/SwiftUIWebFeatures/WebHover.swift).
+   In the components layer on purpose: unlayered app CSS overrides these rules
+   without needing !important. */
+@layer components {
+  [data-hover-bg] { background-color: var(--hover-bg-base); transition: background-color .15s ease; }
+  [data-hover-bg]:hover { background-color: var(--hover-bg); }
+  [data-hover-fg] { color: var(--hover-fg-base); transition: color .15s ease; }
+  [data-hover-fg]:hover { color: var(--hover-fg); }
+  [data-hover-underline]:hover { text-decoration: underline; }
+  [data-hover-stroke] { --hover-stroke: var(--hover-stroke-base); }
+  [data-hover-stroke]:hover { --hover-stroke: var(--hover-stroke-hover); }
+  [data-hover-shadow] { transition: box-shadow .2s ease; }
+  [data-hover-shadow]:hover {
+    box-shadow: 0 var(--hover-shadow-y) var(--hover-shadow-blur) var(--hover-shadow-color);
+  }
+  [data-lift-target] { transition: transform .2s ease, box-shadow .2s ease; }
+  [data-hover-lifts]:hover [data-lift-target] {
+    transform: translateY(-3px);
+    box-shadow: 0 14px 30px var(--hover-lift-shadow);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    [data-hover-bg], [data-hover-fg], [data-hover-shadow], [data-lift-target] { transition: none; }
+  }
+}
+
+/* AVKit-style playback controls of `VideoPlayer` (Sources/SwiftUIWebAVKit/AVKitControls.swift, behaviour in
+   Tools/media-host.js). Plain DOM with stable class names, in the components layer on purpose: an app's
+   unlayered CSS restyles or hides `.avkit-controls` without !important, which the browser's own controls (a
+   shadow DOM in WebKit) never allowed. Pointer devices get the floating bar of macOS; `(pointer: coarse)` gets the centred
+   transport of iOS. */
+@layer components {
+  @keyframes avkit-spin { to { transform: rotate(360deg); } }
+  @keyframes avkit-appear { from { opacity: 0; } to { opacity: 1; } }
+
+  .avkit-video-player:focus-visible { outline: 2px solid #0a84ff; outline-offset: -2px; }
+  .avkit-video-player:has(> .avkit-controls[data-ctl-hidden="1"]) { cursor: none; }
+
+  .avkit-controls {
+    --avkit-fg: rgba(255, 255, 255, 0.96);
+    --avkit-dim: rgba(255, 255, 255, 0.66);
+    --avkit-material: rgba(38, 38, 40, 0.66);
+    --avkit-hover: rgba(255, 255, 255, 0.18);
+    --avkit-track: rgba(255, 255, 255, 0.28);
+    --avkit-accent: #0a84ff;
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+    color: var(--avkit-fg);
+    font: 500 13px/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+    container-type: inline-size;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    opacity: 1;
+    transition: opacity 0.25s ease;
+  }
+  .avkit-controls[data-ctl-hidden="1"] { opacity: 0; }
+  .avkit-controls[data-ctl-hidden="1"] .avkit-bar,
+  .avkit-controls[data-ctl-hidden="1"] .avkit-transport .avkit-button { pointer-events: none; }
+
+  .avkit-scrim { display: none; position: absolute; inset: 0; background: rgba(0, 0, 0, 0.4); }
+
+  .avkit-bar {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    border-radius: 14px;
+    background: var(--avkit-material);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    backdrop-filter: blur(24px) saturate(1.6);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+    pointer-events: auto;
+  }
+  .avkit-transport, .avkit-utility, .avkit-volume-group, .avkit-menu-group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .avkit-menu-group { position: relative; }
+  .avkit-timeline { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 10px; }
+  .avkit-time { min-width: 3.4em; color: var(--avkit-dim); font-size: 12px; text-align: center; white-space: nowrap; }
+
+  .avkit-button {
+    appearance: none;
+    -webkit-appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 36px;
+    padding: 0 6px;
+    margin: 0;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .avkit-button:hover { background: var(--avkit-hover); }
+  .avkit-button:active { background: rgba(255, 255, 255, 0.28); }
+  .avkit-button:focus-visible, .avkit-slider:focus-visible, .avkit-menu-item:focus-visible {
+    outline: 2px solid var(--avkit-accent);
+    outline-offset: -2px;
+  }
+  .avkit-button .symbol-icon { font-size: 20px; }
+  .avkit-play-pause .symbol-icon { font-size: 24px; }
+  .avkit-controls [data-symbol="play.fill"] svg, .avkit-controls [data-symbol="pause.fill"] svg { fill: currentColor; }
+  .avkit-speed { font-weight: 600; font-size: 13px; min-width: 42px; }
+  .avkit-captions .symbol-icon, .avkit-audio .symbol-icon { font-size: 20px; }
+
+  .avkit-slider { position: relative; flex: 1 1 0; min-width: 0; height: 22px; display: flex; align-items: center; cursor: pointer; touch-action: none; }
+  .avkit-slider[aria-disabled="true"] { opacity: 0.5; cursor: default; }
+  .avkit-track { position: relative; width: 100%; height: 4px; border-radius: 2px; background: var(--avkit-track); overflow: hidden; }
+  .avkit-loaded, .avkit-played { position: absolute; left: 0; top: 0; bottom: 0; }
+  .avkit-loaded { background: rgba(255, 255, 255, 0.32); }
+  .avkit-played { background: #fff; }
+  .avkit-thumb {
+    position: absolute;
+    top: 50%;
+    width: 12px;
+    height: 12px;
+    margin: -6px 0 0 -6px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    transition: transform 0.12s ease;
+  }
+  .avkit-slider:hover .avkit-thumb, .avkit-slider:focus-visible .avkit-thumb,
+  .avkit-controls[data-ctl-scrubbing="1"] .avkit-scrubber .avkit-thumb { transform: scale(1.35); }
+  .avkit-volume { flex: none; width: 72px; }
+
+  /* The menus (speed, subtitles, audio) share one panel; the host opens the one named by data-ctl-menu. */
+  .avkit-menu {
+    display: none;
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 14px);
+    min-width: 112px;
+    flex-direction: column;
+    padding: 4px;
+    border-radius: 12px;
+    background: rgba(44, 44, 46, 0.9);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    backdrop-filter: blur(24px) saturate(1.6);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+    white-space: nowrap;
+  }
+  .avkit-controls[data-ctl-menu="speed"] .avkit-speed-menu,
+  .avkit-controls[data-ctl-menu="captions"] .avkit-captions-menu,
+  .avkit-controls[data-ctl-menu="audio"] .avkit-audio-menu { display: flex; }
+  .avkit-menu-item {
+    appearance: none;
+    -webkit-appearance: none;
+    position: relative;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    padding: 9px 12px 9px 28px;
+    cursor: pointer;
+  }
+  .avkit-menu-item:hover { background: var(--avkit-hover); }
+  .avkit-menu-item[aria-checked="true"]::before { content: "\2713"; position: absolute; left: 9px; }
+
+  .avkit-fullscreen .avkit-exit, .avkit-controls[data-ctl-fullscreen="1"] .avkit-fullscreen .avkit-enter { display: none; }
+  .avkit-controls[data-ctl-fullscreen="1"] .avkit-fullscreen .avkit-exit { display: inline-flex; }
+  .avkit-controls[data-ctl-fullscreen="x"] .avkit-fullscreen { display: none; }
+  .avkit-controls:not([data-ctl-pip="1"]) .avkit-pip { display: none; }
+
+  .avkit-spinner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    margin: -22px 0 0 -22px;
+    box-sizing: border-box;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    /* A moment of buffering is not worth a spinner. */
+    animation: avkit-spin 0.9s linear infinite, avkit-appear 0.2s ease 0.4s both;
+  }
+  .avkit-error {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: rgba(0, 0, 0, 0.62);
+    font-size: 14px;
+    pointer-events: none;
+  }
+  .avkit-error .symbol-icon { font-size: 30px; }
+
+  /* Narrow players: the scrubber takes a row of its own, then the rarer buttons give way. */
+  @container (max-width: 560px) {
+    .avkit-volume { display: none; }
+  }
+  @container (max-width: 460px) {
+    .avkit-bar { flex-wrap: wrap; row-gap: 2px; left: 8px; right: 8px; bottom: 8px; }
+    .avkit-timeline { order: 3; flex-basis: 100%; }
+    .avkit-utility { margin-left: auto; }
+  }
+  @container (max-width: 300px) {
+    .avkit-menu-group, .avkit-volume-group { display: none; }
+    .avkit-skip-back, .avkit-skip-forward { display: none; }
+  }
+
+  /* Touch: iOS's layout, a dimmed surface with the transport in the centre, large targets, the scrubber at the bottom. */
+  @media (pointer: coarse) {
+    .avkit-scrim { display: block; transition: opacity 0.25s ease; }
+    .avkit-controls[data-player-state="playing"][data-ctl-hidden="1"] .avkit-scrim { opacity: 0; }
+    .avkit-bar {
+      inset: 0;
+      flex-wrap: wrap;
+      align-content: flex-end;
+      gap: 0 8px;
+      padding: 8px 14px 12px;
+      border-radius: 0;
+      background: none;
+      box-shadow: none;
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+      pointer-events: none;
+    }
+    .avkit-bar > * { pointer-events: auto; }
+    .avkit-transport { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); justify-content: center; gap: 36px; pointer-events: none; }
+    .avkit-transport .avkit-button { pointer-events: auto; width: 56px; height: 56px; border-radius: 50%; }
+    .avkit-transport .avkit-button .symbol-icon { font-size: 34px; }
+    .avkit-transport .avkit-play-pause .symbol-icon { font-size: 46px; }
+    .avkit-controls[data-player-state="buffering"] .avkit-transport .avkit-play-pause { visibility: hidden; }
+    .avkit-utility { order: 1; margin-left: auto; }
+    .avkit-timeline { order: 2; flex-basis: 100%; }
+    .avkit-button { min-width: 44px; height: 44px; }
+    .avkit-slider { height: 32px; }
+    .avkit-volume-group .avkit-volume { display: none; }
+    .avkit-menu { bottom: calc(100% + 10px); }
+    .avkit-thumb { width: 14px; height: 14px; margin: -7px 0 0 -7px; }
+  }
+
+  /* While the layout host holds data-layout-resizing on the document element, geometry it writes snaps instead of running
+     a CSS transition. The rule that does this is generated when the bundle is assembled (Tools/scope-resize-transitions.mjs)
+     and names only the elements that can have a transition, because toggling the attribute restyles the whole document. */
+
+  /* Safari on iOS only turns a tap into a click on an element it considers clickable. The runtime delegates click
+     handlers (data-embedded-events), so a tap on a view with onTapGesture (a scrim, a card) could be dropped, most visibly
+     the first tap while a text field has focus. cursor: pointer marks the element, and through inheritance what it
+     contains, as clickable. Without hover there is no pointer to draw, so nothing changes on screen. */
+  @media (hover: none) {
+    [data-embedded-events*="click"] { cursor: pointer; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .avkit-controls, .avkit-scrim, .avkit-thumb { transition: none; }
+    .avkit-spinner { animation: none; }
+  }
+}

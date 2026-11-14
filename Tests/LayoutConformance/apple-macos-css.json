@@ -1,0 +1,342 @@
+{
+  "nodes" : {
+    "fixed-column-text.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "fixed-column-text.poster" : {
+      "height" : 60,
+      "width" : 44,
+      "x" : 40,
+      "y" : 90
+    },
+    "fixed-column-text.title" : {
+      "height" : 20,
+      "width" : 162,
+      "x" : 96,
+      "y" : 110
+    },
+    "fixed-size.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "fixed-size.text" : {
+      "height" : 20,
+      "width" : 363,
+      "x" : -21.5,
+      "y" : 110
+    },
+    "frame-infinity-leading.child" : {
+      "height" : 20,
+      "width" : 60.5,
+      "x" : 0,
+      "y" : 110
+    },
+    "frame-infinity-leading.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "frame-strict.child" : {
+      "height" : 90,
+      "width" : 180,
+      "x" : 70,
+      "y" : 75
+    },
+    "frame-strict.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "grid-row-alignment.a" : {
+      "height" : 40,
+      "width" : 50,
+      "x" : 90,
+      "y" : 45
+    },
+    "grid-row-alignment.b" : {
+      "height" : 80,
+      "width" : 80,
+      "x" : 150,
+      "y" : 45
+    },
+    "grid-row-alignment.c" : {
+      "height" : 20,
+      "width" : 30,
+      "x" : 90,
+      "y" : 175
+    },
+    "grid-row-alignment.d" : {
+      "height" : 60,
+      "width" : 50,
+      "x" : 150,
+      "y" : 135
+    },
+    "grid-row-alignment.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "hstack-spacer.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "hstack-spacer.left" : {
+      "height" : 20,
+      "width" : 40,
+      "x" : 30,
+      "y" : 110
+    },
+    "hstack-spacer.right" : {
+      "height" : 20,
+      "width" : 60,
+      "x" : 230,
+      "y" : 110
+    },
+    "hstack-text-spacer.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "hstack-text-spacer.text" : {
+      "height" : 20,
+      "width" : 162,
+      "x" : 65,
+      "y" : 110
+    },
+    "layout-priority-reversed.high" : {
+      "height" : 20,
+      "width" : 183.5,
+      "x" : 71.5,
+      "y" : 110
+    },
+    "layout-priority-reversed.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "layout-priority-reversed.low" : {
+      "height" : 20,
+      "width" : 6.5,
+      "x" : 65,
+      "y" : 110
+    },
+    "layout-priority-three-levels.high" : {
+      "height" : 20,
+      "width" : 183.5,
+      "x" : 65,
+      "y" : 110
+    },
+    "layout-priority-three-levels.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "layout-priority-three-levels.low" : {
+      "height" : 20,
+      "width" : 0,
+      "x" : 255,
+      "y" : 110
+    },
+    "layout-priority-three-levels.middle" : {
+      "height" : 20,
+      "width" : 6.5,
+      "x" : 248.5,
+      "y" : 110
+    },
+    "layout-priority.high" : {
+      "height" : 20,
+      "width" : 183.5,
+      "x" : 65,
+      "y" : 110
+    },
+    "layout-priority.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "layout-priority.low" : {
+      "height" : 20,
+      "width" : 6.5,
+      "x" : 248.5,
+      "y" : 110
+    },
+    "lazy-grid-fill.a" : {
+      "height" : 80,
+      "width" : 50,
+      "x" : 52.5,
+      "y" : 80
+    },
+    "lazy-grid-fill.b" : {
+      "height" : 80,
+      "width" : 50,
+      "x" : 217.5,
+      "y" : 80
+    },
+    "lazy-grid-fill.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "lazy-grid-top.a" : {
+      "height" : 40,
+      "width" : 50,
+      "x" : 58,
+      "y" : 80
+    },
+    "lazy-grid-top.b" : {
+      "height" : 80,
+      "width" : 50,
+      "x" : 212,
+      "y" : 80
+    },
+    "lazy-grid-top.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "nested-frames.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "nested-frames.inner" : {
+      "height" : 70,
+      "width" : 90,
+      "x" : 60,
+      "y" : 50
+    },
+    "proposal-probe.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "proposal-probe.infinity" : {
+      "height" : 20,
+      "width" : 126,
+      "x" : 10,
+      "y" : 135
+    },
+    "proposal-probe.unspecified" : {
+      "height" : 20,
+      "width" : 126,
+      "x" : 10,
+      "y" : 105
+    },
+    "proposal-probe.zero" : {
+      "height" : 0,
+      "width" : 0,
+      "x" : 10,
+      "y" : 75
+    },
+    "root-text.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "root-text.text" : {
+      "height" : 20,
+      "width" : 85.5,
+      "x" : 117.25,
+      "y" : 110
+    },
+    "spacer-min.bottom" : {
+      "height" : 20,
+      "width" : 30,
+      "x" : 145,
+      "y" : 160
+    },
+    "spacer-min.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "spacer-min.top" : {
+      "height" : 20,
+      "width" : 30,
+      "x" : 145,
+      "y" : 60
+    },
+    "text-wrapping.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "text-wrapping.text" : {
+      "height" : 120,
+      "width" : 130,
+      "x" : 95,
+      "y" : 60
+    },
+    "vstack-center.a" : {
+      "height" : 20,
+      "width" : 40,
+      "x" : 140,
+      "y" : 90
+    },
+    "vstack-center.b" : {
+      "height" : 30,
+      "width" : 80,
+      "x" : 120,
+      "y" : 120
+    },
+    "vstack-center.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "vstack-leading.a" : {
+      "height" : 20,
+      "width" : 40,
+      "x" : 120,
+      "y" : 90
+    },
+    "vstack-leading.b" : {
+      "height" : 30,
+      "width" : 80,
+      "x" : 120,
+      "y" : 120
+    },
+    "vstack-leading.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "zstack-bottom-trailing.child" : {
+      "height" : 30,
+      "width" : 40,
+      "x" : 220,
+      "y" : 150
+    },
+    "zstack-bottom-trailing.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    }
+  },
+  "os" : "Version 27.0 (Build 26A428)",
+  "platform" : "Apple SwiftUI"
+}

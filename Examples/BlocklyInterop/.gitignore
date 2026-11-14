@@ -1,0 +1,3 @@
+.build/
+node_modules/
+Resources/blockly-global.js

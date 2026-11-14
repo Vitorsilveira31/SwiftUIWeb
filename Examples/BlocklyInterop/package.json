@@ -1,0 +1,11 @@
+{
+  "name": "swiftuiweb-blockly-interop-demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:blockly": "bun build JS/blockly-global.js --target=browser --format=esm --minify --outfile=Resources/blockly-global.js"
+  },
+  "dependencies": {
+    "blockly": "13.3.0"
+  }
+}

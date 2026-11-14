@@ -1,0 +1,17 @@
+<!doctype html><meta charset="utf-8"><title>BrowserIO persistence smoke test</title>
+<h1>BrowserIO: real browser persistence</h1><pre id="result">Running…</pre>
+<script type="module">
+import { createBrowserIO,Writer,Reader } from './browser-io.mjs';
+const report=document.querySelector('#result');const memory=new WebAssembly.Memory({initial:4});let top=16,id=1;const pending=new Map();
+const alloc=n=>{const p=top;top+=n+16;if(top>memory.buffer.byteLength)memory.grow(Math.ceil((top-memory.buffer.byteLength)/65536));return p;};
+const instance={exports:{memory,browser_io_alloc:alloc,browser_io_deliver(i,s,p,n){pending.get(i)?.(s,new Uint8Array(memory.buffer,p,n).slice());}}};
+const host=createBrowserIO({getInstance:()=>instance});
+const check=(value,message)=>{if(!value)throw new Error(message)};
+function sync(action,key='',value=''){const packet=new Writer().u32(0).text('v46-smoke').u32(action).text(key).text(value).bytes();const p=alloc(packet.length);new Uint8Array(memory.buffer,p,packet.length).set(packet);const h=host.imports.sync(2,p,packet.length);const n=host.imports.length(h),out=alloc(n);host.imports.copy(h,out,n);const r=new Reader(new Uint8Array(memory.buffer,out,n).slice());host.imports.release(h);check(r.u32()===0,'WebStorage failure');return r;}
+function db(action,key='',value=new Uint8Array()){return new Promise((resolve,reject)=>{const i=id++;const b=new Writer().text('v46-smoke').u32(action).text(key).data(value).bytes();const p=alloc(b.length);new Uint8Array(memory.buffer,p,b.length).set(b);pending.set(i,(s,data)=>{pending.delete(i);s<0?reject(new Error(new TextDecoder().decode(data))):resolve(new Reader(data))});check(host.imports.request(i,3,p,b.length)===0,'IDB dispatch failed');});}
+try {
+  const saved=sync(0,'reload');const exists=saved.u32()===1;
+  if(!exists){sync(1,'reload','persisted 日本');await db(1,'reload',new Uint8Array([0,128,255]));report.textContent='First write committed. Reload this page to verify persistence.';}
+  else{check(saved.text()==='persisted 日本','LocalStorage persistence mismatch');const item=await db(0,'reload');check(item.u32()===1,'IDB missing persisted record');check([...item.data()].join(',')==='0,128,255','IDB persistence mismatch');await db(2,'reload');sync(2,'reload');report.textContent='PASS: real localStorage and IndexedDB survived reload; namespace records cleaned.';document.documentElement.dataset.result='pass';}
+}catch(error){report.textContent=error.stack;document.documentElement.dataset.result='fail';console.error(error);}
+</script>

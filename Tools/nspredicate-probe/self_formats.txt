@@ -1,0 +1,91 @@
+n == 1
+ANY n == 1
+ALL n > 0
+ANY n > 1
+n.@count == 3
+@count == 3
+n CONTAINS 2
+2 IN n
+n == {1, 2, 3}
+s == {'a', 'B'}
+s CONTAINS 'B'
+s CONTAINS[c] 'b'
+ANY s BEGINSWITH 'a'
+t == {1, 2}
+t.@count == 2
+ANY t == 3
+t CONTAINS 3
+t.@max.self == 3
+n.@sum == 6
+n.@sum.self == 6
+@sum.n == 6
+@avg.n == 2
+@max.n == 3
+@min.n == 1
+@count == 3
+@sum.self == 6
+@max.self == 3
+@min.self == 1
+@avg.self == 2
+@sum.length == 3
+@max.length == 1
+@unionOfObjects.self == {3, 1, 2}
+@distinctUnionOfObjects.self == {1, 2, 3}
+@unionOfArrays.self == {1, 2, 3, 4}
+@sum.t.@count == 3
+@sum.n.@count == 3
+a.b.c == {1, 2}
+a.b.c == {1, 2, 3}
+a.b.@count == 2
+a.b.c.@sum.self == 3
+a.@count == 1
+ANY a.b.c == 3
+ANY a.b.c == 1
+a.b.@sum.c == 3
+a.b.@max.c == 2
+a.b.@min.c == 1
+@sum.a.b.@count == 3
+SELF CONTAINS 2
+SELF CONTAINS 1.5
+2 IN SELF
+SELF == {3, 1, 2}
+SELF == {1, 2, 3}
+SELF IN {1, 2, 3}
+SELF BETWEEN {1, 2}
+SELF > 1
+SELF == 42
+SELF == 42.0
+SELF == 4.5
+SELF < 5
+SELF == 'Hello'
+SELF BEGINSWITH 'He'
+SELF LIKE 'H*'
+SELF MATCHES 'H.*'
+SELF.length == 5
+length == 5
+SELF == nil
+SELF != nil
+SELF == %@
+SELF.timeIntervalSince1970 == 1000000
+timeIntervalSince1970 == 1000000
+SELF > %@
+d.x == {1, 2}
+d.x.@count == 2
+n == 1 AND d.x.@count == 2
+count == 3
+count == 1
+description == 'x'
+self == 1
+SELF.@count == 3
+SELF.@sum.self == 6
+ANY SELF == 1
+ALL SELF > 0
+NONE SELF > 5
+ANY SELF.n == 1
+SELF.n == {1, 2}
+SELF.n.@max.self == 2
+SELF IN SELF
+SELF CONTAINS SELF
+SELF == SELF
+SELF != SELF
+SELF.SELF == 1

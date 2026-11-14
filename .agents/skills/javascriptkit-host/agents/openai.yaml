@@ -1,0 +1,7 @@
+interface:
+  display_name: "JavaScriptKit Host Boundary"
+  short_description: "Review PackageToJS and browser-host interop"
+  default_prompt: "Review this SwiftUIWeb browser-host or PackageToJS change without leaking JavaScriptKit into Core."
+
+policy:
+  allow_implicit_invocation: false

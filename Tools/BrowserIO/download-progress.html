@@ -1,0 +1,27 @@
+<!doctype html><meta charset="utf-8"><title>BrowserIO download progress</title>
+<h1>BrowserIO: download progress</h1><pre id="result">Running…</pre>
+<script type="module">
+// `?origin=` names the test server that serves /progress/{sized,chunked,gzip}; `?mode=worker` runs the probe in a worker.
+import { runDownloadProgressProbe } from './download-progress-probe.mjs';
+const params = new URLSearchParams(location.search);
+const origin = params.get('origin');
+const report = document.querySelector('#result');
+function runInWorker() {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker('./download-progress-worker.mjs', { type: 'module' });
+    worker.onmessage = (event) => { worker.terminate(); event.data.ok ? resolve(event.data.results) : reject(new Error(event.data.error)); };
+    worker.onerror = (event) => reject(new Error(event.message));
+    worker.postMessage({ origin });
+  });
+}
+const run = params.get('mode') === 'worker' ? runInWorker() : runDownloadProgressProbe(origin);
+run.then((results) => {
+  window.__downloadProgress = results;
+  report.textContent = JSON.stringify(results);
+  document.documentElement.dataset.result = 'pass';
+}).catch((error) => {
+  window.__downloadProgressError = String(error?.stack ?? error);
+  report.textContent = window.__downloadProgressError;
+  document.documentElement.dataset.result = 'fail';
+});
+</script>

@@ -1,0 +1,13 @@
+{
+ "comment": "Reviewed divergences from SwiftUI; shrink this list, never grow it.",
+ "extra": [
+  "static func CoordinateSpace.named(_:)",
+  "static func ViewBuilder.buildPartialBlock(accumulated:next:)",
+  "static func ViewBuilder.buildPartialBlock(first:)"
+ ],
+ "foreign": [],
+ "signature": [
+  "init TupleView.init(_:)"
+ ],
+ "isolation": []
+}

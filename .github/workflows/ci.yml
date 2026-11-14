@@ -1,0 +1,238 @@
+name: SwiftUIWeb CI
+
+on:
+  # A pull request runs through `pull_request` only: a `push` trigger on its branch would start a second run of the same
+  # commit, in another concurrency group (its ref is the branch, not refs/pull/N/merge).
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # The swift.org release (its downloads say 6.4.0, not 6.4) and the SHA-256 of its WebAssembly SDK bundle.
+  SWIFT_VERSION: "6.4.0"
+  WASM_SDK_CHECKSUM: "f07b7be3c586d92d7a07051fc6d303b87ebea67eadc40640ba59d5a8b79aa86d"
+
+# Every job runs on a GitHub-hosted runner: a public repository's pull requests come from forks, and a self-hosted
+# runner would run their code on the maintainer's machine. Only the newest run of a branch or pull request is kept.
+concurrency:
+  group: swiftuiweb-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# The tiers are the Makefile's: `make test` (no browser), `make browser-test` (what a pull request must pass) and the
+# nightly run (`example-test`, coverage, size and performance), which also runs on demand.
+jobs:
+  test:
+    name: Swift and tooling tests (macOS)
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.2"
+      - uses: ./.github/actions/setup-swift
+        with:
+          swift-version: ${{ env.SWIFT_VERSION }}
+      # The tool tests import Playwright's helpers (no browser is launched), so the JavaScript dependencies must be there.
+      - run: bun install --frozen-lockfile
+      # `test` includes the API baseline, @available, the source layout and the documentation checks.
+      - run: make test CONFIGURATION=release
+
+  linux:
+    # The framework has no Apple dependency; this keeps the native build and its tests green on Linux, inside the newest
+    # official 6.4 image (the env context is not available to `container`, so the tag is written out).
+    name: Linux build and tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    container: swift:6.4
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: swift build --build-tests
+      - run: swift test --skip-build
+
+  browser:
+    # `make browser-test` on Linux and Chromium: the source lowerer, the Embedded WebAssembly build, the bundles and every
+    # Playwright suite. Each application is compiled once; the other suites reuse its bundle (Tools/bundle-reuse.mjs).
+    # Ubuntu 24.04 (`-noble`) is the newest Ubuntu Playwright ships browsers for, and the WebAssembly SDK needs this exact
+    # toolchain, so the tag names SWIFT_VERSION's release. WebKit runs in the macOS job.
+    name: Browser suites (Linux, Chromium)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    container:
+      image: swift:6.4.0-noble
+      options: --shm-size=2g
+    env:
+      # Playwright prints each browser process's launch, exit signal and stderr (a few lines per browser), so a renderer
+      # crash in any suite says why.
+      DEBUG: pw:browser
+      # Leaves out every WebKit run of the make targets (Makefile, WEBKIT).
+      WEBKIT: "0"
+    defaults:
+      run:
+        # Inside a container `run` defaults to `sh` (dash on Ubuntu), which has no `pipefail`.
+        shell: bash
+    steps:
+      - name: Install the compressors and the archive tools
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq brotli zstd unzip make
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Trust the checkout
+        # The container runs as root over a workspace the runner owns; `git ls-files` (architecture-audit) needs this.
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: ./.github/actions/cache-lowering-tool
+        with:
+          swift-version: ${{ env.SWIFT_VERSION }}
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.2"
+      - name: Install the Swift ${{ env.SWIFT_VERSION }} WebAssembly SDK
+        run: |
+          set -euo pipefail
+          release="swift-${SWIFT_VERSION}-RELEASE"
+          swift sdk install \
+            "https://download.swift.org/swift-${SWIFT_VERSION}-release/wasm-sdk/$release/${release}_wasm.artifactbundle.tar.gz" \
+            --checksum "$WASM_SDK_CHECKSUM"
+          swift sdk list
+      - name: Install the project tooling and the browsers
+        run: |
+          bun install --frozen-lockfile
+          DEBIAN_FRONTEND=noninteractive bunx playwright install --with-deps chromium
+      - run: make architecture-audit
+      - run: make browser-test
+
+  apple:
+    # What needs macOS: the WebKit half of the browser suites, the checks against Apple's SwiftUI (its public API and its
+    # layout) and the shared iOS + Embedded example built with Xcode. The API baseline was recorded with one SDK and the
+    # layout check compares with that SDK's SwiftUI, so the job pins that Xcode; `xcode-27` is GitHub's image that has it.
+    name: WebKit, Apple parity and the iOS example (macOS)
+    runs-on: xcode-27
+    timeout-minutes: 90
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/cache-lowering-tool
+        with:
+          swift-version: ${{ env.SWIFT_VERSION }}
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.2"
+      - uses: ./.github/actions/setup-swift
+        with:
+          swift-version: ${{ env.SWIFT_VERSION }}
+          wasm-sdk-checksum: ${{ env.WASM_SDK_CHECKSUM }}
+      - name: Install the compressors
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: for tool in brotli zstd; do command -v "$tool" >/dev/null || brew install "$tool"; done
+      - run: make setup
+      - run: make browser-test-setup
+      - run: make webkit-browser-test security-browser-test layout-conformance
+      # SwiftUIWeb's public API against the SDK's SwiftUI symbol graphs: a declaration Apple does not have fails here.
+      - run: make swiftui-parity
+      - run: make universal-app-test
+
+  examples:
+    name: Example apps and consumer packages (nightly)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    container:
+      image: swift:6.4.0-noble
+      options: --shm-size=2g
+    env:
+      WEBKIT: "0"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install the compressors and the archive tools
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq brotli zstd unzip make
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: ./.github/actions/cache-lowering-tool
+        with:
+          swift-version: ${{ env.SWIFT_VERSION }}
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.2"
+      - name: Install the Swift ${{ env.SWIFT_VERSION }} WebAssembly SDK
+        run: |
+          set -euo pipefail
+          release="swift-${SWIFT_VERSION}-RELEASE"
+          swift sdk install \
+            "https://download.swift.org/swift-${SWIFT_VERSION}-release/wasm-sdk/$release/${release}_wasm.artifactbundle.tar.gz" \
+            --checksum "$WASM_SDK_CHECKSUM"
+      - name: Install the project tooling and the browsers
+        run: |
+          bun install --frozen-lockfile
+          DEBIAN_FRONTEND=noninteractive bunx playwright install --with-deps chromium
+      - run: make release-browser-test example-test
+
+  measurements:
+    # Coverage, size and performance measure rather than pass or fail a change, so they run nightly and on demand.
+    name: Coverage, size and performance (nightly)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/cache-lowering-tool
+        with:
+          swift-version: ${{ env.SWIFT_VERSION }}
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.2"
+      - uses: ./.github/actions/setup-swift
+        with:
+          swift-version: ${{ env.SWIFT_VERSION }}
+          wasm-sdk-checksum: ${{ env.WASM_SDK_CHECKSUM }}
+      - name: Install the compressors
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: for tool in brotli zstd; do command -v "$tool" >/dev/null || brew install "$tool"; done
+      - run: make setup
+      - run: make browser-test-setup
+      - name: Instrumented core and BrowserIO coverage
+        run: COVERAGE_BROWSER=1 make coverage
+      - name: Embedded Wasm size
+        if: always()
+        run: |
+          make wasm-size-check
+          make wasm-budget BUNDLE=.build/browser/ShowcaseApp
+      - name: Performance contracts
+        if: always()
+        run: make perf-ci
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: measurements
+          path: |
+            .build/coverage
+            .build/wasm-size/report.json
+            .build/performance
+          if-no-files-found: warn

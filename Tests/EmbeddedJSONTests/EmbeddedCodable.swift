@@ -1,0 +1,1 @@
+../../Sources/SwiftUIWebTransferable/EmbeddedCodable.swift

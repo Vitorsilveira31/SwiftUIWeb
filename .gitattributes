@@ -1,0 +1,5 @@
+# A unified diff quotes blank and indented lines with their whitespace; `git diff --check` must not flag the quote.
+Tools/SwiftUIWebLowering/Golden/*.patch -whitespace
+# The markup the binary publication fixtures hold is the serializer's output, white space of the texts included.
+Tests/Fixtures/BinaryPublication/*.html -whitespace
+Tests/Fixtures/BinaryPublication/*.bin binary

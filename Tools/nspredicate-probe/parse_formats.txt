@@ -1,0 +1,410 @@
+order == 1
+android == 2
+note == 3
+in_stock == YES
+a1 == 4
+under_score == 5
+café == 6
+日本 == 7
+ID == 8
+id == 9
+a#b == 10
+x.y == 1
+x . y == 1
+x. y == 1
+x .y == 1
+name==\"x\"
+name=='x'
+name ==  'x'
+name	==	'x'
+name
+== 'x'
+(name == 'x')
+( name == 'x' )
+((name == 'x') )
+name == 'x'  AND  order == 1
+name == 'x'AND order == 1
+name == 'x' ANDorder == 1
+order == 1AND name == 'x'
+order==1&&name=='x'
+order==1||name=='x'
+!order==1
+!(order==1)
+!!order==1
+NOT(order == 1)
+NOT (order == 1)
+NOT   order == 1
+nOt order == 1
+order IN{1,2}
+order IN {1,2}
+order in {1, 2}
+order IN{ 1 , 2 }
+order IN {1,2,}
+order IN {,}
+order IN {1 2}
+order IN ({1,2})
+order BETWEEN{1,2}
+order BETWEEN {1,2} AND TRUEPREDICATE
+order == 1 AND TRUEPREDICATE OR FALSEPREDICATE
+order == (1)
+order == ((1))
+order == (1 + 2)
+order == 1+2
+order == 1 +2
+order == 1+ 2
+order == 1 + +2
+order == 1 - -2
+order == 1--2
+order == 1 - - 2
+order== -1
+order ==-1
+order == - 1
+order == -(1)
+order == -x.y
+order == 1 * -1
+order == 1e5
+order == 1E5
+order == 1e+5
+order == 1e-5
+order == 1.e5
+order == 1.5.5
+order == 0x
+order == 0xG
+order == 0X1f
+order == 0b101
+order == 08
+order == 1_000
+order == 123abc
+order == 1a
+order == .
+order == .5.
+name == ''
+name == ""
+name == ''''
+name == 'a''b'
+name == 'a' 'b'
+name == 'a'b
+name == "a\"b"
+name == 'a\'b'
+name == "a'b"
+name == 'a"b'
+name == '\\'
+name == '\'
+name == 'a\nb'
+name == 'a\qb'
+name == '\u00zz'
+name == '\x4'
+name == '\400'
+name == 'ç'
+name == '日本語'
+name == '🙂'
+name BEGINSWITH 'a' AND name ENDSWITH 'b'
+name BEGINSWITH'a'
+name BEGINSWITH 'a' BEGINSWITH 'b'
+name  begins with 'a'
+name BEGINSWITH[c]'a'
+name BEGINSWITH [c] 'a'
+name BEGINSWITH[ c ] 'a'
+name BEGINSWITH[c,d] 'a'
+name BEGINSWITH[cd]'a'
+name BEGINSWITH[cdnl] 'a'
+name ==[c] 'a'
+name =[c] 'a'
+name <[c] 'a'
+name !=[c] 'a'
+name <>[c] 'a'
+name IN[c] {'a'}
+name BETWEEN[c] {'a','b'}
+name LIKE[c]'a'
+name MATCHES[cd] 'a'
+name CONTAINS[c] name
+name CONTAINS name.x
+SELF
+SELF == SELF
+SELF.name == 'x'
+SELF . name == 'x'
+self.name == 'x'
+Self.name == 'x'
+SELF.SELF.name == 'x'
+SELF.x.y == 1
+true == true
+TRUE == FALSE
+yes == no
+YES == NO
+Yes == No
+nil == NIL
+null == NULL
+Null == Nil
+ANY name == 'x'
+any name == 'x'
+ANY(name == 'x')
+ANY (name) == 'x'
+ANY name.x == 1
+ANY ANY name == 'x'
+NOT ANY name == 'x'
+ANY NOT name == 'x'
+ALL name == 'x' AND ANY name == 'x'
+SOME name == 'x'
+NONE name == 'x'
+none name == 'x'
+@count == 1
+x.@count == 1
+x.@COUNT == 1
+x.@Count == 1
+x.@sum.y == 1
+x.@sum. y == 1
+x.@ == 1
+x.@@count == 1
+@ == 1
+name.@count.@count == 1
+$x == 1
+$X == 1
+$x_1 == 1
+$1 == 1
+$ == 1
+$$x == 1
+$x$y == 1
+$x.y == 1
+$x . y == 1
+$x[0] == 1
+x.$y == 1
+x == $y.z
+TRUEPREDICATE
+TRUEPREDICATE AND TRUEPREDICATE
+TRUEPREDICATE == TRUEPREDICATE
+TRUEPREDICATE == 1
+(TRUEPREDICATE) == 1
+NOT (TRUEPREDICATE)
+TruePredicate
+FALSEPREDICATE OR TRUEPREDICATE
+order == 1 /* c */
+order == 1 // c
+order == 1 -- c
+order == 1 # c
+order == 1
+ AND name == 'x'
+order == 1 AND
+ name == 'x'
+{1,2} == {1,2}
+{1,2}.@count == 2
+{1,2}.x == 1
+{} == {}
+{ } == { }
+{{1}} == {{1}}
+{1, {2}} == {1}
+{'a', 1, nil} == {}
+{x, y} == {1, 2}
+{x.y, 1} == {1, 2}
+{1 + 2, 3} == {3, 3}
+x.y ** 2 == 1
+2 ** 3 ** 2 == 512
+2 * 3 + 4 == 10
+2 + 3 * 4 == 14
+(2 + 3) * 4 == 20
+8 / 2 / 2 == 2
+8 - 2 - 2 == 4
+1 + 2 + 3 == 6
+2 * 3 * 4 == 24
+- 2 ** 2 == 4
+-2 ** 2 == 4
+2 ** -2 == 1
+2 ** - 2 == 1
+2 ** +2 == 1
+order % 2 == 1
+order mod 2 == 1
+order & 1 == 1
+order | 1 == 1
+order ^ 1 == 1
+order ~ 1 == 1
+order <= 1 <= 2
+order == 1 == 1
+order == 1 == TRUEPREDICATE
+1 == 1 == 1
+name == name == name
+(order == 1) == (name == 'x')
+order == 1 AND (name == 'x'
+order == 1 AND )name == 'x'(
+order == 1 AND () name == 'x'
+()
+(())
+( )
+order == 1 AND
+AND order == 1
+OR order == 1
+order == 1 OR OR name == 'x'
+order == 1 AND OR name == 'x'
+NOT NOT NOT order == 1
+NOT AND order == 1
+order == 1 NOT AND name == 'x'
+order NOT IN {1}
+order NOT == 1
+NOT order IN {1}
+order IN NOT {1}
+order == 1,
+order == 1, name == 'x'
+,order == 1
+order == 1.
+order == 1..2
+order == 1.2.3
+x..y == 1
+.x == 1
+x. == 1
+x.y. == 1
+x.y.z.w.v.u == 1
+x.1 == 1
+x.1y == 1
+1x == 1
+x1 == 1
+x-y == 1
+x_y == 1
+x#y == 1
+x@y == 1
+x$y == 1
+x%y == 1
+x!y == 1
+"x" == 1
+'x' == 1
+"x" == 'x'
+'x' == "x"
+`x` == 1
+x == `1`
+x == [1]
+[1] == x
+x[1] == 1
+x[1][2] == 1
+x[FIRST] == 1
+x[LAST] == 1
+x[SIZE] == 1
+x[ANY] == 1
+x[ALL] == 1
+x[name] == 1
+x[ 1 ] == 1
+x[-1] == 1
+x[1.5] == 1
+x[1:2] == 1
+x(1) == 1
+max(x) == 1
+FUNCTION(x) == 1
+function(x, 'y') == 1
+SUBQUERY(x, $y, $y == 1) == 1
+CAST(1, 'NSNumber') == 1
+CAST(x, 'NSString') == 1
+MAX({1}) == 1
+sum:({1}) == 1
+uppercase:(name) == 'X'
+name.uppercase == 'X'
+TERNARY(YES, 1, 2) == 1
+YES ? 1 : 2 == 1
+order == 1 ? 1 : 2
+BLOCKPREDICATE(0x0)
+name MATCHES 'a' AND name MATCHES 'b' OR name MATCHES 'c'
+name LIKE 'a' LIKE 'b'
+name LIKE LIKE
+LIKE == 1
+IN == 1
+BETWEEN == 1
+CONTAINS == 1
+BEGINSWITH == 1
+MATCHES == 1
+AND == 1
+OR == 1
+NOT == 1
+ANY == 1
+ALL == 1
+NONE == 1
+SOME == 1
+SELF == 1
+TRUEPREDICATE == 1
+IN.x == 1
+x.IN == 1
+x.AND == 1
+x.in == 1
+x.and == 1
+x.NOT == 1
+x.ANY == 1
+x.SELF == 1
+x.self == 1
+x.TRUEPREDICATE == 1
+x.nil == 1
+x.NIL == 1
+x.null == 1
+x.true == 1
+x.YES == 1
+x.@count.nil == 1
+order.in == 1
+in == 1
+and == 1
+order == in
+order == and
+order == nil.x
+order == YES.x
+order == 1.x
+order == 'a'.x
+order == 'a'.length
+'a'.length == 1
+"a".length == 1
+1.5.x == 1
+{1}.x == 1
+(1).x == 1
+(x).y == 1
+(x.y).z == 1
+$x == 1 AND $y == 2 OR $z == 3
+x == %@
+x == %@@
+x == %@ %@
+x == %d%d
+x == %%
+x == '%%'
+x == % d
+x == %-5d
+x == %5d
+x == %05d
+x == %.2f
+x == %5.2f
+x == %+d
+x == %ld
+x == %lld
+x == %hd
+x == %hhd
+x == %zd
+x == %jd
+x == %td
+x == %qd
+x == %Lf
+x == %lf
+x == %llf
+x == %e
+x == %E
+x == %g
+x == %G
+x == %a
+x == %A
+x == %c
+x == %C
+x == %s
+x == %S
+x == %p
+x == %n
+x == %x
+x == %X
+x == %o
+x == %O
+x == %u
+x == %U
+x == %D
+x == %i
+x == %F
+x == %K
+x == %k
+x == %v
+x == %1$@
+x == %2$@
+%K == %K
+%K%K == 1
+%K.%K == 1
+%K.y == 1
+x.%K == 1
+%@ == %@
+%@ %@ %@
+%d == %d
+%f == %f

@@ -1,0 +1,61 @@
+name: Install the Swift toolchain
+description: Install the swift.org toolchain the repository builds with and, when asked, its WebAssembly SDK
+inputs:
+  swift-version:
+    description: The swift.org release, as its download names it (for example 6.4.0)
+    required: true
+  wasm-sdk-checksum:
+    description: SHA-256 of that release's WebAssembly SDK bundle; when set, the SDK (wasm and wasm-embedded) is installed
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    # swift-actions/setup-swift resolves versions from a list bundled in the action, which does not know 6.4. The
+    # swift.org package is the same toolchain swiftly installs; it goes to the user's Toolchains folder, and putting its
+    # bin first on PATH is what `swiftly use` does. The Embedded WebAssembly SDK must be built for this exact toolchain,
+    # which Xcode's compiler is not.
+    - name: Install Swift ${{ inputs.swift-version }}
+      shell: bash
+      env:
+        SWIFT_VERSION: ${{ inputs.swift-version }}
+      run: |
+        set -euo pipefail
+        release="swift-${SWIFT_VERSION}-RELEASE"
+        toolchain="$HOME/Library/Developer/Toolchains/$release.xctoolchain"
+        if [ ! -x "$toolchain/usr/bin/swift" ]; then
+          base="https://download.swift.org/swift-${SWIFT_VERSION}-release"
+          pkg="$RUNNER_TEMP/$release-osx.pkg"
+          curl -fsSL --retry 3 -o "$pkg" "$base/xcode/$release/$release-osx.pkg"
+          signature="$(pkgutil --check-signature "$pkg")"
+          grep -q "Status: signed by a developer certificate issued by Apple" <<< "$signature"
+          # Any Apple-issued Developer ID would pass the check above: the signer must be the Swift.org team (V9AUD2URP3).
+          grep -q "Developer ID Installer: Swift Open Source (V9AUD2URP3)" <<< "$signature"
+          installer -pkg "$pkg" -target CurrentUserHomeDirectory
+          rm -f "$pkg"
+        fi
+        test -x "$toolchain/usr/bin/swift"
+        echo "$toolchain/usr/bin" >> "$GITHUB_PATH"
+        # That bin also holds the toolchain's clang, which unlike Xcode's has no default macOS SDK: without SDKROOT a tool
+        # that compiles Objective-C (the NSPredicate probe) cannot find Foundation.
+        echo "SDKROOT=$(xcrun --sdk macosx --show-sdk-path)" >> "$GITHUB_ENV"
+        echo "TOOLCHAINS=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$toolchain/Info.plist")" >> "$GITHUB_ENV"
+        "$toolchain/usr/bin/swift" --version
+    - name: Install the Swift ${{ inputs.swift-version }} WebAssembly SDK
+      if: inputs.wasm-sdk-checksum != ''
+      shell: bash
+      env:
+        SWIFT_VERSION: ${{ inputs.swift-version }}
+        CHECKSUM: ${{ inputs.wasm-sdk-checksum }}
+      run: |
+        set -euo pipefail
+        release="swift-${SWIFT_VERSION}-RELEASE"
+        # A runner that keeps its home folder keeps installed SDKs, and `swift sdk install` refuses a bundle already there.
+        if swift sdk list | grep -qx "${release}_wasm"; then
+          echo "${release}_wasm is already installed."
+        else
+          swift sdk install \
+            "https://download.swift.org/swift-${SWIFT_VERSION}-release/wasm-sdk/$release/${release}_wasm.artifactbundle.tar.gz" \
+            --checksum "$CHECKSUM"
+        fi
+        swift sdk list

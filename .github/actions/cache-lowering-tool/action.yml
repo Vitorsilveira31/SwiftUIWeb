@@ -1,0 +1,19 @@
+name: Cache the source lowerer
+description: Restore the compiled SwiftUIWeb source lowerer so swift-syntax is built once, not on every run
+inputs:
+  swift-version:
+    description: The Swift version the lowerer is built with (part of the cache key)
+    required: true
+runs:
+  using: composite
+  steps:
+    # A clean checkout compiles swift-syntax the first time a browser build lowers sources, about two minutes on a laptop and
+    # more on a runner. SwiftPM's fingerprints make a restored build folder safe: it rebuilds only what changed. The key
+    # names the Swift version and the pinned swift-syntax; a miss falls back to the newest cache of the same version.
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: .build/swiftuiweb-lowering-build
+        key: lowerer-${{ runner.os }}-swift-${{ inputs.swift-version }}-${{ hashFiles('Tools/SwiftUIWebLowering/Package.resolved') }}-${{ github.job }}
+        restore-keys: |
+          lowerer-${{ runner.os }}-swift-${{ inputs.swift-version }}-${{ hashFiles('Tools/SwiftUIWebLowering/Package.resolved') }}-
+          lowerer-${{ runner.os }}-swift-${{ inputs.swift-version }}-
