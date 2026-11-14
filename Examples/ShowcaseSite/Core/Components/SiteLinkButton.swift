@@ -10,6 +10,9 @@ struct SiteLinkButton: View {
   var body: some View {
     Link(destination: destination) {
       Text(title)
+        // One line, at its own width: a button squeezed by its row would wrap its label and grow a second line.
+        .lineLimit(1)
+        .fixedSize()
         .fontWeight(.semibold)
         .foregroundStyle(isProminent ? Color.white : Color.primary)
         .padding(.horizontal, 18)
