@@ -148,6 +148,20 @@ final class ImagePaintTests {
   }
 
   @Test
+  func testHashedCustomSymbolFileIsStillASymbol() {
+    // The release step names a compiled symbol `name.symbol.<hash>.svg`; it must keep drawing as a tinted mask at the
+    // text's size, not as a picture at the SVG's own size.
+    for file in ["catalog-assets/donut.symbol.svg", "catalog-assets/donut.symbol.ca09577a.svg"] {
+      _expectTrue(_isCustomSymbolFile(file))
+      let root = FiberTree(Image(file), deferLazyCollections: false).renderNode
+      _expectTrue(_allNodes(root).contains { $0.classes.contains("custom-symbol") })
+    }
+    for file in ["catalog-assets/logo.svg", "catalog-assets/logo.ca09577a.svg", "symbol.svg", "a.symbol.png"] {
+      _expectTrue(!_isCustomSymbolFile(file))
+    }
+  }
+
+  @Test
   func testAnyGradientShapeStylesMatchTheWrappedGradient() {
     let gradient = Gradient(colors: [.red, .blue])
     let wrapped = AnyGradient(gradient)

@@ -27,6 +27,18 @@ public struct ImagePaint: ShapeStyle {
   }
 }
 
+/// Whether a resolved image source is a custom SF Symbol the build compiled from the asset catalog: `name.symbol.svg`,
+/// or `name.symbol.<hash>.svg` once the release step has put the file's content hash before the extension.
+package func _isCustomSymbolFile(_ source: String) -> Bool {
+  guard source.hasSuffix(".svg") else { return false }
+  if source.hasSuffix(".symbol.svg") { return true }
+  // The hashed form: the last two dot-separated parts are the hash and "svg", the one before them is "symbol".
+  var parts = source.split(separator: ".", omittingEmptySubsequences: false)
+  guard parts.count >= 4 else { return false }
+  parts.removeLast(2)
+  return parts.last == "symbol"
+}
+
 /// A CSS `url("…")` token for an application-supplied source. The source is
 /// written into a quoted CSS string, so a quote or backslash is escaped and
 /// control characters (which cannot appear in a CSS string or a URL) are

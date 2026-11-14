@@ -260,7 +260,7 @@ public struct Image: @unchecked Sendable {
     // An asset-catalog name resolves to the file the build copied into the
     // bundle (`_ImageAssets`); anything else is a path or URL used as is.
     let source = _ImageAssets.source(for: self.source, allowsRemote: allowsRemoteSource) ?? ""
-    if source.hasSuffix(".symbol.svg") {
+    if _isCustomSymbolFile(source) {
       // A custom SF Symbol from the asset catalog: a mask over the current text color, as symbols are tinted.
       let node = _RenderNode.element("span")
       node.classes = ["symbol-icon", "custom-symbol"]
