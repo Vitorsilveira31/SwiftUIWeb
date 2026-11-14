@@ -113,6 +113,16 @@ before/after comparison.
   now the content's own height (`flex: 1 1 auto`), so both engines draw the same sheet; a sheet with detents still fills its
   panel. Checked by opening the same sheet in Chromium and WebKit (576 by 334 in both) and by the presentation browser tests.
 
+- **`matchedGeometryEffect` moves a view from where it was, not from the layout's own box.** A view that follows a source and
+  moves to another one (a segmented control's thumb) started its move from the size the layout gave it when the commit rewrote
+  its box (a background layer is as wide as what it sits behind), so it opened to the whole control and then shrank onto the
+  new tab. The host now remembers where it put the view (and how far along its move was, if one was playing) and moves from
+  that. Checked by sampling the thumb during the move (57 to 69 px wide on the way, where it was 208 before) in Chromium and
+  WebKit; nothing in an application needs to change.
+- **A `.fill` symbol is solid for the closed shapes.** `heart.fill`, `star.fill`, `bell.fill`, `bookmark.fill`, `bolt.fill`,
+  `moon.fill`, `flame.fill`, `circle.fill` and `square.fill` were drawn as the same outline as their plain names; they are filled
+  with the text color now. The other `.fill` names (a check in a circle, an arrow) are still outlines.
+
 ### API and behaviour found by the example apps
 
 The small example apps ("Small apps" in `Examples/README.md`) are fifteen apps, each in its own `Examples/` folder, of ordinary iOS 17 SwiftUI compiled for the browser. Closing what it found added API and changed
