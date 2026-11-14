@@ -869,6 +869,12 @@
     stroke-width: var(--icon-stroke-width, 2);
   }
 
+  /* A `.fill` symbol is the solid glyph (`heart.fill`, `star.fill`). Lucide draws outlines, so the closed shapes that read as the
+     solid symbol once filled are filled with the text color; the others (a check in a circle, an arrow) stay outlines. */
+  .symbol-icon[data-symbol$=".fill"] > svg.lucide-glyph:is(.lucide-heart, .lucide-star, .lucide-bell, .lucide-bookmark, .lucide-zap, .lucide-moon, .lucide-flame, .lucide-circle, .lucide-square) {
+    fill: currentColor;
+  }
+
   /* Some SF Symbols do not have a Lucide equivalent. Keep icon-only adaptive
      navigation legible rather than leaving an empty hit target in the rail. */
   .tab-icon[data-lucide-fallback="true"]::before {
