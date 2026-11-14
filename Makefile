@@ -133,7 +133,7 @@ BROWSER_GROUPS = \
 # csp-bundles-test builds every release bundle the Makefile knows, so it runs before the groups, which then reuse them.
 EXAMPLE_GROUPS = \
 	"showcase: embedded-showcase-test integration-release-test" \
-	"board-site: lazy-rows-browser-test showcase-site-test first-paint-browser-test" \
+	"board-site: lazy-rows-browser-test lazy-cell-state-browser-test showcase-site-test first-paint-browser-test" \
 	"apps: lumio-test quill-test seekr-test neighborly-test stayly-test mailo-test" \
 	"media: media-worker-test" "universal: universal-app-browser-test first-route-browser-test" \
 	"consumers: cross-package-test consumer-regression plugin-test web-command-test" \
@@ -269,6 +269,7 @@ help:
 	@echo "  make web-command-test            swift package web init writes ./swiftweb, which reports the toolchain, builds and serves the development loop"
 	@echo "  make direct-build-test           The development loop compiles a save by replaying the recorded compiler commands, and hands unknown saves to swift build"
 	@echo "  make dev-profile-test            The development profile fast (full Swift, regular WebAssembly) passes the motion, showcase and identity suites in Chromium"
+	@echo "  make lazy-cell-state-browser-test  A view with state of its own in a LazyVGrid cell redraws when it changes, as in a plain stack (Chromium and WebKit)"
 	@echo "  make view-transition-browser-test  A matched swap runs one view transition with the final DOM of the page without transitions (Chromium and WebKit)"
 	@echo "  make redacted-skeleton-browser-test  Redacted placeholder paints a skeleton; unredacted subtrees keep their look, privacy blurs (Chromium and WebKit)"
 	@echo "  make first-paint-browser-test  First screen prerendered into index.html: painted before the wasm, no shift, verify mode (SWIFTUIWEB_FIRST_PAINT=1 turns it on for a release build)"
@@ -630,6 +631,12 @@ dev-profile-test:
 	SWIFTUIWEB_BROWSER_ENGINE=chromium MOTION_BUNDLE=$(DEV_PROFILE_BUNDLES)/MotionApp bun Tools/test-motion-browser.mjs
 	SWIFTUIWEB_BROWSER_ENGINE=chromium bun Tools/test-embedded-showcase.mjs $(DEV_PROFILE_BUNDLES)/ShowcaseApp
 	SWIFTUIWEB_BROWSER_ENGINE=chromium IDENTITY_BUNDLE=$(DEV_PROFILE_BUNDLES)/ShowcaseApp bun Tools/test-identity-browser.mjs
+
+.PHONY: lazy-cell-state-browser-test
+lazy-cell-state-browser-test:
+	BUILD_ONLY=1 CONFIGURATION=release Tools/run-browser.sh lazy-cells
+	bun Tools/test-lazy-cell-state-browser.mjs
+	$(ON_WEBKIT) bun Tools/test-lazy-cell-state-browser.mjs
 
 .PHONY: view-transition-browser-test
 view-transition-browser-test:
