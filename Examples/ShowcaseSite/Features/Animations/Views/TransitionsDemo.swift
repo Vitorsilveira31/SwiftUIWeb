@@ -1,6 +1,6 @@
 import SwiftUIWeb
 
-/// A view that enters and leaves with the transition picked above it.
+/// A view that enters and leaves with the transition picked beside it.
 struct TransitionsDemo: View {
   @State private var shown = true
   @State private var kind = 0
@@ -26,12 +26,21 @@ struct TransitionsDemo: View {
       .frame(maxWidth: .infinity, minHeight: 84)
       .clipped()
       HStack(spacing: 10) {
-        Picker("Transition", selection: $kind) {
-          ForEach(0..<Self.kinds.count, id: \.self) { index in Text(Self.kinds[index].0).tag(index) }
+        // The kind is a menu drawn like the buttons around it. Its label has one width for every kind, and Hide and Show have
+        // one width, so nothing on the line moves when either changes.
+        Menu {
+          ForEach(0..<Self.kinds.count, id: \.self) { index in
+            Button(Self.kinds[index].0) { kind = index }
+          }
+        } label: {
+          // One width for every kind, so the label does not change size with it. The menu and the button beside it are both 36 points tall.
+          Text(Self.kinds[kind].0).frame(width: 72, height: 18, alignment: .leading)
         }
-        .pickerStyle(.menu)
-        Button(shown ? "Hide" : "Show") { withAnimation(.easeInOut(duration: 0.5)) { shown.toggle() } }
-          .buttonStyle(.borderedProminent)
+        .buttonStyle(.bordered)
+        Button { withAnimation(.easeInOut(duration: 0.5)) { shown.toggle() } } label: {
+          Text(shown ? "Hide" : "Show").frame(width: 40, height: 18)
+        }
+        .buttonStyle(.borderedProminent)
       }
     }
   }

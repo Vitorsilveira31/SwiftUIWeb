@@ -486,11 +486,28 @@ async function checkAnimations(browser, base, query) {
   await press("−7");
   await text(page, "228", "235 - 7");
 
-  // Transitions: a view leaves and comes back, the button naming what it does next.
+  // Transitions: a view leaves and comes back, the button naming what it does next. The picker and the button sit on one line, and
+  // the button keeps its size and place when its label changes.
+  // The kind of transition is a menu drawn like a button: the same height as Hide, on the same line.
+  const kindMenu = page.locator(".menu-popup > summary:visible", { hasText: "Opacity" }).first();
+  const hideButton = page.getByRole("button", { name: "Hide", exact: true }).locator("visible=true").first();
+  const [menuBox, hideBox] = [await kindMenu.boundingBox(), await hideButton.boundingBox()];
+  assert.ok(Math.abs(menuBox.y + menuBox.height / 2 - (hideBox.y + hideBox.height / 2)) <= 1, "the kind menu and the Hide button are not on one line");
+  assert.ok(Math.abs(menuBox.height - hideBox.height) <= 1, `the kind menu is ${menuBox.height} tall and the Hide button ${hideBox.height}`);
+  // Choosing a kind changes the menu's label and nothing else on the line moves.
+  await kindMenu.click();
+  await page.locator('.menu-popup [role="menu"]:popover-open').first().getByRole("button", { name: "Scale", exact: true }).click();
+  await text(page, "Scale", "the chosen kind");
+  const afterChoice = [await page.locator(".menu-popup > summary:visible", { hasText: "Scale" }).first().boundingBox(), await hideButton.boundingBox()];
+  assert.ok(Math.abs(afterChoice[0].width - menuBox.width) <= 0.5 && Math.abs(afterChoice[1].x - hideBox.x) <= 0.5, "choosing a kind resized the menu or moved Hide");
   await press("Hide");
   await text(page, "Show", "the Hide button after hiding");
   await press("Show");
   await text(page, "Hide", "the Show button after showing");
+  const hideAgain = await page.getByRole("button", { name: "Hide", exact: true }).locator("visible=true").first().boundingBox();
+  assert.ok(Math.abs(hideAgain.x - hideBox.x) <= 0.5 && Math.abs(hideAgain.width - hideBox.width) <= 0.5, "the button moved or changed size");
+  const showWidth = await (async () => { await press("Hide"); await text(page, "Show", "the Hide button after hiding"); const box = await page.getByRole("button", { name: "Show", exact: true }).locator("visible=true").first().boundingBox(); await press("Show"); await text(page, "Hide", "the Show button after showing"); return box.width; })();
+  assert.ok(Math.abs(showWidth - hideBox.width) <= 0.5, `Show is ${showWidth} wide and Hide ${hideBox.width}`);
 
   // Symbol effects: Listen starts the pulse and offers to stop it. Progress ring: the value is the number beside it.
   await press("Listen");
@@ -518,6 +535,19 @@ async function checkAnimations(browser, base, query) {
   // A card's code opens over the page and closes with Done.
   await page.getByRole("button", { name: /Code$/ }).locator("visible=true").first().click();
   await text(page, "contentTransition(.numericText(value: Double(count)))", "the numeric text code");
+  // The sheet is over the whole page, not under the cards drawn after the one it opened from: at its corners and its middle the
+  // element on top belongs to it. It is looked at once it has come in (it scales and fades in), so the points are tried until they hold.
+  const coveredPoints = () => page.evaluate(() => {
+    const sheet = document.querySelector(".sheet-panel, [role=dialog], [aria-modal]");
+    const rect = sheet.getBoundingClientRect();
+    return [[0.1, 0.1], [0.5, 0.5], [0.9, 0.1], [0.1, 0.9], [0.9, 0.9]].map(([fx, fy]) => sheet.contains(document.elementFromPoint(rect.x + rect.width * fx, rect.y + rect.height * fy)));
+  });
+  let onTop = await coveredPoints();
+  for (let attempt = 0; attempt < 30 && onTop.includes(false); attempt += 1) {
+    await page.waitForTimeout(100);
+    onTop = await coveredPoints();
+  }
+  assert.deepEqual(onTop, [true, true, true, true, true], "the code sheet is under part of the page");
   await press("Done");
   await page.waitForFunction(() => !document.body.innerText.includes("Double(count)"), null, { timeout: 15_000 });
   assert.deepEqual(errors, [], "animations: page errors");
@@ -698,13 +728,13 @@ async function checkControls(browser, base, query) {
   assert.equal(new Set(widths).size, 1, `a DisclosureGroup changes width when it opens or closes: ${widths}`);
   await group.context.close();
 
-  // The catalog's Menu is the last menu on the page: the header's menus come before it.
+  // The catalog's Menu is the last menu drawn on the page: the header's menus come before it, and a page that is hidden draws none of its own.
   const menu = await entry("menu");
-  await menu.page.locator(".menu-popup").last().locator("summary").click();
+  await menu.page.locator(".menu-popup:visible").last().locator("summary").click();
   // The browser reports a `<details>` opening in a task of its own, then the host moves the panel to the top layer.
-  await menu.page.waitForFunction(() => [...document.querySelectorAll(".menu-popup")].at(-1)?.querySelector(":scope > [role=menu]")?.matches(":popover-open"), undefined, { timeout: 5000 });
+  await menu.page.waitForFunction(() => [...document.querySelectorAll(".menu-popup")].filter((popup) => popup.getBoundingClientRect().width > 0).at(-1)?.querySelector(":scope > [role=menu]")?.matches(":popover-open"), undefined, { timeout: 5000 });
   const shown = await menu.page.evaluate(() => {
-    const popup = [...document.querySelectorAll(".menu-popup")].at(-1);
+    const popup = [...document.querySelectorAll(".menu-popup")].filter((popup) => popup.getBoundingClientRect().width > 0).at(-1);
     const panel = popup.querySelector(":scope > [role=menu]");
     const box = panel.getBoundingClientRect();
     const middle = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
@@ -714,10 +744,10 @@ async function checkControls(browser, base, query) {
   assert.equal(shown.topLayer, true, "the Menu's panel is not in the top layer");
   assert.equal(shown.onTop, true, "something covers the Menu's panel");
   assert.equal(shown.below, true, "the Menu's panel is not under its label");
-  await menu.page.locator(".menu-popup").last().locator('[role="menu"] button').first().click();
-  await menu.page.waitForFunction(() => ![...document.querySelectorAll(".menu-popup")].at(-1).open, undefined, { timeout: 5000 });
+  await menu.page.locator(".menu-popup:visible").last().locator('[role="menu"] button').first().click();
+  await menu.page.waitForFunction(() => ![...document.querySelectorAll(".menu-popup")].filter((popup) => popup.getBoundingClientRect().width > 0).at(-1).open, undefined, { timeout: 5000 });
   assert.equal(
-    await menu.page.evaluate(() => [...document.querySelectorAll(".menu-popup")].at(-1).querySelector(":scope > [role=menu]").matches(":popover-open")),
+    await menu.page.evaluate(() => [...document.querySelectorAll(".menu-popup")].filter((popup) => popup.getBoundingClientRect().width > 0).at(-1).querySelector(":scope > [role=menu]").matches(":popover-open")),
     false,
     "choosing an item leaves the panel open",
   );

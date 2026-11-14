@@ -3,6 +3,8 @@ import SwiftUIWeb
 /// Motion: the animation API of SwiftUI, each piece running live.
 struct AnimationsView: View {
   @Environment(\.siteLanguage) private var language
+  /// The animation whose code is open over the page, if any.
+  @State private var codeDemo: AnimationDemoVO?
 
   var body: some View {
     SitePageScaffold(width: SiteLayout.wideWidth) {
@@ -10,11 +12,15 @@ struct AnimationsView: View {
       SiteParagraph(text: AnimationsStrings.lead(language), isLead: true)
       AdaptiveColumnsLayout(minimumWidth: 322, spacing: 14, rowHeight: AnimationDemoCard<EmptyView>.height) {
         ForEach(AnimationsStrings.all(language), id: \.id) { demo in
-          AnimationDemoCard(demo: demo, codeLabel: AnimationsStrings.codeLabel(language), doneLabel: AnimationsStrings.doneLabel(language)) {
+          AnimationDemoCard(demo: demo, codeLabel: AnimationsStrings.codeLabel(language), shownCode: $codeDemo) {
             demoView(demo.id)
           }
         }
       }
+    }
+    // One sheet for the page, over every card: opened from a card, it would sit in that card's stacking order.
+    .sheet(item: $codeDemo) { demo in
+      AnimationCodeSheet(demo: demo, doneLabel: AnimationsStrings.doneLabel(language), shown: $codeDemo)
     }
   }
 

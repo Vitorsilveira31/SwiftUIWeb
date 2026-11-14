@@ -145,7 +145,7 @@ enum AnimationsStrings {
           en: "symbolEffect makes the icon bounce, pulse or swap for another, as SF Symbols do."
         ),
         code: """
-        Image(systemName: "bell.fill").symbolEffect(.bounce, value: rings)
+        Image(systemName: "bell").symbolEffect(.bounce, value: rings)
         Image(systemName: "wifi").symbolEffect(.pulse, isActive: listening)
         Image(systemName: starred ? "star.fill" : "star")
           .contentTransition(.symbolEffect(.replace))
