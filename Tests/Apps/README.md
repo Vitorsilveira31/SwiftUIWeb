@@ -12,6 +12,7 @@ framework, and their code is written for that. Examples for people to learn from
 | [`MediaProbeApp`](MediaProbeApp) | A player over short generated clips with one button per thing the tests read; it logs what Swift saw, in the Worker or on the main thread. Run by `make media-worker-test`. |
 | [`MotionApp`](MotionApp) | One section per piece of SwiftUI motion, each with a long linear animation the test can sample: insertion and removal transitions, the default fade, sliding siblings, numeric text, springs, symbol effects, scroll transitions and completions. Run by `make motion-browser-test`. |
 | [`BoardBenchmarkApp`](BoardBenchmarkApp) | The board that is compared with the React version in `Benchmarks/ReactComparison`: a header, a stats screen and a list of generated works, with the same rows as the React board. |
+| [`LazyCellStateApp`](LazyCellStateApp) | A view with state of its own in a cell of a `LazyVGrid`, in three shapes (its own state, a generic card that stores its content, state changed inside `withAnimation`), and the same cells in a `VStack` as the control. Run by `Tools/test-lazy-cell-state-browser.mjs`. |
 | [`ViewTransitionApp`](ViewTransitionApp) | Matched-geometry pairs, a navigation zoom and pinned swaps, each with a name the view-transition browser test (`Tools/test-view-transition-browser.mjs`) can find. |
 
 They are executable targets of the root package. Most are also listed under `products:` in `Package.swift`; SwiftPM builds an

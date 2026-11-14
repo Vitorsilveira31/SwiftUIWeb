@@ -1221,7 +1221,7 @@ package final class FiberTree {
     for target in selected {
       metrics.invalidatedNodes += 1
       metrics.subtreeTargetPathDepthTotal += target.fiber.identity.fiberPath.count
-      let replacing = collectOwnerTokens(in: target.fiber)
+      let replacing = collectOwnerTokens(in: target.fiber, skippingLazyRows: true)
       stateStore._beginSubtreeRenderPass(replacing: replacing)
       // The owners inside the target render again: each keeps its token when it registers at the same path, so
       // unchanged rows do not re-index (see `_beginReuse`). The target's own owner renders in place.
@@ -1573,11 +1573,15 @@ package final class FiberTree {
   }
 
   /// The owners of `fiber`'s subtree: its Fibers' tokens and the inner owners whose node each returned.
-  private func collectOwnerTokens(in fiber: Fiber) -> Set<UInt64> {
+  /// The owners at and below `fiber`. A pass that renders an enclosing view again passes over the rows a lazy collection
+  /// holds (the placeholder keeps them as they are): `skippingLazyRows` leaves their owners out, so the pass does not retire
+  /// what they read (a cell's own `@State`) without reading it again.
+  private func collectOwnerTokens(in fiber: Fiber, skippingLazyRows: Bool = false) -> Set<UInt64> {
     var result = Set<UInt64>()
     var pending = [fiber]
     while let current = pending.popLast() {
       if let token = current.renderOwnerToken { renderOwnerRegistry._ownersReturning(token, into: &result) }
+      if skippingLazyRows, current.renderNode.lazyCollection != nil { continue }
       pending.append(contentsOf: current.children)
     }
     return result

@@ -187,6 +187,7 @@ let package = Package(
     // application programming model and is not exposed as a library product.
     .target(name: "SwiftUIWebEmbeddedCoreProbe", path: "Sources/SwiftUIWebEmbeddedCoreProbe", swiftSettings: embeddedRestrictionsWarnings),
     .executableTarget(name: "BoardBenchmarkApp", dependencies: ["SwiftUIWebBrowser"], path: "Tests/Apps/BoardBenchmarkApp", swiftSettings: appFoundationAlias),
+    .executableTarget(name: "LazyCellStateApp", dependencies: ["SwiftUIWebBrowser"], path: "Tests/Apps/LazyCellStateApp", swiftSettings: appFoundationAlias),
     .executableTarget(name: "ViewTransitionApp", dependencies: ["SwiftUIWebBrowser"], path: "Tests/Apps/ViewTransitionApp", swiftSettings: appFoundationAlias),
     .executableTarget(name: "MotionApp", dependencies: ["SwiftUIWebBrowser"], path: "Tests/Apps/MotionApp", swiftSettings: appFoundationAlias),
     .executableTarget(name: "ShowcaseSite", dependencies: ["SwiftUIWebBrowser", "SwiftUIWebWeb"], path: "Examples/ShowcaseSite", swiftSettings: appFoundationAlias),
