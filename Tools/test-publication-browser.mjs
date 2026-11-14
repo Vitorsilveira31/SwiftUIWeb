@@ -130,9 +130,17 @@ await runSuite(async () => {
     const full = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     await full.addInitScript(() => { window.__fullPublish = true; });
     await scenario(full, base);
-    const complete = await full.evaluate(normalizedDOM);
-    assert.equal(incrementalDOM.length, complete.length, "incremental and full publications left different pages");
-    assert.equal(incrementalDOM, complete, "incremental and full publications left different pages");
+    // The two pages are compared once both have settled: a transition that ends a frame later on one of them (a slow runner)
+    // is not a difference between publications. A difference that stays is reported where it starts, not as two pages.
+    let complete = await full.evaluate(normalizedDOM);
+    let latest = incrementalDOM;
+    for (const end = Date.now() + 5000; latest !== complete && Date.now() < end; ) {
+      await full.waitForTimeout(100);
+      [latest, complete] = [await incremental.evaluate(normalizedDOM), await full.evaluate(normalizedDOM)];
+    }
+    let at = 0;
+    while (at < latest.length && latest[at] === complete[at]) at += 1;
+    assert.ok(latest === complete, `incremental and full publications left different pages, first different at ${at} of ${latest.length}/${complete.length}:\n  incremental: ${latest.slice(Math.max(0, at - 160), at + 240)}\n  full:        ${complete.slice(Math.max(0, at - 160), at + 240)}`);
     console.log("PASS publications are applied as records, and the page equals the one built from full publications");
 
     // A page that acknowledges two publications late and reads only the newest of several: Swift has published more than it

@@ -57,6 +57,8 @@ function gitIgnored(folder, path) {
     for (const line of readFileSync(ignore, "utf8").split("\n")) {
       const pattern = line.trim().replace(/\/$/, "");
       if (!pattern || pattern.startsWith("#") || pattern.includes("*")) continue;
+      // As in git, a pattern with no slash names a file or folder at any depth (`node_modules` is every `node_modules`).
+      if (!pattern.includes("/") && [relativePath, fromRoot].some((candidate) => candidate.split("/").includes(pattern))) return true;
       if ([relativePath, fromRoot].some((candidate) => candidate === pattern || candidate.startsWith(pattern + "/"))) return true;
     }
   }
