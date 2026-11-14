@@ -403,6 +403,12 @@ async function checkPhone(browser, base, query) {
   const rows = await pageLinkWidths();
   assert.ok(rows.length >= 5, `the menu of pages shows ${rows.length} links`);
   assert.equal(new Set(rows).size, 1, `the highlights of the menu of pages have different widths: ${rows}`);
+  // The highlight does not touch its icon: the row has padding before the label.
+  const inset = await page.evaluate(() => {
+    const link = [...document.querySelectorAll("a")].find((a) => a.getBoundingClientRect().width > 0 && a.textContent.trim() === "Components");
+    return Math.round(link.querySelector("svg").getBoundingClientRect().left - link.getBoundingClientRect().left);
+  });
+  assert.ok(inset >= 8, `the icon of a row of the menu of pages is ${inset}px from the edge of its highlight`);
   await menuButton.click();
   const entryName = await picker.locator("option:checked").textContent();
   const onFirstScreen = (name) =>
