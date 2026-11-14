@@ -1,0 +1,21 @@
+# Pull requests for new releases and security fixes of everything the repository pins: the GitHub Actions (pinned by
+# commit), the JavaScript packages in bun.lock (Shaka Player ships in application bundles; Playwright runs the tests) and
+# the Swift packages in Package.resolved. Security updates are opened as soon as an advisory is published.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    # The workflows, and the composite actions they call.
+    directories: ["/", "/.github/actions/*"]
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: bun
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: swift
+    directory: /
+    schedule:
+      interval: weekly

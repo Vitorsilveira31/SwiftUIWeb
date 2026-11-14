@@ -1,0 +1,1776 @@
+{
+  "nodes" : {
+    "x-aspect-cap-narrow.aspect" : {
+      "height" : 50,
+      "width" : 100,
+      "x" : 110,
+      "y" : 109
+    },
+    "x-aspect-cap-narrow.frame" : {
+      "height" : 50,
+      "width" : 100,
+      "x" : 110,
+      "y" : 109
+    },
+    "x-aspect-cap-narrow.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-aspect-cap-narrow.stack" : {
+      "height" : 78,
+      "width" : 100,
+      "x" : 110,
+      "y" : 81
+    },
+    "x-aspect-cap-padded.aspect" : {
+      "height" : 60,
+      "width" : 120,
+      "x" : 100,
+      "y" : 104
+    },
+    "x-aspect-cap-padded.frame" : {
+      "height" : 80,
+      "width" : 320,
+      "x" : 0,
+      "y" : 94
+    },
+    "x-aspect-cap-padded.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-aspect-cap-padded.stack" : {
+      "height" : 108,
+      "width" : 320,
+      "x" : 0,
+      "y" : 66
+    },
+    "x-aspect-cap-tall.aspect" : {
+      "height" : 80,
+      "width" : 40,
+      "x" : 140,
+      "y" : 94
+    },
+    "x-aspect-cap-tall.frame" : {
+      "height" : 80,
+      "width" : 320,
+      "x" : 0,
+      "y" : 94
+    },
+    "x-aspect-cap-tall.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-aspect-cap-tall.stack" : {
+      "height" : 108,
+      "width" : 320,
+      "x" : 0,
+      "y" : 66
+    },
+    "x-aspect-fit.a" : {
+      "height" : 50,
+      "width" : 100,
+      "x" : 110,
+      "y" : 95
+    },
+    "x-aspect-fit.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-aspect-hero.aspect" : {
+      "height" : 95,
+      "width" : 200,
+      "x" : 60,
+      "y" : 86.5
+    },
+    "x-aspect-hero.frame" : {
+      "height" : 100,
+      "width" : 320,
+      "x" : 0,
+      "y" : 84
+    },
+    "x-aspect-hero.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-aspect-hero.layout" : {
+      "height" : 95,
+      "width" : 200,
+      "x" : 60,
+      "y" : 86.5
+    },
+    "x-aspect-hero.stack" : {
+      "height" : 128,
+      "width" : 320,
+      "x" : 0,
+      "y" : 56
+    },
+    "x-aspect-width.a" : {
+      "height" : 200,
+      "width" : 150,
+      "x" : 85,
+      "y" : 20
+    },
+    "x-aspect-width.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-background.base" : {
+      "height" : 40,
+      "width" : 111.5,
+      "x" : 104.25,
+      "y" : 100
+    },
+    "x-background.bg" : {
+      "height" : 40,
+      "width" : 111.5,
+      "x" : 104.25,
+      "y" : 100
+    },
+    "x-background.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-baseline.a" : {
+      "height" : 33,
+      "width" : 39.5,
+      "x" : 121.5,
+      "y" : 103.5
+    },
+    "x-baseline.b" : {
+      "height" : 15,
+      "width" : 29.5,
+      "x" : 169,
+      "y" : 118.5
+    },
+    "x-baseline.h" : {
+      "height" : 33,
+      "width" : 77,
+      "x" : 121.5,
+      "y" : 103.5
+    },
+    "x-baseline.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-canvas-alone.c" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-canvas-alone.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-canvas-height.c" : {
+      "height" : 12,
+      "width" : 200,
+      "x" : 60,
+      "y" : 128
+    },
+    "x-canvas-height.f" : {
+      "height" : 12,
+      "width" : 200,
+      "x" : 60,
+      "y" : 128
+    },
+    "x-canvas-height.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-canvas-height.v" : {
+      "height" : 40,
+      "width" : 200,
+      "x" : 60,
+      "y" : 100
+    },
+    "x-canvas-ideal.c" : {
+      "height" : 10,
+      "width" : 320,
+      "x" : 0,
+      "y" : 129
+    },
+    "x-canvas-ideal.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-canvas-ideal.v" : {
+      "height" : 38,
+      "width" : 320,
+      "x" : 0,
+      "y" : 101
+    },
+    "x-canvas-size.c" : {
+      "height" : 12,
+      "width" : 200,
+      "x" : 60,
+      "y" : 114
+    },
+    "x-canvas-size.f" : {
+      "height" : 12,
+      "width" : 200,
+      "x" : 60,
+      "y" : 114
+    },
+    "x-canvas-size.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-canvas-vstack.c" : {
+      "height" : 72,
+      "width" : 200,
+      "x" : 60,
+      "y" : 98
+    },
+    "x-canvas-vstack.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-canvas-vstack.v" : {
+      "height" : 100,
+      "width" : 200,
+      "x" : 60,
+      "y" : 70
+    },
+    "x-divider-alone.d" : {
+      "height" : 1,
+      "width" : 320,
+      "x" : 0,
+      "y" : 119.5
+    },
+    "x-divider-alone.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-divider-fixed-hstack.d" : {
+      "height" : 20,
+      "width" : 1,
+      "x" : 154.5,
+      "y" : 110
+    },
+    "x-divider-fixed-hstack.h" : {
+      "height" : 20,
+      "width" : 87,
+      "x" : 116.5,
+      "y" : 110
+    },
+    "x-divider-fixed-hstack.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-divider-fixed-vstack.d" : {
+      "height" : 1,
+      "width" : 48.5,
+      "x" : 135.75,
+      "y" : 119.5
+    },
+    "x-divider-fixed-vstack.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-divider-fixed-vstack.v" : {
+      "height" : 57,
+      "width" : 48.5,
+      "x" : 135.75,
+      "y" : 91.5
+    },
+    "x-divider-frame-in-hstack.d" : {
+      "height" : 20,
+      "width" : 1,
+      "x" : 154.5,
+      "y" : 110
+    },
+    "x-divider-frame-in-hstack.f" : {
+      "height" : 20,
+      "width" : 1,
+      "x" : 154.5,
+      "y" : 110
+    },
+    "x-divider-frame-in-hstack.h" : {
+      "height" : 20,
+      "width" : 87,
+      "x" : 116.5,
+      "y" : 110
+    },
+    "x-divider-frame-in-hstack.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-divider-framed.a" : {
+      "height" : 1,
+      "width" : 100,
+      "x" : 60,
+      "y" : 105.5
+    },
+    "x-divider-framed.b" : {
+      "height" : 1,
+      "width" : 200,
+      "x" : 60,
+      "y" : 124
+    },
+    "x-divider-framed.fa" : {
+      "height" : 1,
+      "width" : 100,
+      "x" : 60,
+      "y" : 105.5
+    },
+    "x-divider-framed.fb" : {
+      "height" : 20,
+      "width" : 200,
+      "x" : 60,
+      "y" : 114.5
+    },
+    "x-divider-framed.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-divider-framed.v" : {
+      "height" : 29,
+      "width" : 200,
+      "x" : 60,
+      "y" : 105.5
+    },
+    "x-divider-hstack-fills.d" : {
+      "height" : 240,
+      "width" : 1,
+      "x" : 154.5,
+      "y" : 0
+    },
+    "x-divider-hstack-fills.h" : {
+      "height" : 240,
+      "width" : 87,
+      "x" : 116.5,
+      "y" : 0
+    },
+    "x-divider-hstack-fills.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-divider-hstack.d" : {
+      "height" : 40,
+      "width" : 1,
+      "x" : 154.5,
+      "y" : 100
+    },
+    "x-divider-hstack.h" : {
+      "height" : 40,
+      "width" : 200,
+      "x" : 60,
+      "y" : 100
+    },
+    "x-divider-hstack.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-divider-max-height-in-hstack.d" : {
+      "height" : 40,
+      "width" : 1,
+      "x" : 154.5,
+      "y" : 100
+    },
+    "x-divider-max-height-in-hstack.f" : {
+      "height" : 40,
+      "width" : 1,
+      "x" : 154.5,
+      "y" : 100
+    },
+    "x-divider-max-height-in-hstack.h" : {
+      "height" : 40,
+      "width" : 200,
+      "x" : 60,
+      "y" : 100
+    },
+    "x-divider-max-height-in-hstack.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-divider-overlay-in-hstack.d" : {
+      "height" : 40,
+      "width" : 1,
+      "x" : 154.5,
+      "y" : 100
+    },
+    "x-divider-overlay-in-hstack.h" : {
+      "height" : 40,
+      "width" : 200,
+      "x" : 60,
+      "y" : 100
+    },
+    "x-divider-overlay-in-hstack.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-divider-overlay-in-hstack.o" : {
+      "height" : 40,
+      "width" : 20,
+      "x" : 145,
+      "y" : 100
+    },
+    "x-divider-padding-in-hstack.d" : {
+      "height" : 40,
+      "width" : 1,
+      "x" : 154.5,
+      "y" : 100
+    },
+    "x-divider-padding-in-hstack.h" : {
+      "height" : 40,
+      "width" : 200,
+      "x" : 60,
+      "y" : 100
+    },
+    "x-divider-padding-in-hstack.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-divider-padding-in-hstack.p" : {
+      "height" : 40,
+      "width" : 9,
+      "x" : 150.5,
+      "y" : 100
+    },
+    "x-divider-vstack-centred.d" : {
+      "height" : 1,
+      "width" : 320,
+      "x" : 0,
+      "y" : 119.5
+    },
+    "x-divider-vstack-centred.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-divider-vstack-centred.v" : {
+      "height" : 57,
+      "width" : 320,
+      "x" : 0,
+      "y" : 91.5
+    },
+    "x-divider-vstack-in-hstack.d" : {
+      "height" : 1,
+      "width" : 114,
+      "x" : 98,
+      "y" : 119.5
+    },
+    "x-divider-vstack-in-hstack.h" : {
+      "height" : 40,
+      "width" : 200,
+      "x" : 60,
+      "y" : 100
+    },
+    "x-divider-vstack-in-hstack.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-divider-vstack-in-hstack.v" : {
+      "height" : 1,
+      "width" : 114,
+      "x" : 98,
+      "y" : 119.5
+    },
+    "x-divider-vstack.d" : {
+      "height" : 1,
+      "width" : 200,
+      "x" : 60,
+      "y" : 119.5
+    },
+    "x-divider-vstack.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-divider-vstack.v" : {
+      "height" : 57,
+      "width" : 200,
+      "x" : 60,
+      "y" : 91.5
+    },
+    "x-divider-width-in-hstack.d" : {
+      "height" : 40,
+      "width" : 1,
+      "x" : 154.5,
+      "y" : 100
+    },
+    "x-divider-width-in-hstack.f" : {
+      "height" : 40,
+      "width" : 30,
+      "x" : 140,
+      "y" : 100
+    },
+    "x-divider-width-in-hstack.h" : {
+      "height" : 40,
+      "width" : 200,
+      "x" : 60,
+      "y" : 100
+    },
+    "x-divider-width-in-hstack.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-divider-width.d" : {
+      "height" : 1,
+      "width" : 100,
+      "x" : 110,
+      "y" : 119.5
+    },
+    "x-divider-width.f" : {
+      "height" : 1,
+      "width" : 100,
+      "x" : 110,
+      "y" : 119.5
+    },
+    "x-divider-width.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-divider-zstack-in-hstack.d" : {
+      "height" : 1,
+      "width" : 114,
+      "x" : 98,
+      "y" : 119.5
+    },
+    "x-divider-zstack-in-hstack.h" : {
+      "height" : 40,
+      "width" : 200,
+      "x" : 60,
+      "y" : 100
+    },
+    "x-divider-zstack-in-hstack.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-divider-zstack-in-hstack.z" : {
+      "height" : 1,
+      "width" : 114,
+      "x" : 98,
+      "y" : 119.5
+    },
+    "x-editor-alone.e" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-editor-alone.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-editor-framed-in-vstack.e" : {
+      "height" : 90,
+      "width" : 200,
+      "x" : 60,
+      "y" : 89
+    },
+    "x-editor-framed-in-vstack.f" : {
+      "height" : 90,
+      "width" : 200,
+      "x" : 60,
+      "y" : 89
+    },
+    "x-editor-framed-in-vstack.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-editor-framed-in-vstack.v" : {
+      "height" : 118,
+      "width" : 200,
+      "x" : 60,
+      "y" : 61
+    },
+    "x-editor-height.e" : {
+      "height" : 90,
+      "width" : 320,
+      "x" : 0,
+      "y" : 75
+    },
+    "x-editor-height.f" : {
+      "height" : 90,
+      "width" : 320,
+      "x" : 0,
+      "y" : 75
+    },
+    "x-editor-height.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-editor-padded.e" : {
+      "height" : 90,
+      "width" : 200,
+      "x" : 60,
+      "y" : 75
+    },
+    "x-editor-padded.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-editor-padded.p" : {
+      "height" : 98,
+      "width" : 208,
+      "x" : 56,
+      "y" : 71
+    },
+    "x-editor-size.e" : {
+      "height" : 90,
+      "width" : 200,
+      "x" : 60,
+      "y" : 75
+    },
+    "x-editor-size.f" : {
+      "height" : 90,
+      "width" : 200,
+      "x" : 60,
+      "y" : 75
+    },
+    "x-editor-size.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-editor-vstack.e" : {
+      "height" : 122,
+      "width" : 200,
+      "x" : 60,
+      "y" : 73
+    },
+    "x-editor-vstack.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-editor-vstack.v" : {
+      "height" : 150,
+      "width" : 200,
+      "x" : 60,
+      "y" : 45
+    },
+    "x-fixed-vertical.f" : {
+      "height" : 140,
+      "width" : 110,
+      "x" : 105,
+      "y" : 50
+    },
+    "x-fixed-vertical.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-flex-vs-text.c" : {
+      "height" : 40,
+      "width" : 146,
+      "x" : 30,
+      "y" : 100
+    },
+    "x-flex-vs-text.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-flex-vs-text.t" : {
+      "height" : 40,
+      "width" : 104,
+      "x" : 186,
+      "y" : 100
+    },
+    "x-frame-cap-hug.cap" : {
+      "height" : 100,
+      "width" : 120,
+      "x" : 100,
+      "y" : 58
+    },
+    "x-frame-cap-hug.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-frame-cap-hug.next" : {
+      "height" : 20,
+      "width" : 35.5,
+      "x" : 100,
+      "y" : 162
+    },
+    "x-frame-cap-hug.stack" : {
+      "height" : 124,
+      "width" : 120,
+      "x" : 100,
+      "y" : 58
+    },
+    "x-frame-cap.cap" : {
+      "height" : 20,
+      "width" : 120,
+      "x" : 100,
+      "y" : 110
+    },
+    "x-frame-cap.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-frame-max-hug.aspect" : {
+      "height" : 80,
+      "width" : 160,
+      "x" : 80,
+      "y" : 94
+    },
+    "x-frame-max-hug.frame" : {
+      "height" : 80,
+      "width" : 320,
+      "x" : 0,
+      "y" : 94
+    },
+    "x-frame-max-hug.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-frame-max-hug.stack" : {
+      "height" : 108,
+      "width" : 320,
+      "x" : 0,
+      "y" : 66
+    },
+    "x-frame-min-fill.a" : {
+      "height" : 120,
+      "width" : 158,
+      "x" : 0,
+      "y" : 60
+    },
+    "x-frame-min-fill.b" : {
+      "height" : 120,
+      "width" : 158,
+      "x" : 162,
+      "y" : 60
+    },
+    "x-frame-min-fill.gallery" : {
+      "height" : 120,
+      "width" : 320,
+      "x" : 0,
+      "y" : 60
+    },
+    "x-frame-min-fill.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-frame-min-geo.frame" : {
+      "height" : 120,
+      "width" : 320,
+      "x" : 0,
+      "y" : 74
+    },
+    "x-frame-min-geo.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-frame-min-geo.reader" : {
+      "height" : 120,
+      "width" : 320,
+      "x" : 0,
+      "y" : 74
+    },
+    "x-frame-min-geo.stack" : {
+      "height" : 148,
+      "width" : 320,
+      "x" : 0,
+      "y" : 46
+    },
+    "x-frame-min.f" : {
+      "height" : 60,
+      "width" : 150,
+      "x" : 85,
+      "y" : 90
+    },
+    "x-frame-min.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-frame-minmax.a" : {
+      "height" : 20,
+      "width" : 200,
+      "x" : 60,
+      "y" : 98
+    },
+    "x-frame-minmax.b" : {
+      "height" : 20,
+      "width" : 200,
+      "x" : 60,
+      "y" : 122
+    },
+    "x-frame-minmax.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-gauge-alone.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-gauge-alone.p" : {
+      "height" : 46.54345703125,
+      "width" : 320,
+      "x" : 0,
+      "y" : 96.728271484375
+    },
+    "x-gauge-centred.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-gauge-centred.p" : {
+      "height" : 46.54345703125,
+      "width" : 320,
+      "x" : 0,
+      "y" : 110.728271484375
+    },
+    "x-gauge-centred.v" : {
+      "height" : 74.54345703125,
+      "width" : 320,
+      "x" : 0,
+      "y" : 82.728271484375
+    },
+    "x-gauge-framed.f" : {
+      "height" : 46.54345703125,
+      "width" : 150,
+      "x" : 85,
+      "y" : 96.728271484375
+    },
+    "x-gauge-framed.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-gauge-framed.p" : {
+      "height" : 46.54345703125,
+      "width" : 150,
+      "x" : 85,
+      "y" : 96.728271484375
+    },
+    "x-gauge-hstack.h" : {
+      "height" : 46.54345703125,
+      "width" : 260,
+      "x" : 30,
+      "y" : 96.728271484375
+    },
+    "x-gauge-hstack.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-gauge-hstack.p" : {
+      "height" : 46.54345703125,
+      "width" : 210.5,
+      "x" : 79.5,
+      "y" : 96.728271484375
+    },
+    "x-gauge-vstack.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-gauge-vstack.p" : {
+      "height" : 46.54345703125,
+      "width" : 200,
+      "x" : 60,
+      "y" : 110.728271484375
+    },
+    "x-gauge-vstack.v" : {
+      "height" : 74.54345703125,
+      "width" : 200,
+      "x" : 60,
+      "y" : 82.728271484375
+    },
+    "x-geometry.g" : {
+      "height" : 100,
+      "width" : 200,
+      "x" : 60,
+      "y" : 70
+    },
+    "x-geometry.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-geometry.t" : {
+      "height" : 20,
+      "width" : 88,
+      "x" : 66,
+      "y" : 70
+    },
+    "x-grid-fill-row.a" : {
+      "height" : 105,
+      "width" : 154,
+      "x" : 0,
+      "y" : 67.5
+    },
+    "x-grid-fill-row.b" : {
+      "height" : 105,
+      "width" : 154,
+      "x" : 166,
+      "y" : 67.5
+    },
+    "x-grid-fill-row.chart" : {
+      "height" : 77,
+      "width" : 154,
+      "x" : 166,
+      "y" : 95.5
+    },
+    "x-grid-fill-row.grid" : {
+      "height" : 105,
+      "width" : 320,
+      "x" : 0,
+      "y" : 67.5
+    },
+    "x-grid-fill-row.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-grid-fill-row.tiles" : {
+      "height" : 77,
+      "width" : 154,
+      "x" : 0,
+      "y" : 95.5
+    },
+    "x-layout-grid-hug.card" : {
+      "height" : 220,
+      "width" : 320,
+      "x" : 0,
+      "y" : 10
+    },
+    "x-layout-grid-hug.frame" : {
+      "height" : 192,
+      "width" : 320,
+      "x" : 0,
+      "y" : 38
+    },
+    "x-layout-grid-hug.grid" : {
+      "height" : 220,
+      "width" : 320,
+      "x" : 0,
+      "y" : 10
+    },
+    "x-layout-grid-hug.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-layout-grid-hug.lattice" : {
+      "height" : 192,
+      "width" : 320,
+      "x" : 0,
+      "y" : 38
+    },
+    "x-layout-grid-tall.card" : {
+      "height" : 200,
+      "width" : 154,
+      "x" : 0,
+      "y" : 20
+    },
+    "x-layout-grid-tall.frame" : {
+      "height" : 172,
+      "width" : 154,
+      "x" : 0,
+      "y" : 48
+    },
+    "x-layout-grid-tall.grid" : {
+      "height" : 200,
+      "width" : 320,
+      "x" : 0,
+      "y" : 20
+    },
+    "x-layout-grid-tall.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-layout-grid-tall.lattice" : {
+      "height" : 92.39999999999964,
+      "width" : 154,
+      "x" : 0,
+      "y" : 87.80000000000018
+    },
+    "x-layout-grid-tall.other" : {
+      "height" : 200,
+      "width" : 154,
+      "x" : 166,
+      "y" : 20
+    },
+    "x-layout-scroll.frame" : {
+      "height" : 192,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-layout-scroll.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-layout-scroll.lattice" : {
+      "height" : 192,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-layout-scroll.scroll" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-layout-stack-hug.frame" : {
+      "height" : 192,
+      "width" : 320,
+      "x" : 0,
+      "y" : 38
+    },
+    "x-layout-stack-hug.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-layout-stack-hug.lattice" : {
+      "height" : 192,
+      "width" : 320,
+      "x" : 0,
+      "y" : 38
+    },
+    "x-layout-stack-hug.stack" : {
+      "height" : 220,
+      "width" : 320,
+      "x" : 0,
+      "y" : 10
+    },
+    "x-menu-picker-alone.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-menu-picker-alone.p" : {
+      "height" : 24,
+      "width" : 156,
+      "x" : 82,
+      "y" : 108
+    },
+    "x-menu-picker-centred.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-menu-picker-centred.p" : {
+      "height" : 24,
+      "width" : 156,
+      "x" : 82,
+      "y" : 122
+    },
+    "x-menu-picker-centred.v" : {
+      "height" : 52,
+      "width" : 156,
+      "x" : 82,
+      "y" : 94
+    },
+    "x-menu-picker-framed.f" : {
+      "height" : 24,
+      "width" : 150,
+      "x" : 85,
+      "y" : 108
+    },
+    "x-menu-picker-framed.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-menu-picker-framed.p" : {
+      "height" : 24,
+      "width" : 150,
+      "x" : 85,
+      "y" : 108
+    },
+    "x-menu-picker-hstack.h" : {
+      "height" : 24,
+      "width" : 300,
+      "x" : 10,
+      "y" : 108
+    },
+    "x-menu-picker-hstack.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-menu-picker-hstack.p" : {
+      "height" : 24,
+      "width" : 156,
+      "x" : 64.5,
+      "y" : 108
+    },
+    "x-menu-picker-share.a" : {
+      "height" : 24,
+      "width" : 121,
+      "x" : 35,
+      "y" : 108
+    },
+    "x-menu-picker-share.b" : {
+      "height" : 24,
+      "width" : 121,
+      "x" : 164,
+      "y" : 108
+    },
+    "x-menu-picker-share.h" : {
+      "height" : 40,
+      "width" : 250,
+      "x" : 35,
+      "y" : 100
+    },
+    "x-menu-picker-share.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-menu-picker-tiny-frame.f" : {
+      "height" : 24,
+      "width" : 40,
+      "x" : 140,
+      "y" : 108
+    },
+    "x-menu-picker-tiny-frame.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-menu-picker-tiny-frame.p" : {
+      "height" : 24,
+      "width" : 40,
+      "x" : 140,
+      "y" : 108
+    },
+    "x-menu-picker-wide-frame.f" : {
+      "height" : 24,
+      "width" : 250,
+      "x" : 35,
+      "y" : 108
+    },
+    "x-menu-picker-wide-frame.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-menu-picker-wide-frame.p" : {
+      "height" : 24,
+      "width" : 156,
+      "x" : 82,
+      "y" : 108
+    },
+    "x-navigation-pushed.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-navigation-pushed.t" : {
+      "height" : 20,
+      "width" : 57.5,
+      "x" : 131.25,
+      "y" : 110
+    },
+    "x-navigation-tab.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-navigation-tab.t" : {
+      "height" : 20,
+      "width" : 28,
+      "x" : 146,
+      "y" : 122
+    },
+    "x-navigation.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-navigation.t" : {
+      "height" : 20,
+      "width" : 44,
+      "x" : 138,
+      "y" : 110
+    },
+    "x-nested-flex.g" : {
+      "height" : 19,
+      "width" : 20,
+      "x" : 260,
+      "y" : 110.5
+    },
+    "x-nested-flex.h" : {
+      "height" : 58,
+      "width" : 240,
+      "x" : 40,
+      "y" : 91
+    },
+    "x-nested-flex.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-nested-flex.v" : {
+      "height" : 58,
+      "width" : 204,
+      "x" : 40,
+      "y" : 91
+    },
+    "x-overlay-fill.base" : {
+      "height" : 20,
+      "width" : 41.5,
+      "x" : 139.25,
+      "y" : 110
+    },
+    "x-overlay-fill.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-overlay-fill.o" : {
+      "height" : 20,
+      "width" : 41.5,
+      "x" : 139.25,
+      "y" : 110
+    },
+    "x-overlay.base" : {
+      "height" : 60,
+      "width" : 120,
+      "x" : 100,
+      "y" : 90
+    },
+    "x-overlay.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-overlay.o" : {
+      "height" : 20,
+      "width" : 30,
+      "x" : 190,
+      "y" : 130
+    },
+    "x-padding-fill.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-padding-fill.p" : {
+      "height" : 52,
+      "width" : 320,
+      "x" : 0,
+      "y" : 94
+    },
+    "x-padding.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-padding.p" : {
+      "height" : 28,
+      "width" : 98.5,
+      "x" : 110.75,
+      "y" : 106
+    },
+    "x-picker-row-tight.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-picker-row-tight.label" : {
+      "height" : 20,
+      "width" : 43,
+      "x" : 85,
+      "y" : 110
+    },
+    "x-picker-row-tight.picker" : {
+      "height" : 24,
+      "width" : 95,
+      "x" : 140,
+      "y" : 108
+    },
+    "x-picker-row-tight.row" : {
+      "height" : 24,
+      "width" : 150,
+      "x" : 85,
+      "y" : 108
+    },
+    "x-picker-row-tight.spacer" : {
+      "height" : 0,
+      "width" : 12,
+      "x" : 128,
+      "y" : 120
+    },
+    "x-picker-row.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-picker-row.label" : {
+      "height" : 20,
+      "width" : 43,
+      "x" : 25,
+      "y" : 110
+    },
+    "x-picker-row.picker" : {
+      "height" : 24,
+      "width" : 156,
+      "x" : 139,
+      "y" : 108
+    },
+    "x-picker-row.row" : {
+      "height" : 24,
+      "width" : 270,
+      "x" : 25,
+      "y" : 108
+    },
+    "x-picker-row.spacer" : {
+      "height" : 0,
+      "width" : 71,
+      "x" : 68,
+      "y" : 120
+    },
+    "x-picker-sizes.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-picker-sizes.unspecified" : {
+      "height" : 24,
+      "width" : 156,
+      "x" : 10,
+      "y" : 105
+    },
+    "x-picker-sizes.w60" : {
+      "height" : 24,
+      "width" : 60,
+      "x" : 10,
+      "y" : 135
+    },
+    "x-picker-sizes.zero" : {
+      "height" : 24,
+      "width" : 33.5,
+      "x" : 10,
+      "y" : 75
+    },
+    "x-progress-alone.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-progress-alone.p" : {
+      "height" : 20,
+      "width" : 320,
+      "x" : 0,
+      "y" : 110
+    },
+    "x-progress-centred.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-progress-centred.p" : {
+      "height" : 20,
+      "width" : 320,
+      "x" : 0,
+      "y" : 124
+    },
+    "x-progress-centred.v" : {
+      "height" : 48,
+      "width" : 320,
+      "x" : 0,
+      "y" : 96
+    },
+    "x-progress-framed.f" : {
+      "height" : 20,
+      "width" : 150,
+      "x" : 85,
+      "y" : 110
+    },
+    "x-progress-framed.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-progress-framed.p" : {
+      "height" : 20,
+      "width" : 150,
+      "x" : 85,
+      "y" : 110
+    },
+    "x-progress-hstack.h" : {
+      "height" : 20,
+      "width" : 260,
+      "x" : 30,
+      "y" : 110
+    },
+    "x-progress-hstack.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-progress-hstack.p" : {
+      "height" : 20,
+      "width" : 210.5,
+      "x" : 79.5,
+      "y" : 110
+    },
+    "x-progress-vstack.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-progress-vstack.p" : {
+      "height" : 20,
+      "width" : 200,
+      "x" : 60,
+      "y" : 124
+    },
+    "x-progress-vstack.v" : {
+      "height" : 48,
+      "width" : 200,
+      "x" : 60,
+      "y" : 96
+    },
+    "x-slider-alone.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-slider-alone.p" : {
+      "height" : 16,
+      "width" : 320,
+      "x" : 0,
+      "y" : 112
+    },
+    "x-slider-centred.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-slider-centred.p" : {
+      "height" : 16,
+      "width" : 320,
+      "x" : 0,
+      "y" : 126
+    },
+    "x-slider-centred.v" : {
+      "height" : 44,
+      "width" : 320,
+      "x" : 0,
+      "y" : 98
+    },
+    "x-slider-framed.f" : {
+      "height" : 16,
+      "width" : 150,
+      "x" : 85,
+      "y" : 112
+    },
+    "x-slider-framed.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-slider-framed.p" : {
+      "height" : 16,
+      "width" : 150,
+      "x" : 85,
+      "y" : 112
+    },
+    "x-slider-hstack.h" : {
+      "height" : 20,
+      "width" : 260,
+      "x" : 30,
+      "y" : 110
+    },
+    "x-slider-hstack.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-slider-hstack.p" : {
+      "height" : 16,
+      "width" : 210.5,
+      "x" : 79.5,
+      "y" : 112
+    },
+    "x-slider-row.h" : {
+      "height" : 20,
+      "width" : 260,
+      "x" : 30,
+      "y" : 110
+    },
+    "x-slider-row.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-slider-row.p" : {
+      "height" : 16,
+      "width" : 191.5,
+      "x" : 62,
+      "y" : 112
+    },
+    "x-slider-vstack.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-slider-vstack.p" : {
+      "height" : 16,
+      "width" : 200,
+      "x" : 60,
+      "y" : 126
+    },
+    "x-slider-vstack.v" : {
+      "height" : 44,
+      "width" : 200,
+      "x" : 60,
+      "y" : 98
+    },
+    "x-text-in-frame-height.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-text-in-frame-height.t" : {
+      "height" : 40,
+      "width" : 120,
+      "x" : 100,
+      "y" : 100
+    },
+    "x-text-in-frame-height.v" : {
+      "height" : 40,
+      "width" : 120,
+      "x" : 100,
+      "y" : 100
+    },
+    "x-three-texts.a" : {
+      "height" : 20,
+      "width" : 42,
+      "x" : 20,
+      "y" : 110
+    },
+    "x-three-texts.b" : {
+      "height" : 40,
+      "width" : 81,
+      "x" : 68,
+      "y" : 100
+    },
+    "x-three-texts.c" : {
+      "height" : 40,
+      "width" : 145,
+      "x" : 155,
+      "y" : 100
+    },
+    "x-three-texts.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-trailing-stack.a" : {
+      "height" : 20,
+      "width" : 42,
+      "x" : 188.75,
+      "y" : 98
+    },
+    "x-trailing-stack.b" : {
+      "height" : 20,
+      "width" : 141.5,
+      "x" : 89.25,
+      "y" : 122
+    },
+    "x-trailing-stack.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-trailing-stack.v" : {
+      "height" : 44,
+      "width" : 141.5,
+      "x" : 89.25,
+      "y" : 98
+    },
+    "x-two-texts.a" : {
+      "height" : 60,
+      "width" : 128,
+      "x" : 38,
+      "y" : 90
+    },
+    "x-two-texts.b" : {
+      "height" : 60,
+      "width" : 108,
+      "x" : 174,
+      "y" : 90
+    },
+    "x-two-texts.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-vstack-spacer.b" : {
+      "height" : 20,
+      "width" : 56,
+      "x" : 132,
+      "y" : 200
+    },
+    "x-vstack-spacer.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-vstack-spacer.t" : {
+      "height" : 20,
+      "width" : 28.5,
+      "x" : 145.75,
+      "y" : 20
+    },
+    "x-zstack-topleading.host" : {
+      "height" : 240,
+      "width" : 320,
+      "x" : 0,
+      "y" : 0
+    },
+    "x-zstack-topleading.r" : {
+      "height" : 40,
+      "width" : 50,
+      "x" : 80,
+      "y" : 70
+    },
+    "x-zstack-topleading.t" : {
+      "height" : 20,
+      "width" : 32,
+      "x" : 80,
+      "y" : 70
+    },
+    "x-zstack-topleading.z" : {
+      "height" : 100,
+      "width" : 160,
+      "x" : 80,
+      "y" : 70
+    }
+  },
+  "os" : "Version 27.0 (Build 26A428)",
+  "platform" : "Apple SwiftUI"
+}

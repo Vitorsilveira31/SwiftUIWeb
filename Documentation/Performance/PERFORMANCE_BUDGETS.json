@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "policy": "fail-on-regression",
+  "budgets": [
+    {
+      "name": "initial-brotli-wasm",
+      "enforcement": "report",
+      "path": "artifacts.ShowcaseApp.initial.brotli",
+      "max": 750000,
+      "maxRegressionPercent": 5.0,
+      "unit": "bytes",
+      "source": "artifact-size",
+      "rationale": "Keeps the text-only release payload within the measured transfer envelope."
+    },
+    {
+      "name": "initial-gzip-wasm",
+      "enforcement": "report",
+      "path": "artifacts.ShowcaseApp.initial.gzip",
+      "max": 1100000,
+      "maxRegressionPercent": 5.0,
+      "unit": "bytes",
+      "source": "artifact-size",
+      "rationale": "Catches transfer regressions for environments without Brotli."
+    },
+    {
+      "name": "retained-node-delta-after-10000",
+      "path": "swift.listScale.10000.settledLive",
+      "max": 64,
+      "unit": "nodes",
+      "source": "swift-memory",
+      "rationale": "Large-list removal must release old Fiber/RenderNode state."
+    },
+    {
+      "name": "released-render-nodes",
+      "path": "swift.release.renderNodeLive",
+      "max": 0,
+      "unit": "nodes",
+      "source": "swift-memory",
+      "rationale": "A released tree must not retain RenderNodes."
+    },
+    {
+      "name": "released-fibers",
+      "path": "swift.release.fiberLive",
+      "max": 0,
+      "unit": "nodes",
+      "source": "swift-memory",
+      "rationale": "A released tree must not retain Fibers."
+    },
+    {
+      "name": "embedded-startup-time",
+      "path": "embeddedBrowser.scenarios.startup.elapsedMs",
+      "max": 10000,
+      "unit": "ms",
+      "source": "browser-embedded",
+      "rationale": "The Embedded cold route must remain measurable within a bounded window."
+    },
+    {
+      "name": "embedded-local-update-errors",
+      "path": "embeddedBrowser.scenarios.localUpdate.errors",
+      "max": 0,
+      "unit": "errors",
+      "source": "browser-embedded",
+      "rationale": "Local updates must publish a clean runtime snapshot."
+    },
+    {
+      "name": "embedded-local-update-dom-mutations",
+      "path": "embeddedBrowser.scenarios.localUpdate.attributeMutations",
+      "max": 4096,
+      "unit": "mutations",
+      "source": "browser-embedded",
+      "rationale": "Repeated local updates must remain bounded."
+    },
+    {
+      "name": "embedded-local-update-layout-passes-skipped",
+      "path": "embeddedBrowser.scenarios.localUpdate.layout.passesSkipped",
+      "min": 1,
+      "unit": "passes",
+      "source": "browser-embedded",
+      "rationale": "A commit that changes nothing the CSS layout reads must not scan the page for semantic roots again."
+    },
+    {
+      "name": "embedded-presentation-unlaid-roots",
+      "path": "embeddedBrowser.scenarios.presentation.layout.unlaid",
+      "max": 0,
+      "unit": "roots",
+      "source": "browser-embedded",
+      "rationale": "CSS must lay out every semantic root a presentation opens: nothing else lays a root out."
+    },
+    {
+      "name": "embedded-scrolling-layout-passes",
+      "path": "embeddedBrowser.scenarios.scrolling.layout.passes",
+      "min": 1,
+      "unit": "passes",
+      "source": "browser-embedded",
+      "rationale": "Scrolling must exercise the layout host."
+    },
+    {
+      "name": "embedded-presentation-errors",
+      "path": "embeddedBrowser.scenarios.presentation.errors",
+      "max": 0,
+      "unit": "errors",
+      "source": "browser-embedded",
+      "rationale": "Repeated presentation cycles must not emit runtime errors."
+    }
+  ]
+}

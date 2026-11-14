@@ -1,0 +1,33 @@
+name: SwiftUI API missing or different
+description: An API that exists in Apple's SwiftUI is missing here, has another signature, or behaves differently.
+labels: ["parity gap"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        SwiftUIWeb follows Apple's SwiftUI names and behavior, and a difference counts as a bug. Check
+        `Documentation/LIMITATIONS.md` first: some frameworks next to SwiftUI (UIKit, Combine, SwiftData...) have no
+        browser counterpart on purpose.
+  - type: input
+    id: api
+    attributes:
+      label: API
+      description: The declaration as Apple documents it, e.g. `func scrollPosition(id: Binding<(some Hashable)?>) -> some View`.
+    validations:
+      required: true
+  - type: input
+    id: docs
+    attributes:
+      label: Link to Apple's documentation
+  - type: textarea
+    id: difference
+    attributes:
+      label: What differs
+      description: Missing, a different signature, or different behavior (what SwiftUI does and what SwiftUIWeb does).
+    validations:
+      required: true
+  - type: textarea
+    id: code
+    attributes:
+      label: Code that uses it
+      render: swift

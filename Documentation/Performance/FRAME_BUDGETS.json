@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "enforcement": "report",
+  "policy": "Frame-time targets of the browser apps: 120 fps most of the time, never below 60. Every budget is in report mode until the optimization phases land; switch a budget (or the whole file) to \"enforce\" to make a miss fail `make perf-frames-check` and the CI job.",
+  "profiles": {
+    "desktop": { "cpu": 1, "label": "Desktop (CPU 1x)" },
+    "phone": { "cpu": 4, "label": "Phone-like (CPU 4x throttling)" }
+  },
+  "metrics": {
+    "commitP95Ms": "95th percentile (nearest rank) of the main-thread time of one commit, over the commits of the interaction (scope pooled: of every commit of the profile)",
+    "longTaskCount": "main-thread tasks over 50 ms (PerformanceObserver longtask) during the interaction",
+    "longTaskMaxMs": "duration of the longest of them",
+    "timeShare16": "percent of the active time of the interaction spent in frame intervals of at most 16.7 ms (+0.1 ms timestamp rounding)",
+    "timeShare8": "same for 8.3 ms, one 120 Hz frame",
+    "slowFrames16": "frame intervals over 16.7 ms (+0.1 ms) during the interaction",
+    "shareInteractionsWithoutSlowFrame": "pooled only: percent of the interactions with no frame interval over 16.7 ms"
+  },
+  "budgets": [
+    {
+      "name": "desktop-commit-p95",
+      "profile": "desktop",
+      "scope": "each",
+      "metric": "commitP95Ms",
+      "max": 8.3,
+      "unit": "ms",
+      "rationale": "A commit that fits one 120 Hz frame leaves the rest of the frame to the browser's own rendering."
+    },
+    {
+      "name": "desktop-commit-p95-all",
+      "profile": "desktop",
+      "scope": "pooled",
+      "metric": "commitP95Ms",
+      "max": 8.3,
+      "unit": "ms",
+      "rationale": "The same limit over every commit of every interaction: the headline number, with more samples than any single interaction has."
+    },
+    {
+      "name": "desktop-long-tasks",
+      "profile": "desktop",
+      "scope": "each",
+      "metric": "longTaskCount",
+      "max": 0,
+      "unit": "count",
+      "rationale": "No main-thread task over 50 ms during any interaction of the measured app."
+    },
+    {
+      "name": "desktop-frames-within-16ms",
+      "profile": "desktop",
+      "scope": "pooled",
+      "metric": "timeShare16",
+      "min": 99,
+      "unit": "%",
+      "rationale": "At least 99% of the active time is spent in frames that make 60 fps."
+    },
+    {
+      "name": "desktop-frames-within-16ms-each",
+      "profile": "desktop",
+      "scope": "each",
+      "metric": "timeShare16",
+      "unit": "%",
+      "rationale": "Reported per interaction to locate the frames that miss the pooled limit."
+    },
+    {
+      "name": "desktop-frames-within-8ms",
+      "profile": "desktop",
+      "scope": "pooled",
+      "metric": "timeShare8",
+      "unit": "%",
+      "rationale": "Reported: the share of the active time in frames that make 120 fps (no limit yet)."
+    },
+    {
+      "name": "desktop-frames-within-8ms-each",
+      "profile": "desktop",
+      "scope": "each",
+      "metric": "timeShare8",
+      "unit": "%",
+      "rationale": "Reported per interaction."
+    },
+    {
+      "name": "phone-no-slow-frame",
+      "profile": "phone",
+      "scope": "each",
+      "metric": "slowFrames16",
+      "max": 0,
+      "unit": "count",
+      "rationale": "On a CPU four times slower no frame may take longer than 16.7 ms: the app never drops below 60 fps."
+    },
+    {
+      "name": "phone-interactions-without-slow-frame",
+      "profile": "phone",
+      "scope": "pooled",
+      "metric": "shareInteractionsWithoutSlowFrame",
+      "min": 50,
+      "unit": "%",
+      "rationale": "\"Most interactions\" run without a slow frame (at least half) even while the per-interaction budget above is not met everywhere; tighten this limit as the app gets there."
+    },
+    {
+      "name": "phone-frames-within-16ms",
+      "profile": "phone",
+      "scope": "pooled",
+      "metric": "timeShare16",
+      "unit": "%",
+      "rationale": "Reported: the share of the active time in 60 fps frames."
+    },
+    {
+      "name": "phone-long-tasks",
+      "profile": "phone",
+      "scope": "each",
+      "metric": "longTaskCount",
+      "unit": "count",
+      "rationale": "Reported: long tasks per interaction with a CPU four times slower."
+    },
+    {
+      "name": "phone-longest-task",
+      "profile": "phone",
+      "scope": "each",
+      "metric": "longTaskMaxMs",
+      "unit": "ms",
+      "rationale": "Reported: the longest task per interaction with a CPU four times slower."
+    },
+    {
+      "name": "phone-commit-p95",
+      "profile": "phone",
+      "scope": "pooled",
+      "metric": "commitP95Ms",
+      "unit": "ms",
+      "rationale": "Reported: per-commit main-thread time with a CPU four times slower."
+    }
+  ]
+}

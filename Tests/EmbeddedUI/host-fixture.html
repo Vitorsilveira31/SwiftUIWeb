@@ -1,0 +1,147 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box}body{font:16px system-ui;margin:20px}button,input,select,textarea{font:inherit;margin:5px;padding:8px}input[type=range]{width:400px;display:block;padding:0} .motion{height:40px;width:40px;background:#06c} main{min-height:800px}details{padding:12px;border:1px solid #ddd}nav{position:sticky;top:0;background:white;padding:10px}#hover-row,#hover-peer{display:block;width:180px;height:32px}
+</style></head><body><script>
+window.imagePipelineCalls=[];
+window.__loadImagePipeline=(document,initial)=>{
+  const image=document.querySelector('img.async-image-loader');
+  window.imagePipelineCalls.push({initial,source:image?.getAttribute('src')??null});
+  for(const loader of document.querySelectorAll('img.async-image-loader'))loader.setAttribute('loading','eager');
+  return Promise.resolve();
+};
+window.sentinel = { retained: true };
+</script><script type="module">
+// Contract fixture: real production host, synthetic Swift ABI producer.
+// It is NOT a replacement Showcase nor proof that the full Swift app compiles.
+import { mountEmbeddedBrowser } from '../../Tools/embedded-dom.js';
+// The markup `render()` builds is served as the binary ROOT publication of the same tree, as Swift serves it.
+import { binaryRoot } from './binary-root.js';
+const escape = value => String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
+const decoder=new TextDecoder();
+const state={count:0,open:true,range:20,text:'Taylor',check:true,selected:'Swift',page:0,trigger:0,width:70,tab:0,imageVersion:1,transactionWidth:70,repeatWidth:70,valuedWidth:70,valued:0,transaction:null,tabShell:false,tick:0,recycleItems:null,recycleInput:false,lazyRevision:0,lazyTitle:"First",lazyRendered:"",pipelineImage:false,pipelineAlt:'first'};
+const memory=new WebAssembly.Memory({initial:2}); let pending=[], length=0, renders=0, phase=true;
+const stats={secureIdsReads:0,secureValues:0,inputs:0,starts:0,dispatches:[],namedDispatches:[],keyPressRuns:[],invalid:0,byteReads:0,lazyWindows:[],viewports:[]};
+function attr(key,id,events='',prevent='') { return `data-embedded-node-id="${key}" ${id?`data-embedded-event-id="${id}" data-embedded-events="${events}" data-embedded-prevent-events="${prevent}"`:''}`; }
+const button=(id,text,key='button-'+id)=>`<button ${attr(key,id,'click')} id="b${id}">${text}</button>`;
+function render() {
+  renders++;
+  const html=`<section ${attr('shell')} ${state.transaction?`data-animation-transaction="${state.transaction}"`:''} ${state.hoverRules?`data-hover-rules="${escape(state.hoverRules)}"`:''}>
+  <nav ${attr('navigation')}>${button(1,'Increment <span>nested</span>')}${button(2,'Page A')}${button(3,'Page B')}${button(4,'Animate')}${button(5,'Trigger')}${button(17,'Change image source')}</nav>
+  <img id="async-image" ${attr('async-image',18,'load,error')} class="async-image-loader" loading="lazy" src="https://images.test/asset-${state.imageVersion}.gif">
+  ${state.lazyRevision?`<div id="lazy-host" ${attr("lazy-host")} data-keep-lazy-index="0" data-keep-lazy-revision="${state.lazyRevision}" data-lazy="vertical"><span id="lazy-value" ${attr("lazy-value")}>${state.lazyRendered}</span></div>`:""}
+  ${state.recycleItems?`<div id="rc" ${attr('rc')}>${state.recycleItems.map(i=>`<div ${attr('cell-'+i)} class="lazy-cell" data-lazy-cell="true" data-lazy-index="${i}" title="cell ${i}" ${i>=4?'style="outline: 1px solid var(--line)"':''}><h3>Title ${i}</h3><p><span>Body ${i}</span>${state.recycleInput?`<input ${attr('cell-input-'+i)} value="v${i}">`:''}</p>${i%2?'<em>odd</em>':''}</div>`).join('')}</div>`:''}
+  ${(state.heads||[]).map((head,i)=>`<div ${attr('head-'+i)} data-document-head="${escape(head.raw!==undefined?head.raw:JSON.stringify(head.entries))}" ${head.hidden?'hidden':''}></div>`).join('')}
+  ${state.adaptiveTabs?`<div id="adaptive-tabs" ${attr('adaptive-tabs')} class="tab-view" data-tab-style="sidebar-adaptable"><nav id="adaptive-sidebar" ${attr('adaptive-sidebar')} class="tab-sidebar" data-tab-sidebar aria-label="Navigation">${[0,1,2].map(i=>`<button ${attr('adaptive-tab-'+i)} role="tab" data-tab-label="Tab ${i}" aria-selected="${i===0}" type="button">Tab ${i}</button>`).join('')}</nav><div ${attr('adaptive-content')}>${state.tick}</div></div>`:''}
+  ${state.icons?`<div id="icons" ${attr('icons')}>${state.icons.map((name,i)=>`<span ${attr('icon-'+i)} class="symbol-icon" data-symbol="${name}" data-tick="${state.tick}" role="img" aria-label="${name}">?</span>`).join('')}</div>`:''}
+  ${state.motionItems?`<div id="motion-items" ${attr('motion-items')}>${Array.from({length:state.motionItems},(_,i)=>`<div ${attr('motion-item-'+i)} class="motion" style="width:${state.transactionWidth}px"></div>`).join('')}</div>`:''}
+  ${state.panelTabs?`<div id="panel-tabs" ${attr('panel-tabs')} class="tab-view" data-selected-tab="${state.panelTabs.selected}"><nav ${attr('panel-tabs-bar')} data-rev="${state.panelTabs.rev||0}">${['a','b','c'].map(v=>`<button id="pt-${v}" ${attr('pt-'+v)} role="tab" data-tab-value="${v}" aria-selected="${v===state.panelTabs.selected}" type="button">${v}</button>`).join('')}</nav>${['a','b','c'].map(v=>{const built=v!=='c'||state.panelTabs.builtC,shown=v===state.panelTabs.selected;return `<div id="pp-${v}" ${attr('pp-'+v)} class="tab-panel" data-tab-panel="true" role="tabpanel" data-tab-value="${v}" data-tab-hidden="${!shown}" aria-hidden="${!shown}" ${built?'':'data-tab-unbuilt="true"'} ${v==='c'&&state.panelTabs.hidesBarC&&!shown?'data-tab-hides-bar="true"':''}>${built?'<span>panel '+v+'</span>':''}</div>`}).join('')}</div>`:''}
+  ${state.focusShell?`<div id="fs-shell" tabindex="0" ${attr('fs-shell',44,'keyPress')}><button id="fs-button" ${attr('fs-button')}>Stays</button>${state.focusOverlay?`<div id="fs-overlay" ${attr('fs-overlay')}><input id="fs-field" type="text" ${attr('fs-field')}></div>`:''}</div>`:''}
+  ${state.submitFields?`<div id="submit-owner" ${attr('submit-owner',41,'submit')} data-submit-triggers="1"><input id="submit-text" type="text" ${attr('submit-text')}><input id="submit-search" type="search" ${attr('submit-search')}><textarea id="submit-area" ${attr('submit-area')}></textarea></div><div id="search-owner" ${attr('search-owner',42,'submit')} data-submit-triggers="4"><input id="search-only" type="search" ${attr('search-only')}></div><form id="submit-form" ${attr('submit-form',43,'submit')}><input id="form-field" type="text" ${attr('form-field')}></form>`:''}
+  ${state.navigationTitle?`<div id="nav-title-host" ${attr('nav-title-host')} ${state.titleHidden?'hidden':''}><h1 ${attr('nav-title')} data-navigation-title="${escape(state.navigationTitle)}">Screen</h1></div>`:''}
+  ${state.tabShell?`<div id="tab-shell" ${attr('tab-shell')} class="tab-view"><div id="tab-shell-sidebar" ${attr('tab-shell-sidebar')} class="tab-sidebar" aria-label="from Swift">${state.tick}</div></div>`:''}
+  ${state.pipelineImage?`<img id="pipeline-image" ${attr('pipeline-image')} alt="${escape(state.pipelineAlt)}" ${state.pipelineLazy?'loading="lazy"':''} src="https://images.test/pipeline.gif">`:''}
+  ${state.secureField?`<input type="password" id="secure" ${attr('secure-field',19,'input')} data-keep-secure-id="pw">`:''}
+  ${state.reorder?`<ul id="reorder" ${attr('reorder')}>${state.reorder.map(row=>typeof row==='string'?escape(row):`<li ${attr('row-'+row)}>Row ${row}</li>`).join('')}</ul>`:''}
+  <output ${attr('count')} id="count">${state.count}</output>
+  <details id="controlled" ${attr('controlled')} data-controlled-open="true" ${state.open?'open':''}><summary ${attr('summary',6,'click','click')}>Disclosure <span>Details</span></summary>${button(7,'Inner button')}<p>Controlled content</p></details>
+  <details id="native" ${attr('native')}><summary>Menu</summary>${button(8,'Menu action')}</details>
+  <input id="range" ${attr('range',9,'input,change')} type="range" min="0" max="100" step="1" value="${state.range}">
+  <output id="progress" ${attr('progress')}>${state.range}</output>
+  <input id="text" ${attr('text',10,'input')} value="${escape(state.lagText??state.text)}">
+  <textarea id="textarea" ${attr('textarea',11,'input')}>${escape(state.text)}</textarea>
+  <input id="check" ${attr('check',12,'change')} type="checkbox" ${state.check?'checked':''}>
+  <select id="select" ${attr('select',13,'change')}>${['Swift','WASI','WebAssembly'].map(value=>`<option value="${value}" ${value===state.selected?'selected':''}>${value}</option>`).join('')}</select>
+  <a ${attr('toc')} href="#lower-card">On this page</a>
+  <section data-hover-group-root="fixture-hover-group" data-hover-group-behavior="activatesGroup">
+    <div id="hover-row" ${attr('hover-row',16,'mouseenter,mouseleave')} data-hover-effect="custom" data-hover-enabled="true" data-hover-group="fixture-hover-group">Hover row</div>
+    <span id="hover-peer" data-hover-group="fixture-hover-group" data-hover-group-behavior="activatesGroup">Grouped peer</span>
+    <div id="hover-outer" ${attr('hover-outer',91,'mouseenter,mouseleave')} style="display:block;width:240px;padding:20px;background:#eee">Outer<div id="hover-inner" ${attr('hover-inner',92,'mouseenter,mouseleave')} style="display:block;height:32px;background:#ccc">Inner</div></div>
+  </section>
+  <div id="transaction" ${attr('transaction')} class="motion" style="width:${state.transactionWidth}px"></div>
+  <div id="repeating" ${attr('repeating')} class="motion" data-animation-iterations="infinite" data-animation-direction="alternate" style="width:${state.repeatWidth}px;transition:all .6s linear"></div>
+  <div id="valued" ${attr('valued')} class="motion" data-animation="linear" data-animation-timing="600ms linear" data-animation-value="${state.valued}" style="width:${state.valuedWidth}px"></div>
+  <div id="timing" ${attr('timing')} class="motion" style="width:${state.width}px; transition:width .6s linear"></div>
+  ${phase?`<div id="phase" ${attr('phase')} class="motion" data-phase-animator="true" data-phase-repeating="true" data-phase-frames="opacity=0.2;transform=scale(0.8)|opacity=1;transform=scale(1)" data-phase-durations="0.4,0.4" data-phase-easing="linear,linear"></div>`:''}
+  <div id="keyframe" ${attr('keyframe')} class="motion" data-keyframe-animator="true" data-keyframe-frames="transform=translateX(0px)|transform=translateX(100px)|transform=translateX(0px)" data-keyframe-offsets="0,0.5,1" data-keyframe-duration="1" data-keyframe-easings="linear,linear" data-keyframe-trigger="${state.trigger}" data-keyframe-repeating="false"></div>
+  <div id="kp-outer" ${attr('kp-outer',30,'keyPress')}><div id="kp-inner" tabindex="0" ${attr('kp-inner',31,'keyPress')}>Key press target</div><input id="kp-field" type="search" ${attr('kp-field')}><input id="kp-field-own" type="text" ${attr('kp-field-own',33,'keyPress')}></div>
+  <div id="kd-shell" tabindex="0" ${attr('kd-shell',90,'keyDown')}>Shell key handler</div>
+  ${button(32,'Shortcut').replace('<button ','<button data-keyboard-shortcut="k|command" ')}
+  <button disabled data-keyboard-shortcut="j|command" ${attr('shortcut-disabled',34,'click')} id="b34">Disabled shortcut</button>
+  <button id="press" data-press-tracking="true" ${attr('press',33,'click,pressed')}>Press <span>label</span></button>
+  <div role="tablist" ${attr('tabs')}>${[0,1].map(i=>`<button role="tab" ${attr('tab-'+i,14+i,'click')} aria-selected="${state.tab===i}" id="tab${i}">Tab ${i}</button>`).join('')}</div>
+  <main ${attr('page-'+state.page)} id="page"><h1>Page ${state.page}</h1>${button(100+state.page,'Page action','page-action-'+state.page)}<div data-view-id="lower-card" style="margin-top:400px">Anchor target</div></main>
+  </section>`;
+  const bytes=binaryRoot(html); length=bytes.length; new Uint8Array(memory.buffer,1024,length).set(bytes);state.transaction=null;
+}
+const api={memory,
+  embedded_browser_lazy_collection_count(){return state.lazyRevision?1:0},
+  embedded_browser_lazy_item_count(){return 2},
+  embedded_browser_lazy_estimated_extent(){return 44},
+  embedded_browser_lazy_window(index,start,count){stats.lazyWindows.push({index,start,count,revision:state.lazyRevision});state.lazyRendered=state.lazyTitle;render()},
+  embedded_browser_start(){stats.starts++;render()},
+  embedded_browser_html_length(){return length},
+  embedded_browser_html_pointer(){stats.pointerReads=(stats.pointerReads||0)+1;return 1024},
+  // Each render is a publication, as Swift numbers them.
+  embedded_browser_publish_seq(){return renders},
+  embedded_browser_html_byte(i){stats.byteReads++;return new Uint8Array(memory.buffer)[1024+i]},
+  embedded_browser_viewport(width,height,dark,reduced){stats.viewports.push([width,height,dark,reduced]);},
+  // SecureField ABI: the host sends an id, Swift answers with the value's length and then the bytes.
+  embedded_browser_secure_value(){stats.secureValues++;return new TextEncoder().encode('s3cret').length},
+  embedded_browser_secure_value_byte(i){return new TextEncoder().encode('s3cret')[i]},
+  embedded_browser_secure_value_reset(){},
+  embedded_browser_secure_ids_length(){stats.secureIdsReads++;return state.secureField?2:0},
+  embedded_browser_event_value_reset(){pending=[]},
+  embedded_browser_event_value_push(b){pending.push(b)},
+  // A worker-hosted Swift answers events later: `lagReflected` pins how many calls the published snapshot reflects.
+  embedded_browser_calls_sent(){return stats.calls||0},
+  embedded_browser_calls_reflected(){return state.lagReflected??(stats.calls||0)},
+  embedded_browser_dispatch(id,code){
+    stats.calls=(stats.calls||0)+1;
+    const value=decoder.decode(new Uint8Array(pending)); stats.dispatches.push({id,code,value});
+    if ([1,7,8].includes(id)) state.count++;
+    else if(id===2)state.page=0;else if(id===3)state.page=1;
+    else if(id===4)state.width=state.width===70?200:70;
+    else if(id===5)state.trigger++;
+    else if(id===6)state.open=!state.open;
+    else if(id===9){state.range=Number(value);if(code===4)stats.inputs++}
+    else if(id===10||id===11)state.text=value;
+    else if(id===12)state.check=value==='true';
+    else if(id===13)state.selected=value;
+    else if(id===14||id===15)state.tab=id-14;
+    else if(id===17)state.imageVersion++;
+    else if(id===100+state.page)state.count++;
+    else if(id===32||id===33)state.count++;
+    else if([41,42,43,44].includes(id)){} // the owners of `submitFields` and `focusShell`: only recorded
+    else {stats.invalid++;return}
+    render();
+  },
+  embedded_browser_dispatch_named(id,nameLength){
+    const bytes=new Uint8Array(pending),name=decoder.decode(bytes.slice(0,nameLength)),value=decoder.decode(bytes.slice(nameLength));
+    stats.namedDispatches.push({id,name,value});
+    // onKeyPress result channel: 1 means `.handled`. As Swift does, the press goes to the target, then to the enclosing
+    // handlers named after it, until one handles it.
+    if(name==='keyPress'){
+      const fields=value.split('\t'),press=fields.slice(0,3).join('\t'),chain=[id,...(fields[3]?fields[3].split(',').map(Number):[])];
+      for(const handler of chain){
+        stats.keyPressRuns.push(handler);
+        if((handler===31&&press.includes('\tArrowDown\t'))||(handler===30&&press.startsWith('down\tx\t')))return 1;
+      }
+      return 0;
+    }
+    if(name==='pressed')return 0;
+    if(id===18&&name==='load')state.count++;
+    else if(id===18&&name==='error')state.count--;
+    else return;
+    render();
+  }
+};
+const mount=()=>mountEmbeddedBrowser({exports:api});
+window.fixture={state,stats,api,render,get renders(){return renders},mount,
+  transaction(){state.transaction='all .6s linear';state.transactionWidth=200;render();window.__embeddedSession.flush()},
+  repeat(){state.repeatWidth=200;render();window.__embeddedSession.flush()},
+  // An .animation(_:value:): a new value generation animates that commit only.
+  valued(width,changed){state.valuedWidth=width;if(changed)state.valued++;render();window.__embeddedSession.flush()},
+  grow(){memory.grow(1);render();window.__embeddedSession.flush()},
+  removePhase(){phase=false;render();window.__embeddedSession.flush()}
+};
+window.fixture.session=mount();window.fixture.ready=true;
+</script></body></html>

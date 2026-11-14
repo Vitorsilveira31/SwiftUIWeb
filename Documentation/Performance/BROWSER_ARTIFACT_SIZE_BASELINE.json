@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "product": "ShowcaseApp",
+  "configuration": "release",
+  "source": "Tools/report-release-size.js",
+  "artifacts": [
+    {
+      "name": "ShowcaseApp",
+      "product": "ShowcaseApp",
+      "bundle": ".build/browser/ShowcaseApp",
+      "status": "ready",
+      "analysis": {
+        "totals": {
+          "initial": {
+            "raw": 2720810,
+            "gzip": 1031656,
+            "brotli": 764364
+          },
+          "optional": {
+            "raw": 0,
+            "gzip": 0,
+            "brotli": 0
+          },
+          "all": {
+            "raw": 2720810,
+            "gzip": 1031656,
+            "brotli": 764364
+          }
+        }
+      }
+    }
+  ]
+}

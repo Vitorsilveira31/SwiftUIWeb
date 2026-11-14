@@ -1,0 +1,14 @@
+{
+  "name": "react-board",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "The React side of the SwiftUIWeb/React comparison: the same board app, written the way a React developer would.",
+  "scripts": {
+    "build": "bun build.mjs"
+  },
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  }
+}

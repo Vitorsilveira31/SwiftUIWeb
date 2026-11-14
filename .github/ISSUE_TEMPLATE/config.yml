@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/Vitorsilveira31/SwiftUIWeb/security/advisories/new
+    about: Report it privately, never in a public issue (see SECURITY.md).
+  - name: Ask a question or share an idea
+    url: https://github.com/Vitorsilveira31/SwiftUIWeb/discussions
+    about: Questions, ideas and things you built go to Discussions.

@@ -1,0 +1,77 @@
+name: Deploy the project site
+
+# Builds the project site (Examples/ShowcaseSite) as a release bundle and deploys it to Cloudflare as a Worker that
+# serves static assets (Tools/cloudflare-site). It runs for a commit on main and on demand, never for a pull request:
+# the job holds the Cloudflare token. `make cloudflare-site-deploy` does the same from a workstation.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # The same toolchain and WebAssembly SDK as the browser job of ci.yml.
+  SWIFT_VERSION: "6.4.0"
+  WASM_SDK_CHECKSUM: "f07b7be3c586d92d7a07051fc6d303b87ebea67eadc40640ba59d5a8b79aa86d"
+
+# Deploys never overlap and are never cancelled half-way; a newer commit waits for the running deploy.
+concurrency:
+  group: deploy-site
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy to Cloudflare
+    # A fork has neither the secrets nor the Worker.
+    if: github.repository == 'Vitorsilveira31/SwiftUIWeb'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    container:
+      image: swift:6.4.0-noble
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check the Cloudflare secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [[ -z "$CLOUDFLARE_API_TOKEN" || -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            echo "::error::Set the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID repository secrets (Tools/cloudflare-site/README.md)."
+            exit 1
+          fi
+      - name: Install the compressors and the archive tools
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq brotli zstd unzip make
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: ./.github/actions/cache-lowering-tool
+        with:
+          swift-version: ${{ env.SWIFT_VERSION }}
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.2"
+      # The Cloudflare CLI runs on Node.js (22.18 or later), not on bun.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - name: Install the Swift ${{ env.SWIFT_VERSION }} WebAssembly SDK
+        run: |
+          set -euo pipefail
+          release="swift-${SWIFT_VERSION}-RELEASE"
+          swift sdk install \
+            "https://download.swift.org/swift-${SWIFT_VERSION}-release/wasm-sdk/$release/${release}_wasm.artifactbundle.tar.gz" \
+            --checksum "$WASM_SDK_CHECKSUM"
+      - run: bun install --frozen-lockfile
+      - name: Build and deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: make cloudflare-site-deploy

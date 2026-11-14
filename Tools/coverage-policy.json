@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "targetLine": 100,
+  "targetBranch": 100,
+  "branchMode": "semantic",
+  "requirePolicyForModules": true,
+  "minimumLine": {
+    "CSwiftUIWebBrowserIO": 100.0,
+    "SwiftUIWeb": 100.0,
+    "SwiftUIWebAVFoundation": 56.0,
+    "SwiftUIWebAVKit": 82.8,
+    "SwiftUIWebBrowser": 41.6,
+    "SwiftUIWebBrowserIO": 72.6,
+    "SwiftUIWebCharts": 82.2,
+    "SwiftUIWebCore": 78.7,
+    "SwiftUIWebFeatures": 78.7,
+    "SwiftUIWebCoreLocation": 94.7,
+    "SwiftUIWebCrypto": 95.0,
+    "SwiftUIWebFiber": 99.7,
+    "SwiftUIWebHTML": 94.9,
+    "SwiftUIWebInternationalization": 75.3,
+    "SwiftUIWebLocking": 97.2,
+    "SwiftUIWebMapKit": 76.9,
+    "SwiftUIWebNetworking": 99.6,
+    "SwiftUIWebPhotosUI": 90.5,
+    "SwiftUIWebTransferable": 97.3,
+    "SwiftUIWebUniformTypeIdentifiers": 100.0,
+    "SwiftUIWebUserNotifications": 97.8,
+    "SwiftUIWebWeb": 100.0,
+    "WebFoundation": 41.1,
+    "WebOSLog": 100.0,
+    "Tools/BrowserIO": 100.0
+  },
+  "minimumFunction": {
+    "CSwiftUIWebBrowserIO": 100.0,
+    "SwiftUIWeb": 100.0,
+    "SwiftUIWebCore": 67.3,
+    "SwiftUIWebCoreLocation": 90.3,
+    "SwiftUIWebNetworking": 99.5,
+    "SwiftUIWebPhotosUI": 82.3,
+    "SwiftUIWebUniformTypeIdentifiers": 100.0,
+    "SwiftUIWebUserNotifications": 96.2,
+    "Tools/BrowserIO": 100.0
+  },
+  "semanticBranchSuites": [
+    "structural arena null/invalid input and generation lifecycle",
+    "dependency graph owner/subtree/root fallback/coalescing/teardown",
+    "observation shared sources and cancellation",
+    "lowering parser failure, source maps and idempotence",
+    "layout measurement/placement/intrinsic and extreme-size properties",
+    "BrowserIO fetch/storage/Intl/cleanup host contract"
+  ]
+}

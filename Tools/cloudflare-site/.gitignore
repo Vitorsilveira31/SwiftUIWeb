@@ -1,0 +1,8 @@
+# Staged by `make cloudflare-site-stage` from the release bundle.
+public/
+# Build output and generated types of the Cloudflare CLI, and Wrangler's state.
+.cloudflare/
+.wrangler/
+# Credentials never belong in the repository.
+.env*
+.dev.vars*

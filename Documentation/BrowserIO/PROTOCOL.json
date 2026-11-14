@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "operations": {
+    "fetch": 1,
+    "storage": 2,
+    "indexedDB": 3,
+    "storageChanges": 4,
+    "connectivity": 5,
+    "connectivityChanges": 6,
+    "dom": 7,
+    "media": 8,
+    "timer": 9,
+    "indexedDBTransaction": 10,
+    "storageTransaction": 11,
+    "storageRevision": 12,
+    "intl": 13,
+    "secureStore": 14,
+    "openWindow": 15,
+    "cookies": 16,
+    "numberUnit": 17,
+    "console": 18,
+    "predicate": 19,
+    "text": 20,
+    "timeZoneOffset": 21,
+    "timeZoneIdentifier": 22,
+    "weekInfo": 23
+  },
+  "events": {
+    "fetchHeaders": 100,
+    "fetchChunk": 101,
+    "fetchUploadProgress": 102,
+    "fetchDownloadProgress": 103
+  }
+}

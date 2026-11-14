@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "artifact": ".build/browser/ShowcaseApp/app.wasm",
+  "runtime": "Embedded Swift + BrowserIO",
+  "configuration": "release",
+  "maxPercentRegression": 5,
+  "metrics": {
+    "raw": 4084187,
+    "gzip9": 1427432,
+    "brotli11": 952312,
+    "zstd19": 1025842,
+    "zstd22": 1025617
+  },
+  "code": 3804904,
+  "data": 233320
+}

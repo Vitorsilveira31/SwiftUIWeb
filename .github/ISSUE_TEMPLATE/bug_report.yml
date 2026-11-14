@@ -1,0 +1,49 @@
+name: Bug report
+description: Something renders, behaves or builds differently from what you expected.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what you saw instead. A screenshot helps for anything visual.
+    validations:
+      required: true
+  - type: textarea
+    id: code
+    attributes:
+      label: Smallest code that shows it
+      description: A view or a small package. If the same code behaves differently in SwiftUI on iOS or macOS, say so.
+      render: swift
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: SwiftUIWeb version or commit
+    validations:
+      required: true
+  - type: input
+    id: swift
+    attributes:
+      label: Swift toolchain
+      description: The output of `swift --version`, and the Embedded WebAssembly SDK you build with.
+    validations:
+      required: true
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser
+      multiple: true
+      options:
+        - Chrome / Edge (Chromium)
+        - Safari (WebKit)
+        - Firefox
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Build output or browser console
+      render: text

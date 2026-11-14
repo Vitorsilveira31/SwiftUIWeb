@@ -1,0 +1,42 @@
+/// The catalog the site ships: every recipe, in the order the list shows them within a category.
+struct LiveComponentCatalogRepository: ComponentCatalogRepository {
+  func recipes() -> [CatalogRecipe] {
+    [
+      TextCatalogRecipe.make(),
+      ImageCatalogRecipe.make(),
+      LabelCatalogRecipe.make(),
+      ProgressCatalogRecipe.make(),
+      GaugeCatalogRecipe.make(),
+      LinkCatalogRecipe.make(),
+      ShapesCatalogRecipe.make(),
+      ContentUnavailableViewCatalogRecipe.make(),
+      ButtonCatalogRecipe.make(),
+      ToggleCatalogRecipe.make(),
+      SliderCatalogRecipe.make(),
+      StepperCatalogRecipe.make(),
+      PickerCatalogRecipe.make(),
+      TextFieldCatalogRecipe.make(),
+      SecureFieldCatalogRecipe.make(),
+      TextEditorCatalogRecipe.make(),
+      DatePickerCatalogRecipe.make(),
+      ColorPickerCatalogRecipe.make(),
+      MenuCatalogRecipe.make(),
+      ControlGroupCatalogRecipe.make(),
+      StacksCatalogRecipe.make(),
+      ZStackCatalogRecipe.make(),
+      SpacerCatalogRecipe.make(),
+      DividerCatalogRecipe.make(),
+      ViewThatFitsCatalogRecipe.make(),
+      GeometryReaderCatalogRecipe.make(),
+      DisclosureGroupCatalogRecipe.make(),
+      GroupBoxCatalogRecipe.make(),
+      ListCatalogRecipe.make(),
+      LazyStacksCatalogRecipe.make(),
+      LazyVGridCatalogRecipe.make(),
+      GridCatalogRecipe.make(),
+      ScrollViewCatalogRecipe.make(),
+      TableCatalogRecipe.make(),
+      FormCatalogRecipe.make(),
+    ]
+  }
+}

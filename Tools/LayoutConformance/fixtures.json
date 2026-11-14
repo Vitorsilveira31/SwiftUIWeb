@@ -1,0 +1,185 @@
+{
+  "schema": 1,
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "fixtures": [
+    {
+      "id": "root-text",
+      "nodes": [
+        "root-text.host",
+        "root-text.text"
+      ],
+      "tolerance": 3.0
+    },
+    {
+      "id": "proposal-probe",
+      "nodes": [
+        "proposal-probe.host",
+        "proposal-probe.zero",
+        "proposal-probe.unspecified",
+        "proposal-probe.infinity"
+      ],
+      "tolerance": 4.0
+    },
+    {
+      "id": "vstack-center",
+      "nodes": [
+        "vstack-center.host",
+        "vstack-center.a",
+        "vstack-center.b"
+      ],
+      "tolerance": 1.0
+    },
+    {
+      "id": "vstack-leading",
+      "nodes": [
+        "vstack-leading.host",
+        "vstack-leading.a",
+        "vstack-leading.b"
+      ],
+      "tolerance": 1.0
+    },
+    {
+      "id": "hstack-spacer",
+      "nodes": [
+        "hstack-spacer.host",
+        "hstack-spacer.left",
+        "hstack-spacer.right"
+      ],
+      "tolerance": 1.0
+    },
+    {
+      "id": "spacer-min",
+      "nodes": [
+        "spacer-min.host",
+        "spacer-min.top",
+        "spacer-min.bottom"
+      ],
+      "tolerance": 1.0
+    },
+    {
+      "id": "frame-strict",
+      "nodes": [
+        "frame-strict.host",
+        "frame-strict.child"
+      ],
+      "tolerance": 1.0
+    },
+    {
+      "id": "frame-infinity-leading",
+      "nodes": [
+        "frame-infinity-leading.host",
+        "frame-infinity-leading.child"
+      ],
+      "tolerance": 1.0
+    },
+    {
+      "id": "layout-priority",
+      "nodes": [
+        "layout-priority.host",
+        "layout-priority.high",
+        "layout-priority.low"
+      ],
+      "tolerance": 2.0
+    },
+    {
+      "id": "layout-priority-reversed",
+      "nodes": [
+        "layout-priority-reversed.host",
+        "layout-priority-reversed.low",
+        "layout-priority-reversed.high"
+      ],
+      "tolerance": 2.0
+    },
+    {
+      "id": "layout-priority-three-levels",
+      "nodes": [
+        "layout-priority-three-levels.host",
+        "layout-priority-three-levels.high",
+        "layout-priority-three-levels.middle",
+        "layout-priority-three-levels.low"
+      ],
+      "tolerance": 2.0
+    },
+    {
+      "id": "fixed-size",
+      "nodes": [
+        "fixed-size.host",
+        "fixed-size.text"
+      ],
+      "tolerance": 3.0
+    },
+    {
+      "id": "zstack-bottom-trailing",
+      "nodes": [
+        "zstack-bottom-trailing.host",
+        "zstack-bottom-trailing.child"
+      ],
+      "tolerance": 1.0
+    },
+    {
+      "id": "text-wrapping",
+      "nodes": [
+        "text-wrapping.host",
+        "text-wrapping.text"
+      ],
+      "tolerance": 4.0
+    },
+    {
+      "id": "nested-frames",
+      "nodes": [
+        "nested-frames.host",
+        "nested-frames.inner"
+      ],
+      "tolerance": 1.0
+    },
+    {
+      "id": "hstack-text-spacer",
+      "nodes": [
+        "hstack-text-spacer.host",
+        "hstack-text-spacer.text"
+      ],
+      "tolerance": 4.0
+    },
+    {
+      "id": "fixed-column-text",
+      "nodes": [
+        "fixed-column-text.host",
+        "fixed-column-text.poster",
+        "fixed-column-text.title"
+      ],
+      "tolerance": 4.0
+    },
+    {
+      "id": "lazy-grid-top",
+      "nodes": [
+        "lazy-grid-top.host",
+        "lazy-grid-top.a",
+        "lazy-grid-top.b"
+      ],
+      "tolerance": 1.0
+    },
+    {
+      "id": "lazy-grid-fill",
+      "nodes": [
+        "lazy-grid-fill.host",
+        "lazy-grid-fill.a",
+        "lazy-grid-fill.b"
+      ],
+      "tolerance": 1.0
+    },
+    {
+      "id": "grid-row-alignment",
+      "nodes": [
+        "grid-row-alignment.host",
+        "grid-row-alignment.a",
+        "grid-row-alignment.b",
+        "grid-row-alignment.c",
+        "grid-row-alignment.d"
+      ],
+      "tolerance": 1.0
+    }
+  ]
+}
