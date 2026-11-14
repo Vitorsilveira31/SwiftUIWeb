@@ -13,6 +13,7 @@ enum ShellStrings {
     case .benefits: return language.pick(pt: "Benefícios", en: "Benefits")
     case .performance: return language.pick(pt: "Desempenho", en: "Performance")
     case .components: return language.pick(pt: "Componentes", en: "Components")
+    case .animations: return language.pick(pt: "Animações", en: "Animations")
     }
   }
 
