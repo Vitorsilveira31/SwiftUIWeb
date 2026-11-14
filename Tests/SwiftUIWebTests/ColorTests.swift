@@ -83,6 +83,17 @@ final class ColorTests {
   }
 
   @Test
+  func testTintWithTheAppAccentDoesNotMakeTheTintPropertyRefertoItself() {
+    // `Color.accentColor` is `var(--tint-color, …)`; as the value of `--tint-color` it would be a cycle.
+    let html = StaticHTMLFiberRenderer().render(Text("accent").tint(Color.accentColor))
+    _expectTrue(!html.contains("--tint-color: var(--tint-color"))
+    _expectTrue(html.contains("--tint-color: var(--asset-color-AccentColor, var(--color-swu-primary));"))
+    // A real tint is written as before.
+    let pink = StaticHTMLFiberRenderer().render(Text("pink").tint(Color.pink))
+    _expectTrue(pink.contains("--tint-color: \(Color.pink.cssValue);"))
+  }
+
+  @Test
   func testEnvironmentColorSchemeMarksItsSubtreeLikePreferredColorScheme() {
     // A subtree set to dark through the environment gets the CSS color-scheme of dark, so its semantic colors
     // (`.primary`) resolve for dark on a page that is light, as they do on iOS.

@@ -159,6 +159,38 @@ describe("Namespaces", () => {
   });
 });
 
+describe("Accent color", () => {
+  test("a system color reference compiles to its light and dark values and AccentColor becomes the tint", () => {
+    withTemp((root) => {
+      const set = join(root, "Kit.xcassets", "AccentColor.colorset");
+      mkdirSync(set, { recursive: true });
+      writeJson(join(set, "Contents.json"), { colors: [{ color: { platform: "universal", reference: "systemIndigoColor" } }] });
+      const values = mod.compileAssets(root);
+      assert.deepEqual(plain(values), { AccentColor: "light-dark(#5856D6, #5E5CE6)" });
+      const css = mod.render(values);
+      assert.match(css, /--asset-color-AccentColor: light-dark\(#5856D6, #5E5CE6\);/);
+      assert.match(css, /--tint-color: var\(--asset-color-AccentColor\);/);
+    });
+  });
+
+  test("an unset AccentColor, an unknown reference and other colors leave the tint alone", () => {
+    withTemp((root) => {
+      const unset = join(root, "Kit.xcassets", "AccentColor.colorset");
+      mkdirSync(unset, { recursive: true });
+      writeJson(join(unset, "Contents.json"), { colors: [{ color: { platform: "universal" } }] });
+      const odd = join(root, "Kit.xcassets", "Odd.colorset");
+      mkdirSync(odd);
+      writeJson(join(odd, "Contents.json"), { colors: [{ color: { reference: "systemNopeColor" } }] });
+      const other = join(root, "Kit.xcassets", "Sky.colorset");
+      mkdirSync(other);
+      writeJson(join(other, "Contents.json"), { colors: [{ color: srgb("0x10", "0x20", "0x30") }] });
+      const values = mod.compileAssets(root);
+      assert.deepEqual(plain(values), { Sky: "#102030" });
+      assert.doesNotMatch(mod.render(values), /--tint-color/);
+    });
+  });
+});
+
 describe("Containment", () => {
   const SECRET = "SECRET-OUTSIDE-PACKAGE";
 

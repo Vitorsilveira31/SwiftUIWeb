@@ -139,9 +139,18 @@ public enum ControlSize: Hashable, Sendable {
 package nonisolated struct TintModifier: ViewModifier {
   package let color: Color?
   package init(color: Color?) { self.color = color }
-  @MainActor package func _modifyContext(_ context: inout _RenderContext) { context.environment.tint = color }
+  /// `.tint(.accentColor)` names the app's own accent. `Color.accentColor` reads `--tint-color`, so writing it into
+  /// `--tint-color` would make the property refer to itself: an invalid value, which the browser draws as its own
+  /// default (a green progress bar). The app's accent is the catalog's `AccentColor` (the app tint), or the theme's
+  /// primary without one.
+  private var isAppAccent: Bool { color?.cssValue == Color.accentColor.cssValue }
+  private static let appAccentCSS = "var(--asset-color-AccentColor, var(--color-swu-primary))"
+  @MainActor package func _modifyContext(_ context: inout _RenderContext) { context.environment.tint = isAppAccent ? nil : color }
   @MainActor package func _apply(to node: _RenderNode, context: inout _RenderContext) {
-    if let color {
+    if isAppAccent {
+      node.attributes["data-tint"] = Self.appAccentCSS
+      node.styles["--tint-color"] = Self.appAccentCSS
+    } else if let color {
       node.attributes["data-tint"] = color.cssValue
       node.styles["--tint-color"] = color.cssValue
     }
