@@ -4880,7 +4880,9 @@
   .sheet-content,
   .presentation-content {
     min-height: 0px;
-    flex: 1;
+    /* The basis is the content's own height: `flex: 1` would make it 0%, and a sheet with no height of its own (no detents)
+       would close up on its padding in Safari. */
+    flex: 1 1 auto;
     overflow-y: auto;
     padding-inline: calc(var(--spacing) * 6);
     padding-block: calc(var(--spacing) * 5);

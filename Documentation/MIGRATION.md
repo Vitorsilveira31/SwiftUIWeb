@@ -108,6 +108,11 @@ before/after comparison.
   symbol `name.symbol.<hash>.svg`; the renderer only knew `name.symbol.svg`, so such a symbol was a picture at the
   SVG's own size (a donut as tall as the screen) instead of a tinted glyph sized by the text.
 
+- **A sheet with no detents sizes to its content in Safari.** `.presentation-content` had `flex: 1`, whose basis is 0%, and
+  Safari closed such a sheet up on its padding (a bar with nothing in it) while Chromium sized it to its content. The basis is
+  now the content's own height (`flex: 1 1 auto`), so both engines draw the same sheet; a sheet with detents still fills its
+  panel. Checked by opening the same sheet in Chromium and WebKit (576 by 334 in both) and by the presentation browser tests.
+
 ### API and behaviour found by the example apps
 
 The small example apps ("Small apps" in `Examples/README.md`) are fifteen apps, each in its own `Examples/` folder, of ordinary iOS 17 SwiftUI compiled for the browser. Closing what it found added API and changed
