@@ -10,6 +10,8 @@
 //     screen, a Menu on a narrow one; each page's address (`/en/start`) follows, and a reload and Back keep it;
 //   * addresses: the language first and the catalog entry last, a deep link opens the page it names, an entry or a language
 //     replaces the address instead of adding a history entry, and the document title follows the page;
+//   * the hero's actions fit a phone: at 320 to 600 px each keeps its label on one line and none passes the edge, stacked when narrow,
+//     the two buttons side by side from 390 px and all three in a row from 430 px;
 //   * the header fits a phone: at 320, 360 and 375 px nothing overflows sideways and the brand, the Menu and the settings
 //     menu do not overlap and stay inside the screen;
 //   * a component's live view and its code follow the knobs: the Text entry gains `.fontWeight(.bold)` when Bold is
@@ -668,6 +670,36 @@ async function checkHeader(browser, base, query) {
 }
 
 // SwiftUI's Stepper draws its label and two buttons, never its value; the value stays for assistive technology.
+// The hero's actions on a phone: each keeps its label on one line (a squeezed button wraps it and grows a second line), none passes the
+// edge of the screen, and the row takes the arrangement that fits: stacked when narrow, the two buttons side by side from 390 px,
+// all three in a row from 430 px. The page draws each arrangement once to measure it, so the actions are looked for among the visible ones.
+async function checkHeroActions(browser, base, query) {
+  for (const width of [320, 360, 390, 430, 600]) {
+    const { context, page, errors } = await open(browser, base, { query, path: "/en/purpose", width });
+    await text(page, "Browse components", `the hero's actions at ${width}`);
+    const action = (name) => page.getByRole("link", { name, exact: true }).locator("visible=true").last();
+    const boxes = {};
+    for (const name of ["Get started", "Browse components", "GitHub"]) boxes[name] = await action(name).boundingBox();
+    for (const [name, box] of Object.entries(boxes)) {
+      assert.ok(box, `${name} is not on the page at ${width}`);
+      assert.ok(box.height <= (name === "GitHub" ? 30 : 48), `${name} wraps onto a second line at ${width} (${box.height} tall)`);
+      assert.ok(box.x >= 0 && box.x + box.width <= width + 0.5, `${name} passes the edge of a ${width} px screen (${box.x + box.width})`);
+    }
+    const [start, components, source] = [boxes["Get started"], boxes["Browse components"], boxes["GitHub"]];
+    const sameRow = (a, b) => Math.abs(a.y + a.height / 2 - (b.y + b.height / 2)) < 4;
+    if (width < 390) {
+      assert.ok(components.y > start.y + start.height - 1 && source.y > components.y + components.height - 1, `the actions are not stacked at ${width}`);
+    } else if (width < 430) {
+      assert.ok(sameRow(start, components) && source.y > start.y + start.height - 1, `the buttons are not side by side with the source under them at ${width}`);
+    } else {
+      assert.ok(sameRow(start, components) && sameRow(components, source), `the actions are not in one row at ${width}`);
+    }
+    assert.deepEqual(errors, [], `hero actions at ${width}: page errors`);
+    await context.close();
+  }
+  return "hero";
+}
+
 async function checkStepper(browser, base, query) {
   const { context, page } = await open(browser, base, { query });
   await goTo(page, "Components");
@@ -796,6 +828,7 @@ async function main() {
         checkComponents,
         checkPhone,
         checkHeader,
+        checkHeroActions,
         checkStepper,
         checkAddresses,
         checkPerformance,
