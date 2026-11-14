@@ -1240,6 +1240,9 @@ export class MatchedGeometryHost {
     this.placed = new Map();
     this.plays = new Map();
     this.saved = new Map();
+    // Where each placed view was put by the last sync (and where its move started, while it runs): a commit rewrites the
+    // view's box before the next sync reads it, so the box it shows by then is the layout's own, not where the view was.
+    this.last = new Map();
     this.frame = 0;
     this.update = () => { this.frame = 0; this.sync(false); };
     this.schedule = () => { if (!this.frame && this.placed.size) this.frame = window.requestAnimationFrame(this.update); };
@@ -1254,6 +1257,7 @@ export class MatchedGeometryHost {
     this.window.removeEventListener('scroll', this.schedule, {capture: true});
     if (this.frame) this.window.cancelAnimationFrame(this.frame);
     for (const element of [...this.placed.keys()]) this.release(element);
+    this.last.clear();
   }
 
   /** Gives `element` its own frame back. */
@@ -1269,11 +1273,28 @@ export class MatchedGeometryHost {
     this.saved.delete(element);
   }
 
+  /** Where `target` showed before this commit rewrote its box: where the last sync put it, or, while its move is still playing,
+   * how far along the move it was. Null for a view that was not placed. */
+  shownBefore(target) {
+    const last = this.last.get(target);
+    if (!last || !this.placed.has(target)) return null;
+    const rect = (left, top, width, height) => ({left, top, width, height, right: left + width, bottom: top + height, x: left, y: top});
+    const play = this.plays.get(target);
+    if (last.from && play && play.animation.playState === 'running') {
+      const progress = play.animation.effect?.getComputedTiming?.().progress;
+      const at = Number.isFinite(progress) ? progress : 1;
+      const mix = (a, b) => a + (b - a) * at;
+      return rect(mix(last.from.left, last.left), mix(last.from.top, last.top), mix(last.from.width, last.width), mix(last.from.height, last.height));
+    }
+    return rect(last.left, last.top, last.width, last.height);
+  }
+
   /** Places every view that takes a source's frame. `animated`: after a commit, which may animate the move. */
   sync(animated) {
     const targets = [...this.root.querySelectorAll('[data-matched-target]')].filter(element => !element.closest(`[${LEAVING}]`));
     const kept = new Set(targets);
     for (const element of [...this.placed.keys()]) if (!kept.has(element)) this.release(element);
+    for (const element of [...this.last.keys()]) if (!kept.has(element)) this.last.delete(element);
     if (!targets.length) return;
     const sources = [...this.root.querySelectorAll('[data-matched-source]')].filter(element => !element.closest(`[${LEAVING}]`));
     // All the reads, then all the writes: where each view shows now, its own box, then its box at its new size.
@@ -1282,7 +1303,7 @@ export class MatchedGeometryHost {
       // A move that is still playing is remembered with how far it got: if the commit does not change where it goes, it goes on.
       const play = this.plays.get(target);
       const running = play && play.animation.playState === 'running' ? {...play, time: play.animation.currentTime} : null;
-      return {target, running, source: sources.find(element => element.getAttribute('data-matched-source') === name), shown: this.placed.has(target) ? target.getBoundingClientRect() : null};
+      return {target, running, source: sources.find(element => element.getAttribute('data-matched-source') === name), shown: this.shownBefore(target)};
     });
     for (const {target} of work) if (this.placed.has(target)) this.release(target);
     for (const item of work) { item.own = item.target.getBoundingClientRect(); item.to = item.source?.getBoundingClientRect() ?? null; }
@@ -1346,6 +1367,7 @@ export class MatchedGeometryHost {
         const [fromX, fromY] = corner(shown, shownWidth, shownHeight), [laidX, laidY] = corner(laid, item.width, item.height);
         from = {translate: translation(fromX - laidX, fromY - laidY), scale: `${item.width > 0 ? shownWidth / item.width : 1} ${item.height > 0 ? shownHeight / item.height : 1}`, transformOrigin: '0 0'};
       }
+      this.last.set(target, {left, top, width, height, from: moves ? {left: shown.left, top: shown.top, width: shown.width, height: shown.height} : null});
       const key = [end.translate, item.width, item.height].join('|');
       const goesOn = item.running?.key === key;
       const frames = goesOn ? item.running.frames : moves ? [from, end] : [end, end];

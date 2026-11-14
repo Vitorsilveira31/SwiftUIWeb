@@ -439,9 +439,14 @@ async function matchedGeometry(page, label) {
   const halfWay = await page.evaluate(() => {
     const pill = window.__byId("pill"), element = pill.closest("[data-matched-target]") ?? pill.querySelector("[data-matched-target]") ?? pill;
     for (const animation of element.getAnimations()) { animation.pause(); animation.currentTime = 500; }
-    return element.getBoundingClientRect().left;
+    const rect = element.getBoundingClientRect();
+    return { left: rect.left, width: rect.width };
   });
-  assert.ok(halfWay > at.tabs[0].x + 2 && halfWay < at.tabs[2].x - 2, `${label}: the pill moves to the new tab with the animation (${halfWay})`);
+  assert.ok(halfWay.left > at.tabs[0].x + 2 && halfWay.left < at.tabs[2].x - 2, `${label}: the pill moves to the new tab with the animation (${halfWay.left})`);
+  // It moves from the tab it was on, at that tab's size: the commit rewrites its box to the layout's own (a background layer is as wide as
+  // what it sits behind) before the move is set up, and the move must not start from that.
+  const widest = Math.max(...at.tabs.map((tab) => tab.w));
+  assert.ok(halfWay.width <= widest + 2, `${label}: and it keeps the size of a tab on the way, not the layout's own (${halfWay.width} wide, a tab is at most ${widest})`);
   await settle(page);
   at = await boxes();
   onTab(at.tabs[2], "the third tab");
