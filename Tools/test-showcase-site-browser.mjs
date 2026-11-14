@@ -381,6 +381,29 @@ async function checkPhone(browser, base, query) {
 
   // The entry picker: a native select whose options are the catalog entries.
   const picker = page.locator("select").filter({ has: page.locator("option", { hasText: "Stepper" }) }).first();
+  // It is a field (border and indicator), not bare text: nothing else tells a visitor it opens a list of components.
+  const field = await picker.evaluate((select) => ({
+    plain: select.getAttribute("data-field-chrome") === "plain",
+    border: Number.parseFloat(getComputedStyle(select).borderTopWidth),
+    indicator: getComputedStyle(select).backgroundImage !== "none",
+  }));
+  assert.ok(!field.plain && field.border > 0 && field.indicator, `the entry picker does not look like a control: ${JSON.stringify(field)}`);
+  // The menu of pages gives every page the same highlight width, whatever its label.
+  const pageLinkWidths = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll("a")]
+        .filter((a) => a.getBoundingClientRect().width > 0 && /^(Purpose|Get started|Benefits|Performance|Components|Animations)$/.test(a.textContent.trim()))
+        .map((a) => Math.round(a.getBoundingClientRect().width)),
+    );
+  const menuButton = page.locator('button[aria-label="Menu"]:visible').first();
+  if ((await pageLinkWidths()).length === 0) {
+    await menuButton.click();
+    await page.waitForTimeout(400);
+  }
+  const rows = await pageLinkWidths();
+  assert.ok(rows.length >= 5, `the menu of pages shows ${rows.length} links`);
+  assert.equal(new Set(rows).size, 1, `the highlights of the menu of pages have different widths: ${rows}`);
+  await menuButton.click();
   const entryName = await picker.locator("option:checked").textContent();
   const onFirstScreen = (name) =>
     page.evaluate((expected) => {
