@@ -12,6 +12,11 @@ struct SiteRouteTests {
     #expect(SiteRoute.parse(path: "benefits") == SiteRoute(language: nil, page: .benefits, entry: nil))
   }
 
+  @Test func theAnimationsPageHasItsOwnAddress() {
+    #expect(SiteRoute.parse(path: "/en/animations") == SiteRoute(language: .en, page: .animations, entry: nil))
+    #expect(SiteRoute(language: .pt, page: .animations, entry: nil).path == "/pt/animations")
+  }
+
   @Test func onlyTheComponentsPageHasEntries() {
     #expect(SiteRoute.parse(path: "/en/purpose/slider")?.entry == nil)
   }

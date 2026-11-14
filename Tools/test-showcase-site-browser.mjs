@@ -6,7 +6,7 @@
 //   * the chip follows the address: a page opened at an address that names the other language shows that language's code;
 //   * the appearance can be forced dark on a light system;
 //   * the home page has a hero and a live counter ("Tap me" counts taps); `/pt` alone opens the Portuguese Purpose page;
-//   * the five pages (Purpose, Get started, Benefits, Performance, Components) open from the header: a row of pills on a wide
+//   * the six pages (Purpose, Get started, Benefits, Performance, Components, Animations) open from the header: a row of pills on a wide
 //     screen, a Menu on a narrow one; each page's address (`/en/start`) follows, and a reload and Back keep it;
 //   * addresses: the language first and the catalog entry last, a deep link opens the page it names, an entry or a language
 //     replaces the address instead of adding a history entry, and the document title follows the page;
@@ -20,6 +20,9 @@
 //   * the Performance page leads with "At a glance", shows its measurements behind a header button, and a segmented CPU
 //     picker switches the rate;
 //   * the Get started page opens from its pill at /en/start with its four steps;
+//   * the Animations page plays each of its eight demos live and answers their controls (the digits roll to the new number, a
+//     view leaves and comes back, a symbol effect starts, a ring fills), opens a card's code over the page, speaks Portuguese at
+//     /pt/animations, and on a phone nothing scrolls sideways;
 //   * the catalog's controls behave: a Toggle's knob is centred in its track, a DisclosureGroup keeps its width open or closed, a
 //     Menu opens in the top layer over what follows it, a List with more rows than its height scrolls without overlapping its rows,
 //     and on a wide screen the component list and the entry scroll on their own while the page stays still;
@@ -465,6 +468,63 @@ async function checkAddresses(browser, base, query) {
   return "addresses";
 }
 
+// The Animations page. The cards sit in plain stacks, not a lazy grid, because a lazy cell does not redraw when a state of its own changes.
+// The page draws each arrangement of the cards once to measure it, so a control is looked for among the visible ones.
+async function checkAnimations(browser, base, query) {
+  const { context, page, errors } = await open(browser, base, { query });
+  await goTo(page, "Animations");
+  await settled(page, "/en/animations", "the Animations page");
+  await text(page, "Numbers that roll", "the first animation");
+  assert.equal((await where(page)).title, "Animations · SwiftUIWeb");
+  const press = (name) => page.getByRole("button", { name, exact: true }).locator("visible=true").first().click();
+
+  // Numbers that roll: the number changes by what is pressed, whatever the roll shows on the way.
+  await press("+100");
+  await text(page, "228", "128 + 100");
+  await press("+7");
+  await text(page, "235", "228 + 7");
+  await press("−7");
+  await text(page, "228", "235 - 7");
+
+  // Transitions: a view leaves and comes back, the button naming what it does next.
+  await press("Hide");
+  await text(page, "Show", "the Hide button after hiding");
+  await press("Show");
+  await text(page, "Hide", "the Show button after showing");
+
+  // Symbol effects: Listen starts the pulse and offers to stop it. Progress ring: the value is the number beside it.
+  await press("Listen");
+  await text(page, "Stop", "the Listen button after starting");
+  await press("100%");
+  await text(page, "100%", "the ring at 100%");
+  await press("60%");
+  await text(page, "60%", "the ring at 60%");
+
+  // A card's code opens over the page and closes with Done.
+  await page.getByRole("button", { name: /Code$/ }).locator("visible=true").first().click();
+  await text(page, "contentTransition(.numericText(value: Double(count)))", "the numeric text code");
+  await press("Done");
+  await page.waitForFunction(() => !document.body.innerText.includes("Double(count)"), null, { timeout: 15_000 });
+  assert.deepEqual(errors, [], "animations: page errors");
+  await context.close();
+
+  // Portuguese, from its own address.
+  const pt = await open(browser, base, { query, path: "/pt/animations", locale: "pt-BR" });
+  await text(pt.page, "Números que rolam", "the Portuguese Animations page");
+  assert.equal((await where(pt.page)).title, "Animações · SwiftUIWeb");
+  assert.deepEqual(pt.errors, [], "animations (pt): page errors");
+  await pt.context.close();
+
+  // A phone: the cards stack in one column and nothing scrolls sideways.
+  const phone = await open(browser, base, { query, path: "/en/animations", width: 390 });
+  await text(phone.page, "Numbers that roll", "the Animations page on a phone");
+  const overflow = await phone.page.evaluate(() => Math.max(...[...document.querySelectorAll("*")].map((element) => element.getBoundingClientRect().right)) - innerWidth);
+  assert.ok(overflow <= 1, `the Animations page overflows a phone by ${overflow}px`);
+  assert.deepEqual(phone.errors, [], "animations (phone): page errors");
+  await phone.context.close();
+  return "animations";
+}
+
 // The Performance page: the headline numbers first, the measurements behind a header button, and a segmented CPU picker.
 async function checkPerformance(browser, base, query) {
   const { context, page, errors } = await open(browser, base, { query });
@@ -694,6 +754,7 @@ async function main() {
         checkStepper,
         checkAddresses,
         checkPerformance,
+        checkAnimations,
         checkControls,
       ]) {
         done.push(await check(browser, server.base, query));

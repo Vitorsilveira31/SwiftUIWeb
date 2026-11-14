@@ -1,8 +1,8 @@
 # ShowcaseSite
 
 The project's own site, written with SwiftUIWeb: what it is for (with the README's counter running beside its code), how to get started, its
-benefits, a measured comparison with React (the headline numbers first, every bar folded away), and a catalog of components you can change
-live. It is in Portuguese and English, and light or dark (one menu in the header; the first visit follows the browser).
+benefits, a measured comparison with React (the headline numbers first, every bar folded away), a catalog of components you can change
+live, and a page of animations that play live next to the code that makes them. It is in Portuguese and English, and light or dark (one menu in the header; the first visit follows the browser).
 
 ```sh
 make run site            # build and serve it (it prints the address)
@@ -12,7 +12,7 @@ swift test --filter ShowcaseSiteTests
 
 ## Addresses
 
-Every page has a readable address with the language first: `/pt/purpose`, `/en/start`, `/en/benefits`, `/pt/components/slider`; `/pt` alone opens the first page in Portuguese. A link or a
+Every page has a readable address with the language first: `/pt/purpose`, `/en/start`, `/en/benefits`, `/en/animations`, `/pt/components/slider`; `/pt` alone opens the first page in Portuguese. A link or a
 reload opens the page, the language and the catalog entry it names; Back and Forward go through the pages visited; choosing
 another entry or another language changes the address without adding a history entry. The title and description follow the
 page. See "Readable addresses per screen" in
@@ -40,6 +40,15 @@ A recipe says which public types it shows (`covers: ["VStack", "HStack"]`).
 must be covered by a recipe, or listed with a reason in [`catalog-coverage.json`](catalog-coverage.json) as `exempt` (not a
 component to configure, such as `AnyView`) or `pending` (an entry still to write). A new public view with none of these
 fails the audit, and a type that gets an entry must leave `pending`.
+
+## The animations page
+
+`Features/Animations` shows eight pieces of SwiftUI's animation API running live, one card each: `contentTransition(.numericText)`,
+transitions, animation curves and springs, `matchedGeometryEffect`, `phaseAnimator`, `keyframeAnimator`, `symbolEffect` and a ring drawn
+with `trim`. A card's button opens its code in a sheet. `AnimationsStrings` holds the words and the code of each card in both
+languages (a test checks that they stay together), and `AnimationsView` lays the cards out with `ViewThatFits`, in three, two or
+one column, in plain stacks. It does not use a `LazyVGrid`: the cards hold state of their own (a counter, a toggle), and the state of a
+view inside a lazy cell was not redrawn when it changed.
 
 ## How the code is organized
 

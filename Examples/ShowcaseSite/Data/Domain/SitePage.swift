@@ -5,6 +5,7 @@ enum SitePage: String, CaseIterable, Hashable {
   case benefits
   case performance
   case components
+  case animations
 
   /// The SF Symbol the page has in the compact navigation menu.
   var symbol: String {
@@ -14,6 +15,7 @@ enum SitePage: String, CaseIterable, Hashable {
     case .benefits: return "star"
     case .performance: return "gauge.with.dots.needle.67percent"
     case .components: return "square.grid.2x2"
+    case .animations: return "wand.and.stars"
     }
   }
 }

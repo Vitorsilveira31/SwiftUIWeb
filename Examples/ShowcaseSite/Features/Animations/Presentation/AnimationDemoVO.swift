@@ -1,0 +1,7 @@
+/// What one animation card says about itself: a name, a sentence about it and the code it runs.
+struct AnimationDemoVO: Equatable {
+  let id: String
+  let title: String
+  let detail: String
+  let code: String
+}

@@ -31,6 +31,10 @@ struct SiteTabsView: View {
         .toolbar(.hidden, for: .tabBar)
         .modifier(metadata(.components))
         .tabItem { Label(ShellStrings.tab(.components, language), systemImage: SitePage.components.symbol) }.tag(SitePage.components)
+      AnimationsView()
+        .toolbar(.hidden, for: .tabBar)
+        .modifier(metadata(.animations))
+        .tabItem { Label(ShellStrings.tab(.animations, language), systemImage: SitePage.animations.symbol) }.tag(SitePage.animations)
     }
   }
 
