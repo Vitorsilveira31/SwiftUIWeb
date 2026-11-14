@@ -21,7 +21,7 @@
 //     picker switches the rate;
 //   * the Get started page opens from its pill at /en/start with its four steps;
 //   * the Animations page plays each of its eight demos live and answers their controls (the digits roll to the new number, a
-//     view leaves and comes back, a symbol effect starts, a ring fills), opens a card's code over the page, speaks Portuguese at
+//     view leaves and comes back, a symbol effect starts, a ring fills) without the page jumping, opens a card's code over the page, speaks Portuguese at
 //     /pt/animations, and on a phone nothing scrolls sideways;
 //   * the catalog's controls behave: a Toggle's knob is centred in its track, a DisclosureGroup keeps its width open or closed, a
 //     Menu opens in the top layer over what follows it, a List with more rows than its height scrolls without overlapping its rows,
@@ -499,6 +499,21 @@ async function checkAnimations(browser, base, query) {
   await text(page, "100%", "the ring at 100%");
   await press("60%");
   await text(page, "60%", "the ring at 60%");
+
+  // The page keeps its place when a card's content changes size: the star swaps for another glyph and the ring's number rolls. A grid that
+  // measured its choices again whenever a card changed (a ViewThatFits of stacks did) put the page back at the top.
+  const scrollTop = () => page.evaluate(() => Math.max(window.scrollY, ...[...document.querySelectorAll("*")].map((element) => element.scrollTop)));
+  await page.mouse.move(640, 500);
+  await page.mouse.wheel(0, 900);
+  await page.waitForFunction(() => Math.max(window.scrollY, ...[...document.querySelectorAll("*")].map((element) => element.scrollTop)) > 100, null, { timeout: 15_000 });
+  const placed = await scrollTop();
+  for (const control of ["Star", "100%", "60%"]) {
+    await press(control);
+    await page.waitForTimeout(900);
+    assert.ok(Math.abs((await scrollTop()) - placed) <= 2, `pressing ${control} moved the page from ${placed} to ${await scrollTop()}`);
+  }
+  await page.mouse.wheel(0, -3000);
+  await page.waitForFunction(() => Math.max(window.scrollY, ...[...document.querySelectorAll("*")].map((element) => element.scrollTop)) < 5, null, { timeout: 15_000 });
 
   // A card's code opens over the page and closes with Done.
   await page.getByRole("button", { name: /Code$/ }).locator("visible=true").first().click();
