@@ -7,8 +7,10 @@ struct ComponentsCompactPicker: View {
   @Environment(\.siteLanguage) private var language
 
   var body: some View {
+    // A menu picker with no label is a bare piece of text. With an empty title it is a field, with the border and the
+    // indicator that show it opens a menu; the screen reader still hears what it chooses.
     Picker(
-      ComponentsStrings.title(language),
+      "",
       selection: Binding(get: { viewModel.selectedID ?? "" }, set: { viewModel.select($0) })
     ) {
       ForEach(viewModel.allGroups(), id: \.category) { group in
@@ -16,7 +18,7 @@ struct ComponentsCompactPicker: View {
       }
     }
     .pickerStyle(.menu)
-    .labelsHidden()
+    .accessibilityLabel(ComponentsStrings.title(language))
     .frame(maxWidth: .infinity, alignment: .leading)
   }
 }
