@@ -216,6 +216,9 @@ async function startServer(dir, port, logName) {
       return null;
     }
     if (await answers(base)) {
+      // The answer may be another suite's server on this port: ours, which could not bind it, exits a moment later (and the
+      // other suite stops its server when it ends, which would leave this one with nothing). Ours has to stay alive to be it.
+      for (let settle = 0; settle < 12 && server.exitCode === null; settle++) await new Promise((done) => setTimeout(done, 50));
       if (server.exitCode !== null) {
         await stop();
         return null;

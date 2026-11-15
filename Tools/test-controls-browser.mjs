@@ -54,6 +54,17 @@ await runSuite(async () => {
       return shown;
     };
 
+    // What `read` returns once `accept` likes it, or what it returns after five seconds. A control's attributes follow a change
+    // after Swift has answered the event, and a loaded CI runner takes longer than any fixed pause to get there.
+    const until = async (read, accept) => {
+      let value;
+      for (const end = Date.now() + 5000; Date.now() < end; await page.waitForTimeout(50)) {
+        value = await read();
+        if (accept(value)) break;
+      }
+      return value;
+    };
+
     await load("/components");
     const controls = page.locator("[data-control-kind]");
     const controlCount = await controls.count();
@@ -62,17 +73,15 @@ await runSuite(async () => {
     const toggle = page.locator('[data-control-kind="toggle"] input').first();
     const before = await toggle.isChecked();
     await toggle.click();
-    await page.waitForTimeout(100);
-    assert.notEqual(await toggle.isChecked(), before);
+    assert.notEqual(await until(() => toggle.isChecked(), (checked) => checked !== before), before);
 
     const slider = page.locator('[data-control-kind="slider"]').first();
     await slider.evaluate((el) => {
       el.value = "0.8";
       el.dispatchEvent(new InputEvent("input", { bubbles: true }));
     });
-    await page.waitForTimeout(100);
     assert.equal(Number(await slider.inputValue()), 0.8);
-    assert.equal(await slider.getAttribute("aria-valuenow"), "0.8");
+    assert.equal(await until(() => slider.getAttribute("aria-valuenow"), (now) => now === "0.8"), "0.8");
     const labeledSlider = page.getByRole("slider", { name: "Progress" });
     assert.equal(await labeledSlider.evaluate((e) => e.parentElement.className), "slider-group");
     const minimumLabel = page.locator(".slider-minimum-label");
@@ -91,24 +100,23 @@ await runSuite(async () => {
 
     const picker = page.locator('[data-control-kind="picker"] select').first();
     await picker.selectOption("WebAssembly");
-    await page.waitForTimeout(100);
-    assert.equal(await picker.inputValue(), "WebAssembly");
+    assert.equal(await until(() => picker.inputValue(), (value) => value === "WebAssembly"), "WebAssembly");
 
     const stepper = page.locator('[data-control-kind="stepper"]').first();
     const oldValue = await stepper.locator('[role="spinbutton"]').getAttribute("aria-valuenow");
     await stepper.getByRole("button", { name: "Increase" }).click();
-    await page.waitForTimeout(100);
-    assert.notEqual(await stepper.locator('[role="spinbutton"]').getAttribute("aria-valuenow"), oldValue);
+    assert.notEqual(
+      await until(() => stepper.locator('[role="spinbutton"]').getAttribute("aria-valuenow"), (now) => now !== oldValue),
+      oldValue,
+    );
 
     const menu = page.locator('[data-control-kind="menu"]').first();
     const summary = menu.locator(":scope > summary");
     assert.equal(await summary.getAttribute("aria-haspopup"), "menu");
     await summary.click();
-    await page.waitForTimeout(50);
-    assert.equal(await summary.getAttribute("aria-expanded"), "true");
+    assert.equal(await until(() => summary.getAttribute("aria-expanded"), (open) => open === "true"), "true");
     await summary.click();
-    await page.waitForTimeout(50);
-    assert.equal(await summary.getAttribute("aria-expanded"), "false");
+    assert.equal(await until(() => summary.getAttribute("aria-expanded"), (open) => open === "false"), "false");
 
     await load("/forms");
     const text = page.locator('[data-control-kind="text-field"]').first();
@@ -130,8 +138,7 @@ await runSuite(async () => {
     await text.evaluate((el) =>
       el.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "編集中" })),
     );
-    await page.waitForTimeout(100);
-    assert.equal(await text.getAttribute("data-ime-composing"), null);
+    assert.equal(await until(() => text.getAttribute("data-ime-composing"), (composing) => composing === null), null);
     assert.ok(await text.evaluate((el) => el === document.activeElement));
 
     // Disabled Save is a native disabled button, not merely a visual state.

@@ -45,6 +45,8 @@ if (import.meta.main) {
     if (!result.ok) process.stdout.write(`FAILED (${result.code}): bun ${result.command}\n`);
   }
   const failed = results.filter((result) => !result.ok);
+  // Named again at the end, where a log that keeps only its last lines (a CI job's) still shows which scripts failed.
+  for (const result of failed) console.log(`FAILED (${result.code}): bun ${result.command}`);
   console.log(`${results.length - failed.length} of ${results.length} scripts passed in ${((Date.now() - started) / 1000).toFixed(1)}s`);
   process.exit(failed.length ? 1 : 0);
 }

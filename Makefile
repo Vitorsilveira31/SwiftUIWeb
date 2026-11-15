@@ -118,9 +118,11 @@ plugin-test-quick:
 # every group at the same time; the suites only read those bundles. A group holds targets that write the same folder.
 BROWSER_BUNDLES = "bundles: browser-bundles"
 # The layout conformance check compares the browser with SwiftUI itself (Tools/LayoutConformance/run-apple.sh needs Xcode),
-# so it joins browser-test on macOS only; CI runs it in the macOS job.
+# so it joins browser-test on macOS only; CI runs it in the macOS job. So does the CSS layout oracle: it compares the frames
+# CSS lays out with the ones SwiftUI measured with the system font of Apple's platforms, and the text of any other platform
+# measures differently (Linux's Chromium draws `system-ui` with another face), so every node with text would miss.
 ifeq ($(shell uname -s),Darwin)
-CONFORMANCE_GROUP = "conformance: layout-conformance"
+CONFORMANCE_GROUP = "conformance: layout-conformance css-layout-oracle"
 endif
 BROWSER_GROUPS = \
 	"controls: controls-browser-test" "controls-a11y: controls-accessibility-test" "presentation: presentation-browser-test" \
@@ -260,6 +262,7 @@ geometry-browser-test:
 
 help:
 	@echo "  make integrated-check           Validate server/ABI/source contracts"
+	@echo "  make css-layout-oracle          Compare CSS layout with SwiftUI's frames (macOS: the frames use Apple's system font)"
 	@echo "  make browser-contract-test      Real Chromium adapters with explicit wire fixtures"
 	@echo "  make lazy-rows-browser-test    Board benchmark: a selection and a favorite show in the publication that answers the click, and after a scroll"
 	@echo "  make motion-browser-test         Transitions in and out, sliding siblings, numeric text and springs in Chromium and WebKit"
@@ -733,6 +736,10 @@ hostile-values-browser-test:
 	SWIFTUIWEB_BUILD_ROOT=$(or $(SWIFTUIWEB_BUILD_ROOT),$(CURDIR)/.build/hostile-values) BUILD_ONLY=1 CONFIGURATION=release $(SWIFT) Tools/swiftuiweb-run.swift --product HostileValues --package-root Tests/HostileValues --build-only
 	bun Tools/test-hostile-values-browser.mjs $(or $(SWIFTUIWEB_BUILD_ROOT),$(CURDIR)/.build/hostile-values)/browser/HostileValues
 
+.PHONY: css-layout-oracle
+css-layout-oracle:
+	bun Tools/css-layout-oracle.mjs --check
+
 .PHONY: embedded-codable-test
 embedded-codable-test:
 	bun Tools/test-embedded-codable.mjs
@@ -740,7 +747,7 @@ embedded-codable-test:
 
 .PHONY: csp-bundles-test stack-depth-browser-test first-route-browser-test first-paint-browser-test first-paint-measure security-browser-test webkit-browser-test integrated-check browser-contract-test browser-test-setup identity-test identity-fuzz-test identity-browser-test publication-browser-test scrolling-test scrolling-browser-test presentation-test presentation-browser-test focus-browser-test controls-test controls-browser-test controls-accessibility-test accessibility-test accessibility-browser-test accessibility-audit perf-test memory-test perf-browser-test render-commit-benchmark perf-report perf-ci perf-frames perf-frames-check
 integrated-check:
-	bun Tools/run-scripts.mjs "Tools/test-runtime-contracts.mjs" "Tools/test-embedded-worker-client.mjs" "Tools/test-embedded-migration-replay.mjs" "Tools/test-feature-loader-origin.mjs" "Tools/test-adaptive-media.mjs" "Tools/test-adaptive-media-browser.mjs" "Tools/test-media-host.mjs" "Tools/test-event-value.mjs" "Tools/test-check-wasm-exports.mjs" "Tools/test-rewrite-release-index.js" "Tools/test-layout-resize-settle.mjs" "Tools/test-layout-skip-pass.mjs" "Tools/test-css-layout-incremental.mjs" "Tools/test-css-layout-layers.mjs" "Tools/test-css-layout-relative.mjs" "Tools/test-css-layout-roots.mjs" "Tools/test-text-fit.mjs" "Tools/css-layout-oracle.mjs --check" "Tools/test-tap-target-css.mjs" "Tools/test-icon-host.mjs" "Tools/test-live-reload.mjs" "Tools/test-browser-support.mjs" "Tools/test-csp-bundles.mjs --self-test" "Tools/test-toolchain-report.mjs" "Tools/test-format-compat.mjs" "Tools/test-coverage.mjs" "Tools/test-performance-contracts.mjs" "Tools/test-frame-budgets.mjs" "Tools/test-size-tools.mjs" "Tools/test-nspredicate-probe.mjs" "Tools/test-predicate-engine.mjs" "Tools/test-layout-conformance.mjs" "Tools/test-wasi-host.mjs" "Tools/test-semantic-integration.mjs" "Tools/test-lint-styles.mjs" "Tools/test-style-invalidation.mjs" "Tools/test-selection-highlight.mjs" "Tools/test-css-layout-grid-cells.mjs" "Tools/test-color-scheme-subtree.mjs" "Tools/test-page-scheme.mjs" "Tools/test-textarea-line-limits.mjs"
+	bun Tools/run-scripts.mjs "Tools/test-runtime-contracts.mjs" "Tools/test-embedded-worker-client.mjs" "Tools/test-embedded-migration-replay.mjs" "Tools/test-feature-loader-origin.mjs" "Tools/test-adaptive-media.mjs" "Tools/test-adaptive-media-browser.mjs" "Tools/test-media-host.mjs" "Tools/test-event-value.mjs" "Tools/test-check-wasm-exports.mjs" "Tools/test-rewrite-release-index.js" "Tools/test-layout-resize-settle.mjs" "Tools/test-layout-skip-pass.mjs" "Tools/test-css-layout-incremental.mjs" "Tools/test-css-layout-layers.mjs" "Tools/test-css-layout-relative.mjs" "Tools/test-css-layout-roots.mjs" "Tools/test-text-fit.mjs" "Tools/test-tap-target-css.mjs" "Tools/test-icon-host.mjs" "Tools/test-live-reload.mjs" "Tools/test-browser-support.mjs" "Tools/test-csp-bundles.mjs --self-test" "Tools/test-toolchain-report.mjs" "Tools/test-format-compat.mjs" "Tools/test-coverage.mjs" "Tools/test-performance-contracts.mjs" "Tools/test-frame-budgets.mjs" "Tools/test-size-tools.mjs" "Tools/test-nspredicate-probe.mjs" "Tools/test-predicate-engine.mjs" "Tools/test-layout-conformance.mjs" "Tools/test-wasi-host.mjs" "Tools/test-semantic-integration.mjs" "Tools/test-lint-styles.mjs" "Tools/test-style-invalidation.mjs" "Tools/test-selection-highlight.mjs" "Tools/test-css-layout-grid-cells.mjs" "Tools/test-color-scheme-subtree.mjs" "Tools/test-page-scheme.mjs" "Tools/test-textarea-line-limits.mjs"
 
 browser-contract-test:
 	bun Tools/test-integrated-browser.mjs

@@ -165,6 +165,8 @@ await runSuite(async () => {
       await page.evaluate(() => window.__performanceMetrics?.reset());
       if (fixture.button) await page.getByRole("button", { name: fixture.button, exact: true }).click();
       await page.waitForTimeout(1500);
+      // The layout runs once the app has drawn, which a runner with few cores takes more than a fixed pause to do.
+      await page.waitForFunction(() => document.querySelectorAll("#embedded-app-root [data-cl], #embedded-app-root [data-sl-root]").length > 0, null, { timeout: 30_000 }).catch(() => {});
       // (`still`: a spinner turns, and the box of a turned square is the bounding box of its turn; every animation is held at its start.)
       if (fixture.still) await page.evaluate(() => document.getAnimations().forEach((animation) => { animation.pause(); animation.currentTime = 0; }));
       const result = await page.evaluate(`(${BOXES})()`);

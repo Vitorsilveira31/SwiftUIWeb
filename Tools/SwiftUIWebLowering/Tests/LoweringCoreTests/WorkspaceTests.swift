@@ -335,6 +335,9 @@ import Testing
     defer { try? FileManager.default.removeItem(at: directory) }
     let source = directory.appendingPathComponent("a.txt").path, copy = directory.appendingPathComponent("b.txt").path
     try "one".write(toFile: source, atomically: false, encoding: .utf8)
+    // A copy is known to hold the source's bytes only when the source's status change is strictly older than the copy's. The
+    // file times of some systems (Linux) tick every few milliseconds, so a copy made at once could land in the source's tick.
+    Thread.sleep(forTimeInterval: 0.05)
     #expect(!FileSystem.unchangedSinceCopied(source: source, destination: copy), "no copy yet")
     #expect(try FileSystem.copyIfChanged(from: source, to: copy))
     #expect(FileSystem.unchangedSinceCopied(source: source, destination: copy))
