@@ -93,8 +93,9 @@ func _fulfillment(of expectations: [_TestExpectation], timeout: Double) async {
     }
     group.addTask {
       // Every suite shares the main actor now, so a wait can sit behind other suites'
-      // synchronous work; a generous floor keeps the wait from being a timing test.
-      let nanoseconds = UInt64(max(10, timeout) * 1_000_000_000)
+      // synchronous work, and the whole suite on a runner with few cores can take well over ten seconds to reach it; a generous
+      // floor keeps the wait from being a timing test (a wait that completes returns at once, so the floor costs nothing).
+      let nanoseconds = UInt64(max(60, timeout) * 1_000_000_000)
       try? await Task.sleep(nanoseconds: nanoseconds)
       return false
     }
