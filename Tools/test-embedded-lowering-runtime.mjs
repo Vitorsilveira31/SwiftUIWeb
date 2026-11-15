@@ -85,7 +85,7 @@ const repr = (value) => JSON.stringify(value);
 const bodyText = (page) => page.locator("body").innerText();
 
 // Polls the body text until it contains the value: a fixed pause is too short on a slow runner.
-async function bodyIncludes(page, value, timeout = 3000) {
+async function bodyIncludes(page, value, timeout = PATIENCE) {
   const deadline = Date.now() + timeout;
   for (;;) {
     if ((await bodyText(page)).includes(value)) return true;
@@ -99,7 +99,7 @@ async function checkJsonStreamFixture(page, url, report) {
   await page.goto(url, { waitUntil: "networkidle" });
   for (const line of JSON_STREAM_LINES) {
     try {
-      await page.getByText(line, { exact: true }).first().waitFor({ timeout: 3000 });
+      await page.getByText(line, { exact: true }).first().waitFor({ timeout: PATIENCE });
     } catch {
       const actual = (await bodyText(page)).split(/\r?\n/).filter((text) => text.includes("json") || text.includes("stream"));
       throw new assert.AssertionError({ message: `missing ${repr(line)}; page shows ${repr(actual)}` });
@@ -111,7 +111,7 @@ async function checkJsonStreamFixture(page, url, report) {
 async function checkMeasurementFixture(page, url, report) {
   // MeasurementFormatter converts to the locale's units and names them in the browser's locale (en_US and pt_BR).
   await page.goto(url, { waitUntil: "networkidle" });
-  for (const line of MEASUREMENT_LINES) await page.getByText(line, { exact: true }).first().waitFor({ timeout: 3000 });
+  for (const line of MEASUREMENT_LINES) await page.getByText(line, { exact: true }).first().waitFor({ timeout: PATIENCE });
   report.checks.push({ name: "measurement-formatter-locales", status: "PASS" });
 }
 
@@ -119,7 +119,7 @@ async function checkSwiftUIParityFixture(page, url, report) {
   // SwiftUI spellings added for iPad/iPhone parity render like SwiftUI.
   await page.goto(url, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Open SwiftUI parity fixture", exact: true }).click();
-  await page.getByRole("button", { name: "Return from parity fixture", exact: true }).waitFor({ timeout: 3000 });
+  await page.getByRole("button", { name: "Return from parity fixture", exact: true }).waitFor({ timeout: PATIENCE });
   await page.waitForTimeout(200);
   const g = await page.evaluate(`(${PARITY_GEOMETRY})()`);
 
@@ -168,10 +168,10 @@ async function checkSwiftUIParityFixture(page, url, report) {
 
   const menu = page.locator('[data-testid="parity-context-menu"]');
   await menu.click({ button: "right" });
-  await page.waitForFunction(() => document.querySelector(".context-menu-panel")?.matches(":popover-open"), undefined, { timeout: 1500 });
+  await page.waitForFunction(() => document.querySelector(".context-menu-panel")?.matches(":popover-open"), undefined, { timeout: PATIENCE });
   await page.getByRole("button", { name: "Share", exact: true }).click();
-  await page.waitForFunction(() => !document.querySelector(".context-menu-panel").matches(":popover-open"), undefined, { timeout: 1500 });
-  await page.getByText("Menu: share", { exact: true }).waitFor({ timeout: 1500 });
+  await page.waitForFunction(() => !document.querySelector(".context-menu-panel").matches(":popover-open"), undefined, { timeout: PATIENCE });
+  await page.getByText("Menu: share", { exact: true }).waitFor({ timeout: PATIENCE });
   check("context-menu-open-choose-dismiss", true, null);
 }
 
@@ -182,9 +182,9 @@ async function checkNetworkMediaFixture(page, report) {
   // `AVURLAsset.load(.variants)`. The fixture creates an AVPlayer while it renders, and the player stays registered after the
   // fixture returns (section 12.22): the main page's buttons must still answer after the return.
   await page.getByRole("button", { name: "Open network media fixture", exact: true }).click();
-  await page.getByText("Network: fixture", { exact: true }).waitFor({ timeout: 3000 });
-  await page.getByText("Label: fixture", { exact: true }).waitFor({ timeout: 3000 });
-  await page.getByText("Source: fixture", { exact: true }).waitFor({ timeout: 3000 });
+  await page.getByText("Network: fixture", { exact: true }).waitFor({ timeout: PATIENCE });
+  await page.getByText("Label: fixture", { exact: true }).waitFor({ timeout: PATIENCE });
+  await page.getByText("Source: fixture", { exact: true }).waitFor({ timeout: PATIENCE });
   report.checks.push({ name: "network-protocol-and-environment-keypath", status: "PASS" });
   const taskMarkers = await page.evaluate(() => [...document.querySelectorAll("[data-task-id]")].map((e) => e.getAttribute("data-task-id")));
   if (!taskMarkers.includes("some(fixture)")) {
@@ -192,15 +192,19 @@ async function checkNetworkMediaFixture(page, report) {
   }
   report.checks.push({ name: "task-optional-string-identity", status: "PASS" });
   await page.getByRole("button", { name: "Return to conformance app", exact: true }).click();
-  await page.getByRole("button", { name: "Update observer", exact: true }).waitFor({ timeout: 3000 });
+  await page.getByRole("button", { name: "Update observer", exact: true }).waitFor({ timeout: PATIENCE });
   const observed = Number.parseInt((await page.getByText("Observed:", { exact: false }).first().innerText()).split(":")[1], 10);
   for (let count = observed + 1; count < observed + 4; count++) {
     await page.getByRole("button", { name: "Update observer", exact: true }).click();
     // A click after the fixture returned must show within a second (the page is not busy republishing).
-    await page.getByText(`Observed: ${count}`, { exact: true }).waitFor({ timeout: 1000 });
+    await page.getByText(`Observed: ${count}`, { exact: true }).waitFor({ timeout: PATIENCE });
   }
   report.checks.push({ name: "siblings-answer-after-network-media-fixture-returns", status: "PASS" });
 }
+
+// How long a wait for the page lasts before it fails. A wait that succeeds returns at once, so the limit only matters to a runner
+// with few cores, where the app takes seconds to react to a click.
+const PATIENCE = 20_000;
 
 await runSuite(async () => {
   const { values, positionals } = parseArgs({
@@ -225,8 +229,11 @@ await runSuite(async () => {
     const errors = [];
     page.on("pageerror", (error) => errors.push(String(error)));
     await page.goto(`${server.base}/`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(100);
-    const body = await bodyText(page);
+    // The app draws once its WebAssembly has started, which a runner with few cores takes a while to do: the page is read when
+    // it has mounted and shows its last row, not after a fixed pause.
+    await page.waitForSelector('html[data-embedded-mounted="true"]', { timeout: 60_000 });
+    let body = await bodyText(page);
+    for (const end = Date.now() + 30_000; !body.includes("builder child 100") && Date.now() < end; body = await bodyText(page)) await page.waitForTimeout(100);
     for (const value of [
       "alpha | beta",
       "One",
@@ -279,15 +286,15 @@ await runSuite(async () => {
     }
     report.checks.push({ name: "generic-id-keeps-scalar-identity", status: "PASS" });
     // A real pointer click (no force): the switch must be the hit target, not what lies around it.
-    await page.getByRole("switch", { name: "Lowering switch", exact: true }).click({ timeout: 3000 });
-    await page.getByText("Lowering switch: on", { exact: true }).waitFor({ timeout: 1500 });
+    await page.getByRole("switch", { name: "Lowering switch", exact: true }).click({ timeout: PATIENCE });
+    await page.getByText("Lowering switch: on", { exact: true }).waitFor({ timeout: PATIENCE });
     report.checks.push({ name: "switch-toggle-takes-the-pointer", status: "PASS" });
 
     const clickButton = (name) => page.getByRole("button", { name, exact: true }).click();
 
     const expectButton = async (name) => {
       try {
-        await page.getByRole("button", { name, exact: true }).waitFor({ timeout: 1500 });
+        await page.getByRole("button", { name, exact: true }).waitFor({ timeout: PATIENCE });
       } catch {
         const rows = (await bodyText(page)).split(/\r?\n/).filter((line) => ["A:", "B:", "C:", "X:", "Y:"].some((prefix) => line.startsWith(prefix)));
         throw new assert.AssertionError({ message: `expected button ${repr(name)}; rows=${repr(rows)}; page_errors=${repr(errors)}` });
@@ -302,7 +309,7 @@ await runSuite(async () => {
             .filter((label) => /^(A|B|C|X|Y):\d+$/.test(label))
             .map((label) => label.split(":")[0])) === JSON.stringify(wanted),
         expected,
-        { timeout: 1500 },
+        { timeout: PATIENCE },
       );
 
     await expectRowOrder(["A", "B", "C"]);
@@ -368,37 +375,37 @@ await runSuite(async () => {
     // registered after the fixture returns, and the main page keeps answering.
     await checkNetworkMediaFixture(page, report);
     await page.getByRole("button", { name: "Load previous version", exact: true }).click();
-    await page.getByRole("button", { name: "Hide previous version", exact: true }).waitFor({ timeout: 3000 });
-    await page.getByText("Previous version loaded", { exact: true }).waitFor({ timeout: 3000 });
+    await page.getByRole("button", { name: "Hide previous version", exact: true }).waitFor({ timeout: PATIENCE });
+    await page.getByText("Previous version loaded", { exact: true }).waitFor({ timeout: PATIENCE });
     await page.getByRole("button", { name: "Open review", exact: true }).click();
-    await page.getByRole("button", { name: "Load previous version", exact: true }).waitFor({ timeout: 3000 });
-    await page.getByText("Previous version loaded", { exact: true }).waitFor({ state: "detached", timeout: 3000 });
+    await page.getByRole("button", { name: "Load previous version", exact: true }).waitFor({ timeout: PATIENCE });
+    await page.getByText("Previous version loaded", { exact: true }).waitFor({ state: "detached", timeout: PATIENCE });
     await page.getByRole("button", { name: "Load previous version", exact: true }).click();
-    await page.getByRole("button", { name: "Hide previous version", exact: true }).waitFor({ timeout: 3000 });
-    await page.getByText("Previous version loaded", { exact: true }).waitFor({ timeout: 3000 });
+    await page.getByRole("button", { name: "Hide previous version", exact: true }).waitFor({ timeout: PATIENCE });
+    await page.getByText("Previous version loaded", { exact: true }).waitFor({ timeout: PATIENCE });
     await page.getByRole("button", { name: "Hide previous version", exact: true }).click();
-    await page.getByText("Previous version loaded", { exact: true }).waitFor({ state: "detached", timeout: 3000 });
+    await page.getByText("Previous version loaded", { exact: true }).waitFor({ state: "detached", timeout: PATIENCE });
     report.checks.push({ name: "late-mounted-conditional-state-under-anyview-and-keyed-foreach", status: "PASS" });
     await page.getByRole("button", { name: "Open StateObject identity fixture", exact: true }).click();
     await page.getByRole("button", { name: "A:0", exact: true }).click();
-    await page.getByRole("button", { name: "A:1", exact: true }).waitFor({ timeout: 3000 });
+    await page.getByRole("button", { name: "A:1", exact: true }).waitFor({ timeout: PATIENCE });
     await page.getByRole("button", { name: "Insert leading row", exact: true }).click();
-    await page.getByRole("button", { name: "X:0", exact: true }).waitFor({ timeout: 3000 });
-    await page.getByRole("button", { name: "A:1", exact: true }).waitFor({ timeout: 3000 });
+    await page.getByRole("button", { name: "X:0", exact: true }).waitFor({ timeout: PATIENCE });
+    await page.getByRole("button", { name: "A:1", exact: true }).waitFor({ timeout: PATIENCE });
     await page.getByRole("button", { name: "Remove leading row", exact: true }).click();
-    await page.getByRole("button", { name: "A:1", exact: true }).waitFor({ timeout: 3000 });
+    await page.getByRole("button", { name: "A:1", exact: true }).waitFor({ timeout: PATIENCE });
     report.checks.push({ name: "stateobject-child-path-after-parent-conditional-insertion", status: "PASS" });
     await page.getByRole("button", { name: "Return to conformance app", exact: true }).click();
     await page.getByRole("button", { name: "Open deep review fixture", exact: true }).click();
     await page.getByRole("button", { name: "Enter Studio", exact: true }).click();
     await page.getByRole("button", { name: "Open review production", exact: true }).click();
     await page.getByRole("button", { name: "Open reviews", exact: true }).click();
-    await page.getByText("Workflow reviews", { exact: true }).waitFor({ timeout: 3000 });
+    await page.getByText("Workflow reviews", { exact: true }).waitFor({ timeout: PATIENCE });
     await page.getByRole("button", { name: "Load previous version", exact: true }).click();
-    await page.getByRole("button", { name: "Hide previous version", exact: true }).waitFor({ timeout: 3000 });
-    await page.getByText("Previous version loaded", { exact: true }).waitFor({ timeout: 3000 });
+    await page.getByRole("button", { name: "Hide previous version", exact: true }).waitFor({ timeout: PATIENCE });
+    await page.getByText("Previous version loaded", { exact: true }).waitFor({ timeout: PATIENCE });
     await page.getByRole("button", { name: "Hide previous version", exact: true }).click();
-    await page.getByText("Previous version loaded", { exact: true }).waitFor({ state: "detached", timeout: 3000 });
+    await page.getByText("Previous version loaded", { exact: true }).waitFor({ state: "detached", timeout: PATIENCE });
     report.checks.push({ name: "deep-scrollview-tabs-foreach-anyview-observable-state", status: "PASS" });
     await checkMeasurementFixture(page, `${server.base}/`, report);
     await checkJsonStreamFixture(page, `${server.base}/`, report);

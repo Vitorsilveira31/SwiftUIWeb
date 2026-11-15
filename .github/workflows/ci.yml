@@ -143,7 +143,7 @@ jobs:
         run: for tool in brotli zstd; do command -v "$tool" >/dev/null || brew install "$tool"; done
       - run: make setup
       - run: make browser-test-setup
-      - run: make webkit-browser-test security-browser-test layout-conformance
+      - run: make webkit-browser-test security-browser-test layout-conformance css-layout-oracle
       # SwiftUIWeb's public API against the SDK's SwiftUI symbol graphs: a declaration Apple does not have fails here.
       - run: make swiftui-parity
       - run: make universal-app-test

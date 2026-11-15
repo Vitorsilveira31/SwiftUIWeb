@@ -114,8 +114,10 @@ await runSuite(async () => {
     const topState = (locator) => locator.evaluate((e) => ({ top: e.scrollTop, max: e.scrollHeight - e.clientHeight }));
     const beforeEdge = await coordinatorTrace();
     await page.getByRole("button", { name: "Scroll to bottom edge", exact: true }).click();
-    await page.waitForTimeout(200);
-    const atBottom = await topState(modern);
+    // The edge is reached once the position has been applied and the rows that came into view have been measured, which a
+    // runner with few cores takes longer than a fixed pause to do.
+    let atBottom = await topState(modern);
+    for (const end = Date.now() + 5000; !(atBottom.max > 0 && atBottom.max - atBottom.top <= 2) && Date.now() < end; atBottom = await topState(modern)) await page.waitForTimeout(50);
     assert.ok(
       atBottom.max > 0 && atBottom.max - atBottom.top <= 2,
       `bottom edge did not reach the end: ${JSON.stringify(atBottom)}`,
