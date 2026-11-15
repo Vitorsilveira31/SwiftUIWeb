@@ -22,6 +22,9 @@ function normalizedDOM() {
   const clone = document.getElementById("embedded-app-root").cloneNode(true);
   for (const element of clone.querySelectorAll("*")) {
     element.removeAttribute("data-embedded-event-id");
+    // A node id is `slot:generation:type`. The slot is where the arena put the node, which follows how many publications were
+    // made and dropped on the way (a page that reads only the newest of several), so it is not part of what the page shows.
+    if (element.hasAttribute("data-embedded-node-id")) element.setAttribute("data-embedded-node-id", element.getAttribute("data-embedded-node-id").replace(/^\d+:/, "*:"));
     // The order of attributes and of style declarations depends on which patch wrote them last, not on what the page
     // shows.
     if (element.hasAttribute("style")) {
