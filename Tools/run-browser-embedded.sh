@@ -486,9 +486,12 @@ else
   cp "$artifact" "$tmp/app.wasm"
   bun Tools/check-wasm-exports.mjs "$tmp/app.wasm" --product "$product" "$LOWERING_REPORT_ROOT"
 fi
+# index.js, render-worker.js and the chunk both import (runtime-shared.js), built together. A release leaves out the browser
+# hosts the manifest proves unused; debug keeps every host (Tools/build-runtime-bundle.mjs).
 # The loader of a split module (Tools/wasm-split-loader.js) is in the scripts only when the module will be split.
-split_loader=false; [[ "${SWIFTUIWEB_WASM_SPLIT:-0}" != 1 ]] || split_loader=true
-bun build Tools/embedded-runtime.js --target=browser --format=esm --minify --define "globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER=$split_loader" --outfile="$tmp/index.js" >/dev/null; bun build Tools/embedded-worker.js --target=browser --format=esm --minify --define "globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER=$split_loader" --outfile="$tmp/render-worker.js" >/dev/null; # Copy only the browser helpers the reachability manifest lists (initial and
+runtime_flags=(); [[ "${SWIFTUIWEB_WASM_SPLIT:-0}" != 1 ]] || runtime_flags=(--wasm-split)
+if [[ "$configuration" == release ]]; then bun Tools/build-runtime-bundle.mjs --outdir "$tmp" --manifest "$manifest" ${runtime_flags[@]+"${runtime_flags[@]}"}; else bun Tools/build-runtime-bundle.mjs --outdir "$tmp" ${runtime_flags[@]+"${runtime_flags[@]}"}; fi
+# Copy only the browser helpers the reachability manifest lists (initial and
 # lazy); an unreachable helper is neither shipped nor referenced by index.html.
 while IFS= read -r helper; do [[ -z "$helper" || "$helper" == icon-adapter.js ]] && continue; if [[ "$helper" == *.js ]]; then bun build "Tools/$helper" --minify --outfile="$tmp/$helper" >/dev/null; else cp "Tools/$helper" "$tmp/"; fi; done < <(bun -e 'const m=await Bun.file(process.argv[1]).json(); for(const f of [...(m.runtime?.initial||[]),...(m.runtime?.lazy||[])]) console.log(f)' "$manifest")
 cp Tools/browser-index.html "$tmp/index.html"; bun Tools/generate-icon-asset.js --manifest "$manifest" --output "$tmp/icon-adapter.js"; if [[ -f "$tmp/icon-adapter.js" ]]; then bun build "$tmp/icon-adapter.js" --minify --outfile="$tmp/icon-adapter.min.js" >/dev/null && mv "$tmp/icon-adapter.min.js" "$tmp/icon-adapter.js"; fi; bun Tools/rewrite-release-index.js --index "$tmp/index.html" --manifest "$manifest"

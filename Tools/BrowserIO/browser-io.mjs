@@ -80,7 +80,7 @@ export function safeErrorMessage(error) {
 // DOM reads answer from a mirror of the mounted elements that the main thread reported
 // before the last reconciliation, and DOM writes are queued for the main thread
 // (remote-dom-host.js) to apply in order. See Documentation/EmbeddedWorker.md.
-export function createBrowserIO({ getInstance, environment = globalThis, baseURL, onError = (e) => console.error(safeErrorMessage(e)), wake = () => {}, remoteDOM = false, stackMeter = null }) {
+export function createBrowserIO({ getInstance, environment = globalThis, baseURL, onError = (e) => console.error(safeErrorMessage(e)), wake = () => {}, remoteDOM = false, stackMeter = null, onCookieWrite = () => {} }) {
   const operations = new Map(); const replies = new Map(); const databases = new Map(); let nextReply = 1; let disposed = false;
   // Side-effecting fetches started since the last snapshot (their id, operation and packet), and on a thread that took
   // the app over, the ones the Worker already sent: a replay asking for one of them again fails instead of sending it.
@@ -313,6 +313,8 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
     if (action === 1) {
       if (text.length > 4096) throw new IOError(-1, 'Cookie is too large');
       document.cookie = text;
+      // The page's cookie watcher learns of its own write, as the worker's host tells it (Tools/cookie-watch.js).
+      onCookieWrite();
       return new Writer().u32(0).bytes();
     }
     throw new IOError(-1, 'Invalid cookie action');
@@ -451,13 +453,16 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
     return result == null ? new Writer().u32(0).bytes() : new Writer().u32(1).text(result).bytes();
   }
 
-  const predicates = createPredicates();
+  // A release whose application builds no NSPredicate leaves the engine out (Tools/build-runtime-bundle.mjs); a request
+  // then answers as for a format Foundation rejects.
+  const predicates = (typeof SWIFTUIWEB_HAS_PREDICATES === 'undefined' || SWIFTUIWEB_HAS_PREDICATES) ? createPredicates() : null;
   /** NSPredicate: the predicate's id, format, argument values, variable dictionaries and, to evaluate it, the object under
    * test. Without an object the answer is whether the format parses, with its `predicateFormat` and the keys it reads. */
   function predicateRequest(packet) {
     const input = new Reader(packet);
     const id = input.u32(), format = input.text(), args = input.data(), bindings = input.data(), object = input.data();
     input.finish();
+    if (!predicates) return new Writer().u32(0).bytes();
     if (object.length) return new Writer().u32(predicates.evaluate(id, format, args, bindings, object)).bytes();
     const found = predicates.describe(id, format, args, bindings);
     if (!found) return new Writer().u32(0).bytes();

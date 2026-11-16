@@ -28,6 +28,11 @@ it lets Swift keep unchanged subtrees out of later publications.
 - `Tools/embedded-worker.js`: the worker side, which owns the WASM instance, its task pump and the BrowserIO host.
 - `Tools/event-value.js`: moves event values and SecureField text across the boundary in one copy.
 
+`Tools/build-runtime-bundle.mjs` builds the page's runtime (`index.js`) and the worker (`render-worker.js`) together,
+with code splitting: the modules both run (the host core, BrowserIO, the WASI host) are one chunk, `runtime-shared.js`,
+that both import, so the worker downloads only its own entry. The worker is a module worker; `index.html` preloads the
+chunk next to `index.js`.
+
 ## Differences from the main-thread mode
 
 - `onKeyPress` cannot veto the browser's default action: the answer is
