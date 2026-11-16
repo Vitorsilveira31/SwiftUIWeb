@@ -313,8 +313,8 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
     setUp(message);
     await instantiateModule(message.module);
     if (typeof exports._initialize === 'function') exports._initialize();
-    // The second argument is flags: 1 reduced motion, 2 CSS layout worked out by Swift.
-    exports.embedded_browser_set_initial_preferences?.(message.dark ? 1 : 0, (message.reducedMotion ? 1 : 0) | (message.cssLayout ? 2 : 0) | ((message.publication | 0) & 0xFF78));
+    // The second argument is flags: 1 reduced motion, then the publication flags.
+    exports.embedded_browser_set_initial_preferences?.(message.dark ? 1 : 0, (message.reducedMotion ? 1 : 0) | ((message.publication | 0) & 0xFF78));
     if (typeof exports.embedded_browser_start !== 'function') throw new Error('Embedded browser entry export is missing');
     // The window before the start, so the first render lays out at it (the page reports it again after its first commit).
     const viewport = message.viewport;

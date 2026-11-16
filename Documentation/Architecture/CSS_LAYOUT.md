@@ -1,16 +1,16 @@
 # CSS layout
 
-The browser lays out the page with its own flexbox and grid. CSS is the only layout: Swift works out the CSS for the
-application's root view in the worker before it publishes, and the page does the rest in JavaScript after each DOM patch
-(`Tools/css-layout.js`, driven by `Tools/layout-host.js`). The islands are the semantic roots of the page: the application's
+The browser lays out the page with its own flexbox and grid. CSS is the only layout: the page works out the CSS from the
+layout attributes Swift publishes, in JavaScript after each DOM patch (`Tools/css-layout.js`, driven by
+`Tools/layout-host.js`). The islands are the semantic roots of the page: the application's
 root view with its `.sidebarAdaptable` TabView and NavigationStacks (title bar and toolbar items included), the content of the
 sidebar's slots (expanded or a collapsed rail), a presentation's content, and the layout trees that native widgets host.
 Chromium and WebKit are tested; Firefox is not yet (one difference is handled: a VStack child's height cap, below).
 
 ## Switches
 
-There is no way to turn CSS layout off. The one switch left is for comparing Swift's CSS with the page's: Swift emits the window
-root's CSS unless `window.__cssLayoutSwift = false` or `?css-swift=0` asks for the page's mapper alone.
+There is no way to turn CSS layout off. `window.__layoutVerify` (`SWIFTUIWEB_LAYOUT_VERIFY=1` with the browser suites) compares
+every incremental flush with an analysis from scratch (see "Checks").
 
 ## How it works
 
@@ -62,60 +62,18 @@ root's CSS unless `window.__cssLayoutSwift = false` or `?css-swift=0` asks for t
    those again and styles the nodes whose context changed. A text change costs nothing: the browser lays text out. A
    refused island is analysed from scratch at the next pass, since its mutations do not reach the mapper.
 
-## Swift emits the CSS
+## Lengths that change
 
-`_CSSLayoutEmitter` (`Sources/SwiftUIWebBrowser/CSSLayoutEmitter.swift`) is the JS mapper's analysis ported function for
-function, run on the fiber tree before each publication, for every semantic root the page would give the mapper whole:
-the window root (the root view, proposed the window), the content of each sidebar slot of the tab views it holds, and a
-presentation's content that holds its root alone (wherever the presentation sits, below a documentation page's content
-too). The page's mapper keeps the roots Swift refuses and the ScrollView islands inside them. It writes the same declaration blocks, character for character: with `window.__layoutVerify` the page analyses the
-root itself and compares every element's block (`CssLayout.verifySwift`, a `swift css block` entry in
-`window.__layoutMismatch`), and the browser suites run with it on.
-
-- **Input.** Each fiber's published element, as the snapshot copies it (a nested button published as a div, a text with
-  layout attributes as a span, fragments flattened). Analyses are kept per fiber and reused while `Fiber.version` (the
-  epoch of the last change in its subtree) is unchanged, except in a volatile subtree (a lazy window, rebuilt at every
-  publication), which is analysed again.
-- **No recursion.** The analysis (children before their parent) and the styling (parent before its children) walk the tree
-  with stacks of their own, as the rest of the render does (see `Tools/test-stack-depth-browser.mjs`). One call per level
-  took about 17 KB of native stack per level, overflowed the Worker's stack on a large screen, and the runtime then ran
-  the app on the main thread for the rest of the session. `CSSLayoutEmitterDepthTests` checks that a deeper tree takes no
-  more call stack.
-- **Output.** A class per element (`sl<n>`, matched by the rule `.sl<n>`; about six bytes where an attribute pair took
-  thirty) and a marker on the root (`data-sl-root`) for the mapper's global rules. A fiber whose block, or a block below
-  it, changed is not sent as a keep placeholder.
-- **Rules.** The rules of new blocks ride on the root (`data-sl-rules`) until the host acknowledges the publication that
-  carried them. The page adopts them, as an appended stylesheet, from the publication before it patches the DOM
-  (`commit` in `Tools/embedded-dom.js`), and takes no layout pass for a change of that attribute alone. Adopted after
-  the patch, an element whose new class names a block the page does not hold yet would be styled without it by any style
-  read in between, and the layout tree below it would be rebuilt twice. When
-  the page merges its rule sheets, Swift's rules are merged with its own.
-- **Lengths that change.** A length that follows a resize, a scroll or an animation (a frame's size, a fixed size, a minmax or
-  fit-content track of a frame, a position, a lazy collection's extents) is not part of the rule: the rule reads
-  `var(--len<i>)` and the element carries the values as inline custom properties (`style="--len0:961px"`), in the order the
-  lengths stand in the block (`_cssVpx` marks them, `_cssLengthVariables` splits them off; `vpx` and `lengthVariables` in the
-  mapper, which writes the same blocks and sets the properties itself). With the lengths inside the rule, every resize step would mint a new rule per frame that differs only in a length,
-  and a rule inserted
-  into a stylesheet makes WebKit invalidate the style of the whole document, 10 to 19 ms of style and layout on a large app's
-  board; now a step changes one inline declaration. Paddings, gaps, spacings and the other lengths a view authors stay
-  in the rule: they do not follow the window. The blocks of a collapsed rail keep their lengths in the text (an element
-  carries one set of properties, its expanded block's). The patch leaves the mapper's own `--cl-len<i>` alone
-  (`ownsLayoutStyle`) and applies Swift's. `window.__layoutVerify` compares the lengths as well as the blocks.
-- **Turned on** by the page at start (`embedded_browser_set_initial_preferences`, whose second argument is flags: 1 reduced
-  motion, 2 CSS layout worked out by Swift).
-
-- **Sidebar slots.** Whether the sidebar is expanded or a collapsed rail is the page's state (the tab shell's
-  `data-tab-sidebar-expanded`), so Swift styles a slot's content for both: a block per element for the expanded slot
-  (`sl<n>`, proposed the slot's width, leading) and, where it differs, one for the rail (`sr<n>`, proposed the rail's
-  width, centred), whose rule the page scopes to `.tab-view[data-tab-sidebar-expanded="false"]`. In the rail the bottom
-  bar's slot hides an `.hstack`'s children after its first (the stylesheet's `.hstack > :not(:first-child)`, unless an
-  element's own inline `display` overrides it): their rail block is `display: none`. Collapsing or expanding the sidebar
-  switches the rules with no publication.
-- **Presentations.** The content element is made a one-cell grid for its root (`data-sl-host`, the mapper's global rule
-  for its own `data-cl-host`, which the patch leaves to the mapper), and the root is proposed the content box.
-- **Smaller publications.** An element Swift styles is published without the inline declarations its block overrides
-  (`!important` wins over an inline value, so they were dead weight; `_CSSLayoutEmitter.declares`), and every
-  publication, in either mode, without `data-layout-schema` (a marker of Swift's own, which the page never reads).
+A length that follows a resize, a scroll or an animation (a frame's size, a fixed size, a minmax or fit-content track of a
+frame, a position, a lazy collection's extents) is not part of a block's rule: the rule reads `var(--cl-len<i>)` and the
+element carries the values as inline custom properties (`style="--cl-len0:961px"`), in the order the lengths stand in the
+block (`vpx` marks them, `lengthVariables` splits them off). With the lengths inside the rule, every resize step would mint a
+new rule per frame that differs only in a length, and a rule inserted into a stylesheet makes WebKit invalidate the style of
+the whole document, 10 to 19 ms of style and layout on a large app's board; now a step changes one inline declaration.
+Paddings, gaps, spacings and the other lengths a view authors stay in the rule: they do not follow the window. The blocks of a
+collapsed rail keep their lengths in the text (an element carries one set of properties, its expanded block's). A DOM patch
+leaves the `--cl-len<i>` properties alone (`ownsLayoutStyle`). `window.__layoutVerify` compares the lengths as well as the
+blocks.
 
 ## The mapping
 
@@ -204,8 +162,8 @@ GeometryReader does) and centres its content on its point: the content is absolu
 `translate: -50% -50%`; a global `:dir(rtl)` rule measures the point from the right), offered the
 whole space, so a long text wraps at its width (`EmbeddedPlacementFixture`). Among a stack's views the host offers it at
 most 10 pt (its answer to an unlimited proposal, as for an aspect box: `capIdeal`); what such a 10 pt position offers its
-own content, and the share its siblings get, can differ from the host's there. A `ViewThatFits` is laid out by the
-page's mapper (Swift refuses it: the choice needs the page's measurements). It is a ZStack of the candidate it shows,
+own content, and the share its siblings get, can differ from the host's there. A `ViewThatFits` is laid out with the
+page's measurements (the choice needs them). It is a ZStack of the candidate it shows,
 as large as that candidate; the others keep their blocks and the stylesheet hides them. At each pass (a patch, a resize
 of the window) `chooseFits` shows the first candidate whose ideal size fits what the ViewThatFits is offered on the axes
 it chooses along, else the last:
@@ -226,8 +184,7 @@ A ViewThatFits with no candidate (`ViewThatFits { EmptyView() }`) is a ZStack of
 `EmbeddedFitFixture` covers candidates that fill, Food Truck's parking spot card (a ViewThatFits beside a Spacer in an
 HStack, in three widths), candidates as wide as their content, a vertical choice, a resize of the window, and the cases
 above: no candidate, one candidate, a ViewThatFits in a candidate, candidates from a `ForEach` and from an `if`, one in a
-ZStack, in a horizontal ScrollView and over both axes. A `containerRelativeFrame` is laid out by the page's mapper too
-(Swift refuses it): it is a frame whose size on the axes it selects is Swift's sampled length function, piecewise linear,
+ZStack, in a horizontal ScrollView and over both axes. A `containerRelativeFrame` is a frame whose size on the axes it selects is Swift's sampled length function, piecewise linear,
 written as a CSS expression (`relativeLength`: a sum of ramps, `max(0px, var(--sl-cw) - c)`, and a `clamp` step where a
 container length has two samples) of its container's length; the samples are sorted, so a function that
 decreases, bends or arrives unsorted is the same expression. `Tools/test-css-layout-relative.mjs` compares it with
@@ -257,8 +214,8 @@ that proposal. Along an HStack it keeps its ideal width: the host finds it as wi
 it is not flexible there. The mapper calls that a soft fill (`axis.soft`): a fill on the cross axis and in a cell, rigid
 along a stack's axis, which a container passes on when every view of it that fills is soft.
 A NavigationSplitView is a `flexible` leaf whose columns the stylesheet's grid lays out: it keeps the stylesheet's
-`display`, and the content of each column is a semantic root of its own, which Swift lays out with CSS (a column's
-content box, see "Islands") where it can and the host where it cannot.
+`display`, and the content of each column is a semantic root of its own, which the mapper lays out with CSS (a column's
+content box, see "Islands").
 
 **A user-defined `Layout`** runs in Swift (`sizeThatFits`, `placeSubviews`); CSS and the page's measurements give it what the
 host's solve gives it. The wrapper (`layout-box`) is a `size` leaf of the width and height Swift wrote for the proposal it
@@ -282,8 +239,7 @@ Layout makes of a subview at another proposal than the one it places it with (`s
 size, a minimum or a maximum) was never measured by the host either: Swift answers it from its estimate, and the
 measurement at the placed proposal replaces the estimate (a Layout that places at the proposal it asked with, as a flow does
 with `.unspecified`, gets the page's size).
-Swift's `_CSSLayoutEmitter` still refuses the wrapper: the proposal is the page's to read, so a root that holds a
-Layout is styled by the page's mapper, whose analysis the reports need. `Tools/test-css-layout-fixtures-browser.mjs` lays
+`Tools/test-css-layout-fixtures-browser.mjs` lays
 `EmbeddedLayoutFixture` out (a wrapping flow, a radial layout, ideal-width columns, Layouts inside one another and in
 a ScrollView, a publication and a resize) on Chromium and WebKit, and requires that the mapper
 refuses nothing in it.

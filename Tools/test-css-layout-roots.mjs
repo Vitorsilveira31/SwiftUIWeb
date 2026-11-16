@@ -92,33 +92,6 @@ await runSuite(async () => {
     const beforeMerge = await rect("fill");
     const merged = await page.evaluate(() => { window.css.mergeRules(); return { rules: window.css.ruleSheets.length, adopted: document.adoptedStyleSheets.length }; });
     assert.equal(merged.rules, 1, "merged into one sheet");
-    // Rules Swift sent (`.sl<n>`, see `_CSSLayoutEmitter`) survive the merge.
-    const swift = await page.evaluate(() => {
-      const css = window.css, probe = document.createElement("div");
-      probe.className = "sl900"; document.body.append(probe);
-      css.adoptSwiftRules(".sl900{width:123px!important}\n");
-      const before = probe.getBoundingClientRect().width;
-      css.mergeRules();
-      const after = probe.getBoundingClientRect().width; probe.remove();
-      return { before, after };
-    });
-    assert.deepEqual(swift, { before: 123, after: 123 }, "Swift's rules are kept when the sheets are merged");
-    // A sidebar slot element's block in a collapsed rail (`.sr<n>`) applies only inside a collapsed tab view, and survives
-    // the merge too.
-    const railRule = await page.evaluate(() => {
-      const css = window.css, shell = document.createElement("div"), probe = document.createElement("div");
-      shell.className = "tab-view"; shell.setAttribute("data-tab-sidebar-expanded", "true");
-      probe.className = "sl901 sr902"; shell.append(probe); document.body.append(shell);
-      css.adoptSwiftRules(".sl901{width:50px!important}\n.sr902{width:20px!important}\n");
-      const width = () => probe.getBoundingClientRect().width;
-      const expanded = width();
-      shell.setAttribute("data-tab-sidebar-expanded", "false");
-      const collapsed = width();
-      css.mergeRules();
-      const merged = width(); shell.remove();
-      return { expanded, collapsed, merged };
-    });
-    assert.deepEqual(railRule, { expanded: 50, collapsed: 20, merged: 20 }, "a rail rule applies in a collapsed rail only, and survives the merge");
     assert.equal(merged.adopted, 2, "the mapper's global rules and its blocks");
     assert.deepEqual(await rect("fill"), beforeMerge, "merging moves nothing");
 

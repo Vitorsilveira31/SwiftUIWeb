@@ -37,20 +37,20 @@ const num = (v, d = null) => v == null || v === '' ? d : v === 'inf' ? Infinity 
 // A length: a number of pixels, or a CSS expression (a `containerRelativeFrame`'s, see `relativeLength`).
 const px = v => typeof v === 'string' ? v : (Math.round(v * 64) / 64) + 'px';
 /** A length that can change with every step of a resize, a scroll or an animation (a frame's size, a position, a lazy extent), marked
- * for `lengthVariables`: the rule of a block carries `var(--len<i>)` where it stands and the element the values, so a new value
+ * for `lengthVariables`: the rule of a block carries `var(--cl-len<i>)` where it stands and the element the values, so a new value
  * rewrites one inline declaration and adds no rule (a rule inserted in a stylesheet invalidates the style of the whole document). */
 const vpx = v => '\u0001' + px(v) + '\u0002';
-/** The rule text of a block that `vpx` marked, and its lengths in order: `<prefix><i>` is the i-th (Swift's blocks use `--len`, the
- * mapper's own `--cl-len`, which a DOM patch leaves alone, see `ownsLayoutStyle`). With `variables` false (a collapsed
+/** The rule text of a block that `vpx` marked, and its lengths in order: `<prefix><i>` is the i-th (`--cl-len<i>`,
+ * which a DOM patch leaves alone, see `ownsLayoutStyle`). With `variables` false (a collapsed
  * rail's block, whose element already carries the lengths of its expanded one) the lengths stay in the text and the list is empty. */
-export function lengthVariables(block, variables = true, prefix = '--len') {
+export function lengthVariables(block, variables = true, prefix = '--cl-len') {
   const lengths = [];
   const text = block.replace(/\u0001([^\u0002]*)\u0002/g, (_, length) => variables ? (lengths.push(length), `var(${prefix}${lengths.length - 1})`) : length);
   return [text, lengths];
 }
 /** Whether `element` carries `lengths` as `<prefix><i>`, and nothing more. */
-const holdsLengths = (element, lengths, prefix = '--len') => lengths.every((length, i) => element.style.getPropertyValue(prefix + i) === length) && element.style.getPropertyValue(prefix + lengths.length) === '';
-const writeLengths = (element, lengths, prefix = '--len') => {
+const holdsLengths = (element, lengths, prefix = '--cl-len') => lengths.every((length, i) => element.style.getPropertyValue(prefix + i) === length) && element.style.getPropertyValue(prefix + lengths.length) === '';
+const writeLengths = (element, lengths, prefix = '--cl-len') => {
   lengths.forEach((length, i) => element.style.setProperty(prefix + i, length));
   for (let i = lengths.length; element.style.getPropertyValue(prefix + i) !== ''; i++) element.style.removeProperty(prefix + i);
 };
@@ -69,8 +69,7 @@ const GROUPING = new Set(['frame', 'padding', 'fixed', 'aspect']);
 // The kinds a Divider inside them still runs along the stack around them (`Divider().frame(height: 20)` is a vertical rule in an
 // HStack, as is one with a padding, a fixedSize or an overlay); a ZStack, a VStack, a ScrollView and the rest start over.
 const RUNS_THROUGH = new Set(['frame', 'padding', 'fixed', 'overlay', 'background']);
-// The height of a linear ProgressView's track: the 8 px its view authors (and the host measures), which the published DOM no longer
-// carries when Swift emitted the block that overrides it.
+// The height of a linear ProgressView's track: the 8 px its view authors (and the host measures).
 const PROGRESS_TRACK = 8;
 /** Whether a Divider directly in a node of `kind` held by `parent` runs vertically: its stack is an HStack. */
 const runsVertical = (kind, parent) => kind === 'hstack' || (RUNS_THROUGH.has(kind) && !!parent?.runsVertical);
@@ -107,8 +106,6 @@ const relativeLength = (samples, variable) => {
   return `max(0px, calc(${expr}))`;
 };
 
-/** The rule of a block Swift sent: `.sl<n>`, or, for a collapsed rail (`r<n>`), `.sr<n>` scoped to the rail. */
-const swiftRule = (key, block) => key[0] === 'r' ? `.tab-view[data-tab-sidebar-expanded="false"] .sr${key.slice(1)}{${block}}` : `.sl${key}{${block}}`;
 
 /** The layout kind of an element: its `data-layout-kind`, else what the host's `describeFresh` would infer. */
 export function kindOf(element) {
@@ -227,7 +224,6 @@ export class CssLayout {
     this.cache = new WeakMap(); // element -> analysed node
     this.dirty = new Set();
     this.islands = new Set();
-    this.swiftRoot = null; // the root of a `verifySwift` analysis, whose block Swift sent
     this.roots = new WeakMap(); // root island -> what its container proposes ({ def: {x, y}, ax, height })
     this.foreign = new WeakSet(); // semantic roots inside an island that the JS host lays out
     this.pending = new Set(); // islands with analysed-but-unassigned changes
@@ -250,39 +246,36 @@ export class CssLayout {
     // A menu Picker is as wide as its selected label in SwiftUI; a <select> is as wide as its widest option. The page
     // measures the selected label as the host does (`sizeSelects`, `--sl-select-w`); until then, Chromium sizes it to the
     // selection with field-sizing (a pixel off the host's measure), WebKit and Firefox to its widest option.
-    // The global rules hold for the elements Swift styles too (`data-sl`, see `_CSSLayoutEmitter`).
     this.selectWidths = new WeakMap(); // select -> what its width was measured for
     this.fontEpoch = 0; // a font that loads changes every label's width
     document.fonts?.addEventListener?.('loadingdone', () => { this.fontEpoch++; });
-    this.sheet.insertRule(':is([data-cl],[data-sl-root]) select{field-sizing:content !important;width:var(--sl-select-w,auto) !important}', 0);
+    this.sheet.insertRule('[data-cl] select{field-sizing:content !important;width:var(--sl-select-w,auto) !important}', 0);
     // SwiftUI's Text is as wide as the lines it draws, not as what it is offered: a wrapped text is as wide as its longest
     // line, a truncated one as what it shows and the ellipsis. CSS keeps the box it offered, so the page measures the
     // lines (`fitTexts`) and caps the box there (`--sl-text-w`); what is left goes to the views beside it. The attribute
-    // twice outranks a block (`[data-cl-<n>]`, `.sl<n>`).
+    // twice outranks a block (`[data-cl-<n>]`).
     this.textWidths = new Map(); // text leaf -> the cap it carries
     this.fontSizes = new WeakMap(); // text leaf -> the font size a minimumScaleFactor shrink set, and the size Swift set
     this.sheet.insertRule('[data-text-fit][data-text-fit]{max-width:var(--sl-text-w) !important}', 0);
     // The stylesheet skips the rendering of lazy stacks and grids (`content-visibility: auto`, with a 160 px placeholder),
     // which is only harmless while the host gives them their size: with CSS layout their size is their content's, and
     // SwiftUIWeb's lazy windows already keep only the visible rows in the DOM.
-    this.sheet.insertRule(':is([data-cl],[data-sl-root] *):is(.grid-layout,.lazy-vstack,.lazy-hstack){content-visibility:visible !important}', 0);
+    this.sheet.insertRule('[data-cl]:is(.grid-layout,.lazy-vstack,.lazy-hstack){content-visibility:visible !important}', 0);
     // The container of a root proposed its cell (a presentation's content): a one-cell grid the root fills or is aligned in.
-    // A presentation's content made a one-cell grid for its root, by the mapper (`data-cl-host`) or by Swift (`data-sl-host`).
-    this.sheet.insertRule(':is([data-cl-host],[data-sl-host]){display:grid !important;grid-template-columns:minmax(0,1fr) !important;grid-template-rows:minmax(0,1fr) !important}', 0);
+    this.sheet.insertRule('[data-cl-host]{display:grid !important;grid-template-columns:minmax(0,1fr) !important;grid-template-rows:minmax(0,1fr) !important}', 0);
     // `.position(x:y:)` measures its point from the trailing edge in a right-to-left document (as SwiftUI's position does).
-    this.sheet.insertRule(':is([data-cl],[data-sl-root] *)[data-layout-kind="position"]:dir(rtl) > *{left:auto !important;right:var(--sl-px) !important;translate:50% -50% !important}', 0);
+    this.sheet.insertRule('[data-cl][data-layout-kind="position"]:dir(rtl) > *{left:auto !important;right:var(--sl-px) !important;translate:50% -50% !important}', 0);
     // A NavigationStack's title (the stylesheet's `::before`) is in the bar row with the items. A pushed destination replaces the
     // root whatever its `aria-hidden` says (the stylesheet hides it by that alone, and it takes no part in the layout).
     // The stack may itself be the styled root (an app whose window content is a NavigationStack), not only below one.
-    this.sheet.insertRule('.navigation-stack:is([data-cl],[data-sl-root],[data-sl-root] *)::before{grid-area:1 / 1 / 2 / -1 !important}', 0);
-    this.sheet.insertRule(':is(.navigation-stack,.navigation-view)[data-navigation-depth]:not([data-navigation-depth="0"]):is([data-cl],[data-sl-root],[data-sl-root] *) > .navigation-root:not([data-navigation-motion="covered"]){display:none !important}', 0);
+    this.sheet.insertRule('.navigation-stack[data-cl]::before{grid-area:1 / 1 / 2 / -1 !important}', 0);
+    this.sheet.insertRule(':is(.navigation-stack,.navigation-view)[data-navigation-depth]:not([data-navigation-depth="0"])[data-cl] > .navigation-root:not([data-navigation-motion="covered"]){display:none !important}', 0);
     // A ViewThatFits being probed (`probeFits`) shows no candidate.
     this.sheet.insertRule('.view-that-fits[data-fit-probe] > *{display:none !important}', 0);
     // A hidden tab or screen keeps its blocks, whose `display` would override the stylesheet's `display: none`.
     // The screen under a push stays drawn while the push plays (`data-navigation-motion`, transition-host.js), still taking
     // no part in the layout.
-    this.sheet.insertRule(`:is([data-cl],[data-sl-root] *):is(${HIDDEN}):not([data-navigation-motion="covered"]){display:none !important}`, 0);
-    this.swiftBlocks = new Map(); // id -> block of the rules Swift sent
+    this.sheet.insertRule(`[data-cl]:is(${HIDDEN}):not([data-navigation-motion="covered"]){display:none !important}`, 0);
   }
   /** Records a mutation inside an island: the element and its ancestors are analysed again. */
   mark(element, root) {
@@ -400,7 +393,7 @@ export class CssLayout {
     const view = this.document.defaultView, measured = [];
     let box = null;
     for (const select of this.document.getElementsByTagName('select')) {
-      if (!select.parentElement?.closest('[data-cl],[data-sl-root]')) continue;
+      if (!select.parentElement?.closest('[data-cl]')) continue;
       const option = select.options[select.selectedIndex];
       // Read without a style recalculation (the computed style is read only to measure): the selection, its label, the
       // classes and the fonts loaded so far.
@@ -438,7 +431,7 @@ export class CssLayout {
     for (const [text] of this.textWidths) text.removeAttribute('data-text-fit');
     const capped = new Map();
     let candidates = [...this.document.querySelectorAll('[data-layout-leaf="text"]')].filter(text =>
-      text.isConnected && !text.hasAttribute('data-layout-wrap') && (text.hasAttribute('data-cl') || text.closest('[data-sl-root]')));
+      text.isConnected && !text.hasAttribute('data-layout-wrap') && text.hasAttribute('data-cl'));
     // A font shrink comes before the lines are measured: a text that now fits is measured as the text it is.
     for (const text of candidates) this.shrinkToFit(text);
     for (let round = 0; round < 3 && candidates.length; round++) {
@@ -1143,8 +1136,7 @@ export class CssLayout {
     const push = (p, v) => d.push(p + ':' + v);
     const ctx = !parent ? 'root' : parent.kind === 'hstack' ? 'row' : parent.kind === 'vstack' ? 'column' : 'cell';
     // Own display.
-    // A root Swift styled (`verifySwift`) is not one: it is sized like any root (`rootPlacement`), not placed by the host.
-    if (ctx === 'root' && k === 'scroll' && this.islands.has(e) && e !== this.swiftRoot) {
+    if (ctx === 'root' && k === 'scroll' && this.islands.has(e)) {
       // The island root: the host places it (it is a flexible leaf); CSS lays out what is inside.
       push('display', 'grid'); push('grid-template-columns', 'minmax(0,1fr)'); push('grid-template-rows', 'auto'); push('align-content', 'start'); push('padding', '0');
       return d;
@@ -1585,9 +1577,9 @@ export class CssLayout {
     const top = this.cache.get(root);
     if (!top) return 0;
     let writes = 0;
-    // A collapsed rail's blocks keep their lengths in the text (an element has one set of `--len<i>`, its expanded block's).
-    const variables = this.roots.get(root)?.key !== 'rail', prefix = root === this.swiftRoot ? '--len' : '--cl-len';
-    /** Gives `e` the rule of `built` (interned) and returns its id; the lengths it marks go to the element as `--len<i>`. */
+    // A collapsed rail's blocks keep their lengths in the text (an element has one set of `--cl-len<i>`, its expanded block's).
+    const variables = this.roots.get(root)?.key !== 'rail', prefix = '--cl-len';
+    /** Gives `e` the rule of `built` (interned) and returns its id; the lengths it marks go to the element as `--cl-len<i>`. */
     const apply = (e, built) => {
       const [block, lengths] = lengthVariables(built, variables, prefix);
       if (sink) { sink(e, block, lengths); return '0'; }
@@ -1652,38 +1644,6 @@ export class CssLayout {
     if (!sink) this.adoptRules();
     return writes;
   }
-  /** Adopts the rules Swift sent (`data-sl-rules`, one `[data-sl-<n>]{block}` a line) that it does not hold yet. */
-  adoptSwiftRules(text) {
-    const fresh = [];
-    for (const line of text.split('\n')) {
-      // `.sl<n>{block}`, or `.sr<n>{block}`: a sidebar slot element's block in a collapsed rail, scoped to it.
-      const match = /^\.(sl|sr)(\d+)\{(.*)\}$/.exec(line);
-      const key = match && (match[1] === 'sr' ? 'r' + match[2] : match[2]);
-      // A block with braces or `</` would close the rule early and write other CSS: the page's text is not trusted that far.
-      if (!match || this.swiftBlocks.has(key) || /[{}]|<\//.test(match[3])) continue;
-      this.swiftBlocks.set(key, match[3]);
-      fresh.push(swiftRule(key, match[3]));
-    }
-    if (!fresh.length || !this.sheet) return;
-    this.fresh.push(...fresh);
-    this.adoptRules();
-  }
-  /** Equivalence check of a root Swift styled (`window.__layoutVerify`): every element must carry the block a fresh
-   * analysis of the page gives it. */
-  verifySwift(root, proposal) {
-    const fresh = new CssLayout(this.document, { ...this.options, detached: true });
-    fresh.islands.add(root); fresh.roots.set(root, proposal);
-    fresh.swiftRoot = root;
-    if (!fresh.claim(root)) { this.mismatch({ what: 'swift css root', note: 'refused by the page' }); return; }
-    fresh.assign(root, (element, block, lengths) => {
-      // In a collapsed rail an element carries its rail block (`sr<n>`) where it differs from its own.
-      const rail = proposal.key === 'rail' ? [...element.classList].find(name => /^sr\d+$/.test(name)) : null;
-      const held = rail ? 'r' + rail.slice(2) : [...element.classList].find(name => /^sl\d+$/.test(name))?.slice(2) ?? null;
-      if (this.swiftBlocks.get(held) !== block) this.mismatch({ what: 'swift css block', element: element.localName + '.' + String(element.className).split(' ')[0], held, swift: this.swiftBlocks.get(held) ?? null, fresh: block });
-      // (An element of a collapsed rail carries the lengths of its expanded block.)
-      else if (!rail && !holdsLengths(element, lengths)) this.mismatch({ what: 'swift css lengths', element: element.localName + '.' + String(element.className).split(' ')[0], held, fresh: lengths, swift: [...element.style].filter(name => name.startsWith('--len')).map(name => element.style.getPropertyValue(name)) });
-    });
-  }
   adoptRules() {
     if (!this.fresh.length) return;
     const window = this.document.defaultView, sheet = new window.CSSStyleSheet();
@@ -1702,9 +1662,7 @@ export class CssLayout {
     this.merging = false;
     if (this.ruleSheets.length < 2) return;
     const merged = new this.document.defaultView.CSSStyleSheet();
-    // The mapper's own blocks and the ones Swift sent.
-    const swift = [...this.swiftBlocks].map(([key, block]) => swiftRule(key, block));
-    merged.replaceSync([...this.blocks.map((block, id) => block === undefined ? '' : `[data-cl-${id}]{${block}}`), ...swift].join('\n'));
+    merged.replaceSync(this.blocks.map((block, id) => block === undefined ? '' : `[data-cl-${id}]{${block}}`).join('\n'));
     const old = new Set(this.ruleSheets);
     this.ruleSheets = [merged];
     this.document.adoptedStyleSheets = [...this.document.adoptedStyleSheets.filter(sheet => !old.has(sheet)), merged];

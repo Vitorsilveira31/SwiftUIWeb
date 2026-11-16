@@ -22,7 +22,7 @@ native browser DOM, measurement, input, scrolling and accessibility
   intent. Application code remains ordinary SwiftUI-shaped source.
 - **Fiber / ViewGraph** owns stable semantic identity, reconciliation,
   lifecycle and retained state. Identity is never derived from DOM order.
-- **CSS layout** (`Tools/css-layout.js`, or the CSS Swift emits itself) turns the
+- **CSS layout** (`Tools/css-layout.js`) turns the
   layout intent Swift describes (`data-layout-kind` and its attributes) into
   flexbox and grid declarations that give SwiftUI's proposal/response sizes
   ([`Architecture/CSS_LAYOUT.md`](Architecture/CSS_LAYOUT.md)). The browser

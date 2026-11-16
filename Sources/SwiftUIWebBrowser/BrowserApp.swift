@@ -456,9 +456,7 @@ private struct _EmbeddedSnapshotContext {
   // that keeps every visited tab would otherwise send each hidden tab's lazy lists with every publication. The tab is
   // built and written again when it is selected.
   if (fiber.isVolatile || fiber.publishedHostOwned) && !_embeddedBrowserIsHiddenTabContent(fiber, context: context) { return false }
-  // A subtree whose CSS layout blocks changed carries new attributes (see `_CSSLayoutEmitter`).
-  let css = _CSSLayoutEmitter.shared
-  return !(css.forceFull || css.changed.contains(ObjectIdentifier(fiber)))
+  return true
 }
 
 /// The first element of the tree, in the order the annotations look for it (`_embeddedBrowserAnnotate`).
@@ -551,29 +549,6 @@ private enum _EmbeddedSnapshotStep {
   }
   copy.styles = node.styles
   copy.classes = node.classes
-  // The CSS layout block Swift gave the element: a class its rule matches (`sl<n>`, six bytes or so an element where an
-  // attribute pair took thirty), and the root's marker (`data-sl-root`) for the mapper's global rules.
-  let css = _CSSLayoutEmitter.shared
-  if let block = css.assigned[ObjectIdentifier(fiber)] {
-    copy.classes.append("sl" + String(block))
-    // In a sidebar slot, the block of the collapsed rail when it differs (`sr<n>`, a rule the page scopes to the rail).
-    let rail = css.railAssigned[ObjectIdentifier(fiber)]
-    if let rail, rail != block { copy.classes.append("sr" + String(rail)) }
-    // The inline layout declarations the blocks override (`!important`) are not sent: they were a seventh of a
-    // publication.
-    if !copy.styles.isEmpty {
-      // In a slot, only what both blocks declare.
-      copy.styles = copy.styles.filter { entry in !(css.declares(block, entry.key) && (rail.map { css.declares($0, entry.key) } ?? true)) }
-    }
-    // The lengths its block's rule reads (`var(--len<i>)`): the one thing that changes when a frame follows the window.
-    if let lengths = css.assignedLengths[ObjectIdentifier(fiber)] {
-      for (index, length) in lengths.enumerated() { copy.styles["--len" + String(index)] = length }
-    }
-    if css.roots.contains(ObjectIdentifier(fiber)) { copy.attributes["data-sl-root"] = "" }
-  }
-  // A presentation's content holding a root Swift styled is a one-cell grid for it (the mapper's global rule for
-  // `data-sl-host`; the page's own `data-cl-host` is the mapper's, which the patch leaves alone).
-  if css.hosts.contains(ObjectIdentifier(fiber)) { copy.attributes["data-sl-host"] = "" }
   if let info = _embeddedBrowserLazyIDs[fiber.identity] {
     copy.attributes["data-keep-lazy-index"] = String(info.0)
     copy.attributes["data-keep-lazy-lanes"] = String(info.1)
@@ -766,10 +741,6 @@ private let _embeddedHoverLearningDelay = 0.25
     _embeddedHoverLearningDue = false
     tree._learnDeferredHover()
   }
-  // CSS layout of the window root, before the snapshot: it decides the blocks the copies carry and which subtrees cannot
-  // be kept.
-  // (Its time counts with the snapshot's.)
-  _CSSLayoutEmitter.shared.run(tree.root)
   // A publication lists the changes since the epoch the host acknowledged only when the host holds the tree the fibers'
   // records describe; otherwise it is the whole tree, and nothing is replaced by a placeholder.
   let hostHoldsTree = BinaryHeldState.holdsTree(_embeddedBinaryRootRecord, acked: _embeddedPublishAckedEpoch)
@@ -808,10 +779,6 @@ private let _embeddedHoverLearningDelay = 0.25
   if let operations = BrowserHistoryAdapter.embeddedOperations() {
     annotations.values.append(["data-history-operations": operations])
   }
-  // The CSS layout rules the host may not have yet ride on the root until it acknowledges them.
-  if let rules = _CSSLayoutEmitter.shared.rulesAttribute(acked: _embeddedPublishAckedEpoch) {
-    annotations.values.append(["data-sl-rules": rules])
-  }
   // Numbered, so that two animated commits in a row with the same animation still differ: an update sends the root's first
   // element only when its attributes changed, and an unchanged transaction would reach the page as no transaction at all.
   annotations.transaction = tree.root.stateStore._takeAnimationTransactionCSS().map { css in
@@ -824,7 +791,6 @@ private let _embeddedHoverLearningDelay = 0.25
   if _embeddedPublishCount % 8 == 0 { _embeddedBrowserPruneEventRoutes(tree) }
 
   let covered = tree._advanceEpoch()
-  _CSSLayoutEmitter.shared.published(epoch: covered)
   tree._hoverRulesPublished(epoch: covered)
   let published = _embeddedBrowserPublishBinary(tree, root: root, context: context, annotations: annotations, covered: covered)
   _embeddedPublishCounters[0] += UInt64(published)
@@ -1462,12 +1428,11 @@ public extension BrowserAppLauncher {
     _embeddedBrowserPublish(tree)
   }
 
-  /// `flags`: 1 reduced motion, 2 CSS layout worked out by Swift (`_CSSLayoutEmitter`), 32 publications with a reference
-  /// encoding of the same tree attached (see `_embeddedBinaryVerify`), 64 no shapes. 8 and 16 are retired: they chose the HTML transport.
+  /// `flags`: 1 reduced motion, 32 publications with a reference
+  /// encoding of the same tree attached (see `_embeddedBinaryVerify`), 64 no shapes. 8 and 16 are retired (they chose the HTML transport), and so is 2 (CSS layout worked out by Swift).
   static func embeddedBrowserSetInitialPreferences(dark: UInt32, reducedMotion flags: UInt32) {
     ColorSchemeRuntime.install(dark == 1 ? .dark : .light)
     AccessibilityRuntime.install(reduceMotion: flags & 1 == 1)
-    _CSSLayoutEmitter.shared.enabled = flags & 2 == 2
     _embeddedBinaryVerify = flags & 32 == 32
     _embeddedBinaryShapesEnabled = flags & 64 == 0
     // Tuning, from the page (window.__binaryShapeInstances, window.__binaryShapeElements): bits 8 to 11 and 12 to 15, 0 for the default.
