@@ -68,9 +68,42 @@ export function parseViewports(text) {
   });
 }
 
+/**
+ * The mutable globals a module defines itself (not imports). A move from the Worker to the main thread carries linear
+ * memory only; a global the first module owns is, in a Swift module, the stack pointer, which is back at its start between
+ * passes, but a mutable global that wasm-split moved into the second module would start over there. Returns their count.
+ */
+export function ownMutableGlobals(bytes) {
+  let at = 8;
+  const leb = () => { let value = 0, shift = 0, byte; do { byte = bytes[at++]; value += (byte & 0x7f) * 2 ** shift; shift += 7; } while (byte & 0x80); return value; };
+  while (at < bytes.length) {
+    const id = bytes[at++], size = leb(), end = at + size;
+    if (id !== 6) { at = end; continue; }
+    let mutable = 0;
+    for (let count = leb(), index = 0; index < count; index++) {
+      at++; // value type
+      if (bytes[at++] === 1) mutable++;
+      // The constant expression: the opcodes a global's initializer can hold, up to its end (0x0b).
+      for (let op = bytes[at++]; op !== 0x0b; op = bytes[at++]) {
+        if (op === 0x41 || op === 0x42 || op === 0x23 || op === 0xd2) { while (bytes[at++] & 0x80); }
+        else if (op === 0x43) at += 4;
+        else if (op === 0x44) at += 8;
+        else if (op === 0xd0) at++;
+        else if (![0x6a, 0x6b, 0x6c, 0x7c, 0x7d, 0x7e].includes(op)) throw new Error(`unexpected opcode 0x${op.toString(16)} in a global initializer`);
+      }
+    }
+    return mutable;
+  }
+  return 0;
+}
+
 /** Waits until the app is mounted and has stopped committing: its first screen. */
 export async function settle(page, timeout = 60_000) {
-  await page.waitForSelector(MOUNTED, { timeout, state: "attached" });
+  try {
+    await page.waitForSelector(MOUNTED, { timeout, state: "attached" });
+  } catch (error) {
+    throw new Error(`the app did not mount within ${timeout / 1000} s (${error.message.split("\n")[0]}): the first screen cannot be profiled`);
+  }
   await page.evaluate((quietMs) => new Promise((done) => {
     let timer = 0;
     const quiet = () => { clearTimeout(timer); timer = setTimeout(async () => { await document.fonts.ready; done(); }, quietMs); };
@@ -172,6 +205,8 @@ export async function splitBundle(bundle, { route = "/", viewports = parseViewpo
         mkdirSync(logDir, { recursive: true });
         cpSync(profile, join(logDir, "first-screen.prof"));
       }
+      const moved = ownMutableGlobals(readFileSync(secondary));
+      if (moved > 0) throw new Error(`wasm-split moved ${moved} mutable global(s) into ${SECONDARY}; a move from the Worker to the main thread would start them over, so this module cannot be split`);
       const before = { raw: statSync(input).size, br: brotliSize(input) };
       const first = { raw: statSync(primary).size, br: brotliSize(primary) };
       const rest = { raw: statSync(secondary).size, br: brotliSize(secondary) };

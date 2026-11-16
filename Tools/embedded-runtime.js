@@ -8,7 +8,9 @@ import { writeEventValue } from './event-value.js';
 import { createSplitLoader, isSplitModule } from './wasm-split-loader.js';
 
 // The second half of a split release module (Tools/wasm-split-release.mjs): the functions the first screen did not run.
-// A bundle that is not split has no such file, and its module has no placeholder to load it for.
+// A bundle that is not split has no such file, and its module has no placeholder to load it for. The launcher defines
+// `globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER` as false for such a bundle, so the loader is not in its scripts at all; where it
+// is not defined (development, the tests) the loader stays.
 const SECONDARY_MODULE = './app-rest.wasm';
 
 const encoder = new TextEncoder();
@@ -176,12 +178,16 @@ async function startOnMainThread(module, options, url) {
   }
   // This thread cannot wait for the second half of a split module in the middle of a call, so it loads both before the
   // application runs; the download of the second starts with the instantiation of the first.
-  const split = !hot && isSplitModule(module) ? createSplitLoader(module, { url: new URL(SECONDARY_MODULE, import.meta.url).href }) : null;
-  const secondHalf = split?.load();
-  if (split) Object.assign(imports, split.imports);
+  let split = null, secondHalf = null;
+  if (globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER !== false && !hot && isSplitModule(module)) {
+    split = createSplitLoader(module, { url: new URL(SECONDARY_MODULE, import.meta.url).href });
+    secondHalf = split.load();
+    // Awaited below; a failure that lands while the first half instantiates is not an unhandled rejection meanwhile.
+    secondHalf.catch(() => {});
+    Object.assign(imports, split.imports);
+  }
   const result = await WebAssembly.instantiate(module, imports);
-  split?.attach(result);
-  await secondHalf;
+  if (globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER !== false && split) { split.attach(result); await secondHalf; }
   instance = result;
   if (typeof instance.exports._initialize === 'function') instance.exports._initialize();
   if (hot) {
@@ -320,7 +326,7 @@ function workerRequested(options) {
 }
 
 async function instantiateWithWorker(module, options) {
-  const secondary = isSplitModule(module) ? new URL(SECONDARY_MODULE, import.meta.url).href : null;
+  const secondary = globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER !== false && isSplitModule(module) ? new URL(SECONDARY_MODULE, import.meta.url).href : null;
   const facade = await createWorkerInstance(module, { baseURL: document.baseURI, secondary, diagnostics: options.performanceDiagnostics === true || window.__performanceDiagnostics === true });
   workerInstance = facade;
   browserSession = mountEmbeddedBrowser(facade, options);
