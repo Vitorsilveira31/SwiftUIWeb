@@ -268,7 +268,7 @@ enum _SemanticLayers {
   }
 
   /// Whether the CSS layout can lay `layers` (outermost first, the element's own layer first) out in the one box of their
-  /// element. The conditions are those under which `chainPlan` (`Tools/css-layout.js`, `CSSLayoutEmitter.swift`) finds no
+  /// element. The conditions are those under which `chainPlan` (`Tools/css-layout.js`) finds no
   /// plan: more than one box on an axis (a fixed, fixedSize or min/max frame that nothing fills), a layer other than a
   /// padding inside a padding that is inside a box, and a filling minimum that overflows the fixed frame holding it.
   static func isFoldable(_ layers: [Layer]) -> Bool {

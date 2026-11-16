@@ -18,7 +18,7 @@ Two ways were weighed.
 **A. Run the release bundle in headless Chromium and serialize what it shows.** The build serves the finished bundle, loads the
 route, waits for `html[data-embedded-mounted="true"]` and for the page to stop committing, and reads `#embedded-app-root`'s
 markup, the layout rules the runtime adopted (CSS_LAYOUT.md: adopted stylesheets, the framework's static layout rules, the
-`sl<N>` blocks Swift styled the window root with, `data-cl-<N>` selectors) and the `<style>` elements the runtime added.
+`data-cl-<N>` selectors) and the `<style>` elements the runtime added.
 
 **B. Render through the native static renderer** (`make snapshot`), which prints the Fiber HTML without a browser.
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 // A run of frame, padding and fixedSize modifiers shares one element (`data-layout-wrap`, `_SemanticLayers`) that CSS layout styles
 // as the chain of wrapper elements it replaces. A shared element nothing styles would lose the layers: every visible one must
-// carry the block of the CSS layout mapper (`data-cl`, the folded chain, see Documentation/Architecture/CSS_LAYOUT.md) or a
-// class of the CSS Swift emitted (`slN`), in every Showcase topic, at a phone, a tablet and a desktop width.
+// carry the block of the CSS layout mapper (`data-cl`, the folded chain, see Documentation/Architecture/CSS_LAYOUT.md),
+// in every Showcase topic, at a phone, a tablet and a desktop width.
 // Bundle: LAYERS_BUNDLE (.build/browser/ShowcaseApp). Port: LAYERS_PORT.
 import assert from "node:assert/strict";
 import { join, resolve } from "node:path";
@@ -32,7 +32,7 @@ await runSuite(async () => {
           for (const element of document.querySelectorAll("[data-layout-wrap]")) {
             if (element.closest("[data-layout-hidden],[hidden],[data-tab-hidden=true],[data-navigation-inactive=true]") || !element.getClientRects().length) continue;
             count++;
-            if (!element.hasAttribute("data-cl") && ![...element.classList].some((c) => /^sl\d+$/.test(c))) lost.push(element.className + " in " + element.parentElement?.className);
+            if (!element.hasAttribute("data-cl")) lost.push(element.className + " in " + element.parentElement?.className);
           }
           return { count, lost };
         });

@@ -19,7 +19,7 @@ const { ROOT, ATTRS, CHILDREN, HELD, ELEMENT, ELEMENT_NS, TEXT, SHAPE, DEFINE, E
 const NODE_ID = 'data-embedded-node-id';
 // The attributes a publication puts on the first element of the tree to ask something of the page. The page reads them before it
 // patches anything, and the hover rules are never written to an element: they are applied to a style sheet.
-const ANNOTATION_TRANSACTION = BINARY_ATOMS.indexOf('data-animation-transaction'), ANNOTATION_HOVER_RULES = BINARY_ATOMS.indexOf('data-hover-rules'), ANNOTATION_LAYOUT_RULES = BINARY_ATOMS.indexOf('data-sl-rules');
+const ANNOTATION_TRANSACTION = BINARY_ATOMS.indexOf('data-animation-transaction'), ANNOTATION_HOVER_RULES = BINARY_ATOMS.indexOf('data-hover-rules');
 
 /** A publication the page cannot read: from another build (its version or atoms differ), or damaged. */
 export class BinaryFormatError extends Error {}
@@ -367,7 +367,7 @@ export function scanRecords(publication) {
   const annotationsAt = (at, pairs) => {
     for (const end = at + pairs * 2; at < end; at += 2) {
       const name = words[at];
-      if (name === ANNOTATION_TRANSACTION || name === ANNOTATION_HOVER_RULES || name === ANNOTATION_LAYOUT_RULES) annotations.push([strings[name], strings[words[at + 1]]]);
+      if (name === ANNOTATION_TRANSACTION || name === ANNOTATION_HOVER_RULES) annotations.push([strings[name], strings[words[at + 1]]]);
     }
   };
   let position = 0;

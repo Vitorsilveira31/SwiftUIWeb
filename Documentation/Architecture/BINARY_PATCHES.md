@@ -169,7 +169,7 @@ acknowledged and nothing else.
 
 1. Check the header. A wrong version or atoms hash means the page asks for `publish_full`.
 2. Decode the strings with one `TextDecoder.decode` and one `split('\0')`.
-3. Read the annotations (`data-hover-rules`, `data-sl-rules`, `data-animation-transaction`) before applying anything.
+3. Read the annotations (`data-hover-rules`, `data-animation-transaction`) before applying anything.
    `scanRecords` splits the stream into records and collects those attributes from `ATTRS` records and from the elements a
    `CHILDREN` record builds; the page puts them on an element of their own and reads them from it. The hover rules are
    never written to an element.

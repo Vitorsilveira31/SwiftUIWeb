@@ -2731,12 +2731,6 @@ export function mountEmbeddedBrowser(instance, options = {}) {
       // A whole tree's are read from its stream: the builder does not put them in the DOM.
       const hoverRules = update ? annotation('data-hover-rules')?.getAttribute('data-hover-rules') : builtHoverRules;
       if (hoverRules) applyHoverRules(hoverRules);
-      // The rules of the blocks Swift styled the window root with (`data-sl-rules`, CSS_LAYOUT.md) are adopted before the
-      // patch: an element whose class names a block the page does not hold yet would be styled without it by any style
-      // read before the patch's mutation records are handled, and its subtree laid out again twice.
-      let swiftRules=null;
-      if (update) swiftRules = annotation('data-sl-rules'); else for (const child of content.children) if (child.hasAttribute('data-sl-rules')) { swiftRules=child; break; }
-      if (swiftRules) layout?.adoptSwiftRules?.(swiftRules);
       if (!update) noteSyncMarkers(content);
       const active=document.activeElement;
       if (active && active!==document.body && root.contains(active)) { focusChain=[]; for (let element=active; element && element!==root; element=element.parentElement) focusChain.push(element); }

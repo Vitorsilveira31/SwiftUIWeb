@@ -8,7 +8,7 @@ function host() {
   const window = { cancelAnimationFrame() {} };
   const layout = Object.create(SemanticLayoutHost.prototype);
   Object.assign(layout, {
-    // The window root, with no rules Swift styled it with.
+    // The window root.
     root: { querySelector: () => null },
     window, disposed: false, updating: false, updateRequested: false, scheduled: 0,
     metrics: { passes: 0, passesSkipped: 0, unlaid: 0 }, unlaid: new Set(),
