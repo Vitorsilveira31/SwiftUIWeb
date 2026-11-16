@@ -206,6 +206,22 @@ async function checkNetworkMediaFixture(page, report) {
 // with few cores, where the app takes seconds to react to a click.
 const PATIENCE = 20_000;
 
+// A press made before the page has bound the button's handler does nothing, and Playwright cannot tell. The press is repeated
+// while the button is still there and its result is not, so a press that was only late is never answered twice (the button
+// is gone by then).
+async function pressUntil(page, name, result) {
+  const button = page.getByRole("button", { name, exact: true });
+  const shown = page.getByRole("button", { name: result, exact: true });
+  for (const end = Date.now() + PATIENCE; Date.now() < end; ) {
+    if ((await button.count()) > 0) await button.click({ timeout: PATIENCE });
+    try {
+      await shown.waitFor({ timeout: 2500 });
+      return;
+    } catch {}
+  }
+  await shown.waitFor({ timeout: 1000 });
+}
+
 await runSuite(async () => {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
@@ -387,8 +403,7 @@ await runSuite(async () => {
     await page.getByText("Previous version loaded", { exact: true }).waitFor({ state: "detached", timeout: PATIENCE });
     report.checks.push({ name: "late-mounted-conditional-state-under-anyview-and-keyed-foreach", status: "PASS" });
     await page.getByRole("button", { name: "Open StateObject identity fixture", exact: true }).click();
-    await page.getByRole("button", { name: "A:0", exact: true }).click();
-    await page.getByRole("button", { name: "A:1", exact: true }).waitFor({ timeout: PATIENCE });
+    await pressUntil(page, "A:0", "A:1");
     await page.getByRole("button", { name: "Insert leading row", exact: true }).click();
     await page.getByRole("button", { name: "X:0", exact: true }).waitFor({ timeout: PATIENCE });
     await page.getByRole("button", { name: "A:1", exact: true }).waitFor({ timeout: PATIENCE });
