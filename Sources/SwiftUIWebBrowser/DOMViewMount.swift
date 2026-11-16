@@ -70,7 +70,7 @@ private final class _DOMViewMountController: WebMountController {
 /// Browser-side association between a stable Fiber token and its latest
 /// type-erased lifecycle descriptor.
 enum _DOMViewRuntime {
-  @MainActor private static var descriptors: [String: _DOMViewDescriptor] = [:]
+  @MainActor private static var descriptors: [String: _DOMViewDescriptor] = .init()
   @MainActor private static var stagedTokens: Set<String> = []
   @MainActor private static var registration: WebSubscription?
 

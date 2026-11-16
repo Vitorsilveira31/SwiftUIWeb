@@ -933,7 +933,7 @@ public struct GraphicsContext {
   /// Symbol definitions for `Canvas`. A tagged view keeps its markup, which a 2D context draws as an image.
   /// Hosts without a renderer draw the fallback label.
   package struct Symbols: Hashable, Sendable {
-    fileprivate var entries: [String: _CanvasSymbolEntry] = [:]
+    fileprivate var entries: [String: _CanvasSymbolEntry] = .init()
     package init() {}
     package mutating func add<ID: Hashable, V: View>(_ view: V, id: ID) {
       let fallback: String
@@ -965,7 +965,7 @@ public struct GraphicsContext {
 
   package init() {
     recorder = _CanvasRecorder()
-    symbols = [:]
+    symbols = .init()
     canvasSize = SwiftUIWebCanvasSize(width: 300, height: 150)
     environmentFont = .body
     environmentColor = .primary

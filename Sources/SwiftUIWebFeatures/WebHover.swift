@@ -23,7 +23,7 @@ private func _hoverPixels(_ value: Double) -> Int {
 @_spi(Renderer) public nonisolated struct _WebHoverModifier: ViewModifier {
   public let attributes: [String: String]
   public let styles: [String: String]
-  public init(attributes: [String: String], styles: [String: String] = [:]) {
+  public init(attributes: [String: String], styles: [String: String] = .init()) {
     self.attributes = attributes
     self.styles = styles
   }

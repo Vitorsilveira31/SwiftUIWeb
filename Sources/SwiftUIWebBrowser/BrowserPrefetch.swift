@@ -141,7 +141,7 @@ public final class _WebPrefetchPlanner {
 
   public private(set) var policy: _WebPrefetchPolicy
   public private(set) var metrics = _WebPrefetchMetrics()
-  private var entries: [String: Entry] = [:]
+  private var entries: [String: Entry] = .init()
   private var dispatchedKeys: Set<String> = []
   private var nextOrder: UInt64 = 0
 
@@ -295,8 +295,8 @@ public final class _WebPrefetchPlanner {
 /// when a route or feature receives intent.
 @_spi(Browser)
 @MainActor public enum WebPrefetchRuntime {
-  private static var resources: [String: _WebPrefetchResource] = [:]
-  private static var registrationIDs: [String: UInt64] = [:]
+  private static var resources: [String: _WebPrefetchResource] = .init()
+  private static var registrationIDs: [String: UInt64] = .init()
   private static var generation: UInt64 = 0
   private static var nextRegistrationID: UInt64 = 0
   /// The most manifest entries kept. Past it a new registration is not added (a prefetch is only a hint), so data cannot

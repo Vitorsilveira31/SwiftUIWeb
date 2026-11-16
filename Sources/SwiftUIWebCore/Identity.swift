@@ -420,7 +420,7 @@ package func fiberKeyDescription(_ key: _FiberKey) -> String {
 /// `-1`, and so on, so two live paths never share an id. The registry keeps 16 bytes per distinct path, no paths; when it
 /// holds more than `capacity` it is emptied (ids stay the same, only the suffix of a path that collided could change).
 @_spi(Renderer) public final class _CompactPathIDRegistry {
-  private var claims: [UInt64: [UInt64]] = [:]
+  private var claims: [UInt64: [UInt64]] = .init()
   private var count = 0
   private let capacity: Int
 

@@ -73,7 +73,7 @@ func _isSafeAttributeName(_ name: String) -> Bool {
 /// Keeps the attributes whose names are safe, and drops URL attributes whose
 /// scheme is not.
 func _safeAttributes(_ attributes: [String: String]) -> _NodeValues {
-  var result: _NodeValues = [:]
+  var result: _NodeValues = .init()
   for (name, value) in attributes {
     if let safe = _safeAttributeValue(name: name, value: value) { result[name] = safe }
   }

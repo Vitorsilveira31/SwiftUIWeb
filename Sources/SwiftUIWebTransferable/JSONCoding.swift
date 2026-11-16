@@ -456,7 +456,7 @@ open class JSONEncoder: @unchecked Sendable {
   open var dataEncodingStrategy: DataEncodingStrategy = .base64
   open var nonConformingFloatEncodingStrategy: NonConformingFloatEncodingStrategy = .throw
   open var keyEncodingStrategy: KeyEncodingStrategy = .useDefaultKeys
-  @preconcurrency open var userInfo: [CodingUserInfoKey: any Sendable] = [:]
+  @preconcurrency open var userInfo: [CodingUserInfoKey: any Sendable] = .init()
 
   public init() {}
 
@@ -509,7 +509,7 @@ private final class _JSONArrayRef {
 
 private final class _JSONObjectRef {
   var keys: [String] = []
-  var values: [String: _JSONFuture] = [:]
+  var values: [String: _JSONFuture] = .init()
   func set(_ key: String, _ value: _JSONFuture) {
     if values.updateValue(value, forKey: key) == nil { keys.append(key) }
   }
@@ -729,7 +729,7 @@ open class JSONDecoder: @unchecked Sendable {
   open var dataDecodingStrategy: DataDecodingStrategy = .base64
   open var nonConformingFloatDecodingStrategy: NonConformingFloatDecodingStrategy = .throw
   open var keyDecodingStrategy: KeyDecodingStrategy = .useDefaultKeys
-  @preconcurrency open var userInfo: [CodingUserInfoKey: any Sendable] = [:]
+  @preconcurrency open var userInfo: [CodingUserInfoKey: any Sendable] = .init()
 
   public init() {}
 
@@ -775,7 +775,7 @@ private final class _JSONDecoderImpl: Decoder, SingleValueDecodingContainer {
     guard case .object(let members) = value else {
       throw typeMismatch([String: Any].self, value, codingPath: codingPath)
     }
-    var object: [String: _JSONValue] = [:]
+    var object: [String: _JSONValue] = .init()
     for member in members {
       let key: String
       switch preservesKeys ? .useDefaultKeys : options.keyStrategy {

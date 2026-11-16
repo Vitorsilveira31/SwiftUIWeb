@@ -49,7 +49,7 @@ public extension Animatable where AnimatableData == EmptyAnimatableData {
     let identifier: String
     let value: Any
   }
-  private var entries: [String: Entry] = [:]
+  private var entries: [String: Entry] = .init()
 
   public init() {}
 
@@ -98,7 +98,7 @@ public struct ProposedViewSize: Equatable, Sendable {
 /// normalized fractions (one per content column) rather than pixels, which
 /// keeps a user's split stable when the browser viewport changes size.
 @_spi(Renderer) public final class _SplitViewStateStore {
-  private var values: [String: [Double]] = [:]
+  private var values: [String: [Double]] = .init()
 
   public init() {}
 
@@ -169,7 +169,7 @@ public struct ViewDimensions {
 
   package init(size: CGSize) {
     self.size = size
-    overrides = [:]
+    overrides = .init()
     explicitHorizontal = nil
     explicitVertical = nil
   }
@@ -853,8 +853,8 @@ final package class _LayoutProposalStore {
   package var reported = ProposedViewSize.unspecified
   package var rendered = ProposedViewSize.unspecified
   /// The size the host measured each subview at, with the proposal it was measured for (by subview index).
-  package var measured: [Int: (proposal: ProposedViewSize, size: CGSize)] = [:]
-  package var renderedMeasured: [Int: (proposal: ProposedViewSize, size: CGSize)] = [:]
+  package var measured: [Int: (proposal: ProposedViewSize, size: CGSize)] = .init()
+  package var renderedMeasured: [Int: (proposal: ProposedViewSize, size: CGSize)] = .init()
 }
 
 #if hasFeature(Embedded)

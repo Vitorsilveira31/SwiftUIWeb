@@ -72,12 +72,12 @@ func _listRowInsetsModifier(_ insets: EdgeInsets?) -> _SemanticCompatibilityModi
 
 @inline(never)
 func _fontWeightModifier(_ weight: Font.Weight?) -> _SemanticCompatibilityModifier {
-  _SemanticCompatibilityModifier(styles: weight.map { ["font-weight": $0.rawValue] } ?? [:])
+  _SemanticCompatibilityModifier(styles: weight.map { ["font-weight": $0.rawValue] } ?? .init())
 }
 
 @inline(never)
 func _fontDesignModifier(_ design: Font.Design?) -> _SemanticCompatibilityModifier {
-  _SemanticCompatibilityModifier(styles: design.map { ["font-family": $0.rawValue] } ?? [:])
+  _SemanticCompatibilityModifier(styles: design.map { ["font-family": $0.rawValue] } ?? .init())
 }
 
 @inline(never)
@@ -124,12 +124,12 @@ func _minimumScaleFactorModifier(_ factor: Double) -> _SemanticCompatibilityModi
 
 @inline(never)
 func _allowsHitTestingModifier(_ enabled: Bool) -> _SemanticCompatibilityModifier {
-  _SemanticCompatibilityModifier(attributes: ["data-allows-hit-testing": enabled ? "true" : "false"], styles: enabled ? [:] : ["pointer-events": "none"])
+  _SemanticCompatibilityModifier(attributes: ["data-allows-hit-testing": enabled ? "true" : "false"], styles: enabled ? .init() : ["pointer-events": "none"])
 }
 
 @inline(never)
 func _scrollIndicatorsModifier(_ visibility: ScrollIndicatorVisibility) -> _SemanticCompatibilityModifier {
-  _SemanticCompatibilityModifier(attributes: ["data-scroll-indicators": visibility.rawValue], styles: visibility == .hidden || visibility == .never ? ["scrollbar-width": "none"] : [:])
+  _SemanticCompatibilityModifier(attributes: ["data-scroll-indicators": visibility.rawValue], styles: visibility == .hidden || visibility == .never ? ["scrollbar-width": "none"] : .init())
 }
 
 @inline(never)
@@ -141,7 +141,7 @@ func _scrollDismissesKeyboardModifier(_ mode: ScrollDismissesKeyboardMode) -> _S
 func _scrollContentBackgroundModifier(_ visibility: Visibility) -> _SemanticCompatibilityModifier {
   _SemanticCompatibilityModifier(
       attributes: ["data-scroll-content-background": visibility.rawValue],
-      styles: visibility == .hidden ? ["background": "transparent"] : [:],
+      styles: visibility == .hidden ? ["background": "transparent"] : .init(),
       environment: { $0._scrollContentBackgroundHidden = visibility == .hidden }
     )
 }
@@ -153,12 +153,12 @@ func _scrollEdgeEffectHiddenModifier(_ hidden: Bool, for edges: Edge.Set) -> _Se
 
 @inline(never)
 func _scrollDisabledModifier(_ disabled: Bool) -> _SemanticCompatibilityModifier {
-  _SemanticCompatibilityModifier(attributes: ["data-scroll-disabled": disabled ? "true" : "false"], styles: disabled ? ["overscroll-behavior": "none"] : [:])
+  _SemanticCompatibilityModifier(attributes: ["data-scroll-disabled": disabled ? "true" : "false"], styles: disabled ? ["overscroll-behavior": "none"] : .init())
 }
 
 @inline(never)
 func _scrollClipDisabledModifier(_ disabled: Bool) -> _SemanticCompatibilityModifier {
-  _SemanticCompatibilityModifier(attributes: ["data-scroll-clip-disabled": disabled ? "true" : "false"], styles: disabled ? ["overflow": "visible"] : [:])
+  _SemanticCompatibilityModifier(attributes: ["data-scroll-clip-disabled": disabled ? "true" : "false"], styles: disabled ? ["overflow": "visible"] : .init())
 }
 
 @inline(never)

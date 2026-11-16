@@ -280,7 +280,7 @@ final class _NotificationLease: @unchecked Sendable {
 public final class NSMutableDictionary: ExpressibleByDictionaryLiteral {
   /// Keys are kept whole: keyed by hash alone, two keys whose hashes collide (32 bits in the browser build) shared a slot.
   private enum StoredKey: Hashable { case string(String), int(Int), bool(Bool), object(ObjectIdentifier) }
-  private var storage: [StoredKey: Any] = [:]
+  private var storage: [StoredKey: Any] = .init()
   public init() {}
   public init(dictionaryLiteral elements: (Int, AnyObject)...) {}
   public subscript(key: Any) -> Any? {

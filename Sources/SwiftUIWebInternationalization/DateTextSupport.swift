@@ -3,7 +3,7 @@
 /// Parsed `Intl.DateTimeFormat` options (`name=value;...`), shared by
 /// `Date.FormatStyle`, `Text(_:style:)` and date ranges.
 struct _DateFormatOptions {
-  private var values: [String: String] = [:]
+  private var values: [String: String] = .init()
 
   init(_ encoded: String) {
     for pair in encoded.split(separator: ";") {

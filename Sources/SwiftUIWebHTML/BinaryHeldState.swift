@@ -41,7 +41,7 @@ package enum BinaryHeldState {
   /// that stands for it, and whether it sits in content the page replaces or manages, whose elements the page does not keep)
   /// and in the placeholders that stood for the others (`kept`).
   package static func published(_ output: BinaryFiberEncoder.Output, visited: [(fiber: Fiber, copy: _RenderNode, inHostContent: Bool)], kept: [(fiber: Fiber, node: _RenderNode)], covered: UInt64) {
-    var byCopy: [ObjectIdentifier: Fiber] = [:]
+    var byCopy: [ObjectIdentifier: Fiber] = .init()
     byCopy.reserveCapacity(visited.count + kept.count)
     for entry in visited { byCopy[ObjectIdentifier(entry.copy)] = entry.fiber }
     for entry in kept { byCopy[ObjectIdentifier(entry.node)] = entry.fiber }

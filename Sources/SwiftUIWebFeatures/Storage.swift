@@ -82,8 +82,8 @@ package struct StorageAdapter {
 private enum _ProcessStorage {
   private final class Values: @unchecked Sendable {
     let lock = _RuntimeLock()
-    var app: [String: String] = [:]
-    var scene: [String: String] = [:]
+    var app: [String: String] = .init()
+    var scene: [String: String] = .init()
   }
   private static let values = Values()
   static var appValues: [String: String] {
@@ -116,17 +116,40 @@ package enum StorageRuntime {
       remove: { _ProcessStorage.sceneValues[$0] = nil }
     )
     }()
-    // Indexed by key, so invalidating one key touches only that key's entries.
-    var cache: [String: [StorageScope: String]] = [:]
-    var missing: [String: Set<StorageScope>] = [:]
+    // One cache per scope, indexed by key: the two scopes are fixed, so they are two fields rather than tables keyed
+    // by the scope (Embedded Swift emits the hashed-collection code once per key type).
+    var appCache = ScopeCache()
+    var sceneCache = ScopeCache()
     var sceneSharesAppAdapter = false
-    var revisions: [StorageScope: UInt64] = [.app: 0, .scene: 0]
     var reloadGeneration: UInt64 = 0
     var lastError: StorageError?
     /// Writes the host refused so far; a wrapper compares it around its own write to keep the previous value.
     var failedWrites: UInt64 = 0
   }
+  /// The values read or written for one scope, the keys known to be missing, and the scope's revision.
+  private struct ScopeCache {
+    var values: [String: String] = .init()
+    var missing: Set<String> = []
+    var revision: UInt64 = 0
+
+    mutating func forget(_ key: String) {
+      values[key] = nil
+      missing.remove(key)
+    }
+  }
   private static let state = State()
+  private static func cache(_ scope: StorageScope) -> ScopeCache {
+    switch scope {
+    case .app: return state.appCache
+    case .scene: return state.sceneCache
+    }
+  }
+  private static func withCache(_ scope: StorageScope, _ body: (inout ScopeCache) -> Void) {
+    switch scope {
+    case .app: body(&state.appCache)
+    case .scene: body(&state.sceneCache)
+    }
+  }
   private static var app: StorageAdapter? {
     get { state.app }
     set { state.app = newValue }
@@ -135,21 +158,13 @@ package enum StorageRuntime {
     get { state.scene }
     set { state.scene = newValue }
   }
-  private static var cache: [String: [StorageScope: String]] {
-    get { state.cache }
-    _modify { yield &state.cache }
-  }
-  private static var missing: [String: Set<StorageScope>] {
-    get { state.missing }
-    _modify { yield &state.missing }
-  }
   private static var sceneSharesAppAdapter: Bool {
     get { state.sceneSharesAppAdapter }
     set { state.sceneSharesAppAdapter = newValue }
   }
-  private static var revisions: [StorageScope: UInt64] {
-    get { state.revisions }
-    _modify { yield &state.revisions }
+  private static func setRevisions(app appRevision: UInt64, scene sceneRevision: UInt64) {
+    state.appCache.revision = appRevision
+    state.sceneCache.revision = sceneRevision
   }
   private static var _reloadGeneration: UInt64 {
     get { state.reloadGeneration }
@@ -184,7 +199,7 @@ package enum StorageRuntime {
       app = adapter
       scene = adapter
       sceneSharesAppAdapter = true
-      revisions = [.app: app?.revision?() ?? 0, .scene: scene?.revision?() ?? 0]
+      setRevisions(app: app?.revision?() ?? 0, scene: scene?.revision?() ?? 0)
       _lastError = nil
       _invalidateCache()
     }
@@ -197,7 +212,7 @@ package enum StorageRuntime {
       app = appAdapter
       scene = sceneAdapter
       sceneSharesAppAdapter = false
-      revisions = [.app: app?.revision?() ?? 0, .scene: scene?.revision?() ?? 0]
+      setRevisions(app: app?.revision?() ?? 0, scene: scene?.revision?() ?? 0)
       _lastError = nil
       _invalidateCache()
     }
@@ -225,29 +240,28 @@ package enum StorageRuntime {
   private static func _read(_ key: String, scope: StorageScope) -> String? {
     guard !key.isEmpty else { _lastError = .invalidKey; return nil }
     guard let adapter = adapter(for: scope) else { return nil }
-    if let value = cache[key]?[scope] { return value }
-    if missing[key]?.contains(scope) == true { return nil }
+    let cached = cache(scope)
+    if let value = cached.values[key] { return value }
+    if cached.missing.contains(key) { return nil }
     guard let value = adapter.read(backendKey(key, scope: scope)) else {
-      missing[key, default: []].insert(scope)
+      withCache(scope) { _ = $0.missing.insert(key) }
       return nil
     }
-    cache[key, default: [:]][scope] = value
+    withCache(scope) { $0.values[key] = value }
     return value
   }
 
   /// Caches the value now current for a scoped key, replacing any cached value or missing mark.
   private static func _setCached(_ value: String, scope: StorageScope, key: String) {
-    cache[key, default: [:]][scope] = value
-    missing[key]?.remove(scope)
-    if missing[key]?.isEmpty == true { missing[key] = nil }
+    withCache(scope) {
+      $0.values[key] = value
+      $0.missing.remove(key)
+    }
   }
 
   /// Drops the cached value and missing mark of one scoped key.
   private static func _forget(scope: StorageScope, key: String) {
-    cache[key]?[scope] = nil
-    if cache[key]?.isEmpty == true { cache[key] = nil }
-    missing[key]?.remove(scope)
-    if missing[key]?.isEmpty == true { missing[key] = nil }
+    withCache(scope) { $0.forget(key) }
   }
 
   /// Updates the in-memory value synchronously and lets the host decide when
@@ -266,7 +280,7 @@ package enum StorageRuntime {
   private static func _write(_ value: String, forKey key: String, scope: StorageScope) {
     guard let adapter = adapter(for: scope) else { _lastError = .unavailable; return }
     guard !key.isEmpty else { _lastError = .invalidKey; return }
-    guard revisions[scope, default: 0] < UInt64.max else {
+    guard cache(scope).revision < UInt64.max else {
       _lastError = .revisionExhausted
       return
     }
@@ -297,12 +311,12 @@ package enum StorageRuntime {
       return
     }
     _setCached(value, scope: scope, key: key)
-    revisions[scope, default: 0] += 1
+    withCache(scope) { $0.revision += 1 }
     _lastError = nil
   }
 
   package static func revision(for scope: StorageScope = .app) -> UInt64 {
-    lock.withLock { revisions[scope, default: 0] }
+    lock.withLock { cache(scope).revision }
   }
 
   /// Commits a batch of writes/removals as one logical storage transaction.
@@ -335,7 +349,7 @@ package enum StorageRuntime {
       case .set(let key, _), .remove(let key): return !key.isEmpty
       }
     }) else { _lastError = .invalidKey; throw StorageError.invalidKey }
-    let actual = revisions[scope, default: 0]
+    let actual = cache(scope).revision
     if let expectedRevision, expectedRevision != actual {
       _lastError = .transactionConflict(expected: expectedRevision, actual: actual)
       throw StorageError.transactionConflict(expected: expectedRevision, actual: actual)
@@ -420,10 +434,10 @@ package enum StorageRuntime {
         _setCached(value, scope: scope, key: key)
       case .remove(let key):
         _forget(scope: scope, key: key)
-        missing[key, default: []].insert(scope)
+        withCache(scope) { _ = $0.missing.insert(key) }
       }
     }
-    revisions[scope] = nextRevision
+    withCache(scope) { $0.revision = nextRevision }
     _lastError = nil
     return nextRevision
   }
@@ -454,20 +468,25 @@ package enum StorageRuntime {
 
   private static func _invalidateCache(scope: StorageScope? = nil, key: String? = nil) {
     guard scope != nil || key != nil else {
-      cache.removeAll(keepingCapacity: true)
-      missing.removeAll(keepingCapacity: true)
+      for candidateScope in [StorageScope.app, .scene] {
+        withCache(candidateScope) {
+          $0.values.removeAll(keepingCapacity: true)
+          $0.missing.removeAll(keepingCapacity: true)
+        }
+      }
       refreshRevision(for: .app)
       refreshRevision(for: .scene)
       return
     }
-    // With a key, only that key's entries are visited; a scope-only invalidation still scans every key.
-    let keys = key.map { [$0] } ?? Array(Set(cache.keys).union(missing.keys))
-    for candidateKey in keys {
-      var scopes = Set<StorageScope>()
-      if let entries = cache[candidateKey] { scopes.formUnion(entries.keys) }
-      if let absent = missing[candidateKey] { scopes.formUnion(absent) }
-      for candidateScope in scopes where scope == nil || candidateScope == scope {
-        _forget(scope: candidateScope, key: candidateKey)
+    // With a key, only that key's entries are visited; a scope-only invalidation drops the scope's whole cache.
+    for candidateScope in [StorageScope.app, .scene] where scope == nil || candidateScope == scope {
+      withCache(candidateScope) { cached in
+        if let key {
+          cached.forget(key)
+        } else {
+          cached.values.removeAll(keepingCapacity: true)
+          cached.missing.removeAll(keepingCapacity: true)
+        }
       }
     }
     if let scope {
@@ -479,7 +498,7 @@ package enum StorageRuntime {
   }
 
   private static func refreshRevision(for scope: StorageScope) {
-    if let value = adapter(for: scope)?.revision?() { revisions[scope] = value }
+    if let value = adapter(for: scope)?.revision?() { withCache(scope) { $0.revision = value } }
   }
 
   private static func adapter(for scope: StorageScope) -> StorageAdapter? {
@@ -562,7 +581,7 @@ private final class InMemoryStorage<Value> {
 /// share a source, which only renders a view more than it needs.
 enum _StorageObservation {
 #if hasFeature(Embedded)
-  @MainActor private static var sources: [String: Published<UInt32>] = [:]
+  @MainActor private static var sources: [String: Published<UInt32>] = .init()
 
   @MainActor private static func source(_ key: String) -> Published<UInt32> {
     if let source = sources[key] { return source }

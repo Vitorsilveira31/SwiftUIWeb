@@ -74,7 +74,7 @@ public struct _NodeValues: Hashable, Sendable, Sequence, ExpressibleByDictionary
 
   /// The same values as a dictionary, for an API that takes one.
   public var dictionary: [String: String] {
-    var result: [String: String] = [:]
+    var result: [String: String] = .init()
     result.reserveCapacity(entries.count)
     for entry in entries { result[entry.key] = entry.value }
     return result
@@ -120,4 +120,58 @@ package extension Dictionary where Key == String, Value == String {
       if let existing = self[entry.key] { self[entry.key] = try combine(existing, entry.value) } else { self[entry.key] = entry.value }
     }
   }
+}
+
+/// A render node's event handlers by name: a few at most, kept in the order they were first set.
+///
+/// The same trade as `_NodeValues`: a node carries a handful of handlers, so a scan of the names is quicker than a hash
+/// table, and it spares the binary a `Dictionary<String, _EventHandler>` (Embedded Swift emits the hashed-collection
+/// code for every key and value type it is used with). It reads like the dictionary it replaces: a subscript that
+/// returns nil for a missing name and removes the handler when set to nil, `removeValue(forKey:)`, `keys`, iteration as
+/// `(key:value:)`.
+public struct _NodeEvents: Sequence, ExpressibleByDictionaryLiteral {
+  public typealias Element = (key: String, value: _EventHandler)
+  @usableFromInline var entries: [Element]
+
+  @inlinable public init() { entries = [] }
+
+  public init(dictionaryLiteral elements: (String, _EventHandler)...) {
+    entries = []
+    for (key, value) in elements { self[key] = value }
+  }
+
+  @usableFromInline func index(of key: String) -> Int? {
+    let length = key.utf8.count
+    for index in entries.indices where entries[index].key.utf8.count == length && entries[index].key == key { return index }
+    return nil
+  }
+
+  public subscript(key: String) -> _EventHandler? {
+    get { index(of: key).map { entries[$0].value } }
+    set {
+      if let index = index(of: key) {
+        if let newValue { entries[index].value = newValue } else { entries.remove(at: index) }
+      } else if let newValue {
+        entries.append((key, newValue))
+      }
+    }
+  }
+
+  @discardableResult public mutating func removeValue(forKey key: String) -> _EventHandler? {
+    guard let index = index(of: key) else { return nil }
+    return entries.remove(at: index).value
+  }
+
+  @inlinable public var isEmpty: Bool { entries.isEmpty }
+  @inlinable public var count: Int { entries.count }
+  public var keys: [String] { entries.map { $0.key } }
+
+  /// Whether both hold handlers for the same names, whatever their order.
+  public func hasSameNames(as other: _NodeEvents) -> Bool {
+    guard entries.count == other.entries.count else { return false }
+    for entry in entries where other.index(of: entry.key) == nil { return false }
+    return true
+  }
+
+  @inlinable public func makeIterator() -> IndexingIterator<[Element]> { entries.makeIterator() }
 }

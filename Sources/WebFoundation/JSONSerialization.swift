@@ -110,7 +110,7 @@ open class JSONSerialization: NSObject {
         let written = token.withUnsafeBufferPointer { stream.write($0.baseAddress! + offset, maxLength: token.count - offset) }
         if written <= 0 {
           let cause = stream.streamError as? NSError
-          reason?.pointee = NSError(domain: NSCocoaErrorDomain, code: 512, userInfo: cause.map { ["NSUnderlyingError": $0] } ?? [:])
+          reason?.pointee = NSError(domain: NSCocoaErrorDomain, code: 512, userInfo: cause.map { ["NSUnderlyingError": $0] } ?? .init())
           return -1
         }
         offset += written
@@ -186,7 +186,7 @@ open class JSONSerialization: NSObject {
       for item in items { result.append(_foundationObject(item)) }
       return result
     case .object(let fields):
-      var result: [String: Any] = [:]
+      var result: [String: Any] = .init()
       for (key, field) in fields { result[key] = _foundationObject(field) }
       return result
     }
@@ -214,7 +214,7 @@ open class JSONSerialization: NSObject {
       return .array(tree)
     }
     if let fields = _dictionary(value) {
-      var tree: [String: _EmbeddedJSONValue] = [:]
+      var tree: [String: _EmbeddedJSONValue] = .init()
       for (key, field) in fields {
         guard let element = _embeddedValue(field) else { return nil }
         tree[key] = element
@@ -293,14 +293,14 @@ open class JSONSerialization: NSObject {
 
   private static func _widenedDictionary<T>(_ value: Any, _ type: T.Type) -> [String: Any]? {
     guard let fields = value as? [String: T] else { return nil }
-    var result: [String: Any] = [:]
+    var result: [String: Any] = .init()
     for (key, field) in fields { result[key] = field }
     return result
   }
 
   private static func _widenedOptionalDictionary<T>(_ value: Any, _ type: T.Type) -> [String: Any]? {
     guard let fields = value as? [String: T?] else { return nil }
-    var result: [String: Any] = [:]
+    var result: [String: Any] = .init()
     for (key, field) in fields {
       if let present = field { result[key] = present } else { result[key] = NSNull() }
     }

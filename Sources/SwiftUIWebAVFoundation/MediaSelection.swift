@@ -113,7 +113,7 @@ internal struct _MediaTracks {
   var audible: [AVMediaSelectionOption] = []
   var legible: [AVMediaSelectionOption] = []
   /// The options playing (audio) or shown (subtitles) right now, by characteristic.
-  var active: [String: AVMediaSelectionOption] = [:]
+  var active: [String: AVMediaSelectionOption] = .init()
 
   func options(for characteristic: AVMediaCharacteristic) -> [AVMediaSelectionOption] {
     switch characteristic {
@@ -183,7 +183,7 @@ extension AVURLAsset {
   internal func _receiveTracks(_ payload: String) {
     _tracks = _MediaTracks(payload)
     let waiters = _trackWaiters
-    _trackWaiters = [:]
+    _trackWaiters = .init()
     for (_, waiter) in waiters { waiter.resume() }
   }
 }
@@ -208,7 +208,7 @@ extension AVPlayerItem {
   /// The chosen options, or for a group left automatic what the player plays or shows now.
   nonisolated public var currentMediaSelection: AVMediaSelection {
     _assumeMainActor {
-      var selected = (asset as? AVURLAsset)?._tracks?.active ?? [:]
+      var selected = (asset as? AVURLAsset)?._tracks?.active ?? .init()
       for (key, _) in _noneChosen { selected[key] = nil }
       for (key, option) in _chosenOptions { selected[key] = option }
       return AVMediaSelection(selected: selected)

@@ -387,7 +387,7 @@ struct _InlineMarkdown {
 
   private func attributes(_ style: Style) -> AttributeContainer {
     var container = AttributeContainer()
-    var css: _NodeValues = [:]
+    var css: _NodeValues = .init()
     if style.bold { css["font-weight"] = "700" }
     if style.italic { css["font-style"] = "italic" }
     if style.code { css["font-family"] = "ui-monospace, monospace" }

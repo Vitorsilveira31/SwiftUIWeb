@@ -125,15 +125,15 @@ package enum LocalizedValue: Hashable, Sendable {
 @_spi(Generated) public enum LocalizationTable {
   private static let lock = _RuntimeLock()
   private final class State: @unchecked Sendable {
-    var tables: [String: [String: LocalizedValue]] = [:]
-    var sortedTables: [String: [LocalizationSortedEntries]] = [:]
+    var tables: [String: [String: LocalizedValue]] = .init()
+    var sortedTables: [String: [LocalizationSortedEntries]] = .init()
     var development = "en"
     var preferred: String?
     /// What `lookup` found for a key in the preferred language (nil: nothing), with the key exactly as it was looked up:
     /// a render resolves the same keys on every pass, and each lookup otherwise rebuilt the candidate language names and
     /// searched every table. A `String` key matches any canonically equivalent one, where the tables compare bytes, so
     /// a hit counts only when the bytes are the same too. Emptied whenever a table or a language changes.
-    var found: [String: (key: String, result: (value: LocalizedValue, language: String)?)] = [:]
+    var found = _ReferenceTable<(key: String, result: (value: LocalizedValue, language: String)?)>()
   }
   // Every access happens under `lock`.
   private static let state = State()
@@ -174,7 +174,7 @@ package enum LocalizedValue: Hashable, Sendable {
   package static func register(language: String, entries: [String: LocalizedValue]) {
     let name = normalized(language)
     lock.withLock {
-      var merged = tables[name] ?? [:]
+      var merged = tables[name] ?? .init()
       for (key, value) in entries { merged[key] = value }
       tables[name] = merged
       forgetLookups()
@@ -191,7 +191,7 @@ package enum LocalizedValue: Hashable, Sendable {
     lock.withLock { sortedTables[name, default: []].append(entries); forgetLookups() }
   }
 
-  package static func removeAll() { lock.withLock { tables = [:]; sortedTables = [:]; forgetLookups() } }
+  package static func removeAll() { lock.withLock { tables = .init(); sortedTables = .init(); forgetLookups() } }
 
   static func normalized(_ identifier: String) -> String {
     var result = ""

@@ -62,7 +62,7 @@
 }
 
 @MainActor private func _cornerStyles(of node: _RenderNode) -> _NodeValues {
-  var corners: _NodeValues = [:]
+  var corners: _NodeValues = .init()
   for (property, value) in node.styles where property.hasPrefix("border") && property.hasSuffix("radius") && !value.isEmpty {
     corners[property] = value
   }

@@ -140,13 +140,13 @@ public extension TableColumn {
   /// A fixed column width (`nil` leaves the column flexible).
   nonisolated func width(_ width: CGFloat? = nil) -> TableColumn<RowValue, Sort, Content, Label> {
     var copy = self
-    copy._widthStyles = width.map { ["width": "\(_swiftUIWebDescribe($0))px"] } ?? [:]
+    copy._widthStyles = width.map { ["width": "\(_swiftUIWebDescribe($0))px"] } ?? .init()
     return copy
   }
 
   nonisolated func width(min: CGFloat? = nil, ideal: CGFloat? = nil, max: CGFloat? = nil) -> TableColumn<RowValue, Sort, Content, Label> {
     var copy = self
-    var styles: _NodeValues = [:]
+    var styles: _NodeValues = .init()
     if let min { styles["min-width"] = "\(_swiftUIWebDescribe(min))px" }
     if let ideal { styles["width"] = "\(_swiftUIWebDescribe(ideal))px" }
     if let max { styles["max-width"] = "\(_swiftUIWebDescribe(max))px" }

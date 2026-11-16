@@ -83,7 +83,7 @@ public extension Text {
 /// The custom attributes of a text, by type.
 struct _TextCustomAttributes {
   private var values = _TypedValueStorage<ObjectIdentifier>()
-  private var hashes: [ObjectIdentifier: Int] = [:]
+  private var hashes: [ObjectIdentifier: Int] = .init()
 
   var isEmpty: Bool { hashes.isEmpty }
 

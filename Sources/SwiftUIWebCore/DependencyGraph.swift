@@ -68,8 +68,8 @@
     /// Sources read without a leaf credit left to cover the read.
     var unproven: Set<_StateSourceID> = []
     /// Leaf reads still covered per source; a key stays after its credits are spent, because an unproven leaf is structural.
-    var credits: [_StateSourceID: UInt32] = [:]
-    var owners: [_StateSourceID: Set<UInt64>] = [:]
+    var credits: [_StateSourceID: UInt32] = .init()
+    var owners: [_StateSourceID: Set<UInt64>] = .init()
     var readers: Set<UInt64> = []
     /// Owners whose committed edges the pass keeps: a subtree the render reused without running its bodies read
     /// nothing in this pass, and still depends on what it read when it last ran.
@@ -79,9 +79,9 @@
   private var structural: Set<_StateSourceID> = []
   private var observationSources: Set<_StateSourceID> = []
   /// `source -> owners`, the committed graph the dirty queries read.
-  private var owners: [_StateSourceID: Set<UInt64>] = [:]
+  private var owners: [_StateSourceID: Set<UInt64>] = .init()
   /// `owner -> sources`, the inverse of `owners`: replacing an owner retires its edges without scanning every source.
-  private var byOwner: [UInt64: Set<_StateSourceID>] = [:]
+  private var byOwner: [UInt64: Set<_StateSourceID>] = .init()
   private var dirty: Set<_StateSourceID> = []
   private var explicit: Set<_StateSourceID> = []
   private var pass: Pass?

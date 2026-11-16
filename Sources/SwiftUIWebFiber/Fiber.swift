@@ -73,16 +73,19 @@ func _nearestMountedRenderOwnerIdentity(
   return nil
 }
 
-package struct FiberIdentity: Hashable, CustomStringConvertible {
-  /// The keys from the root, as a chain that shares its prefix with the identity of the parent (see `_FiberPath`).
-  package let fiberPath: _FiberPath
-  package init(fiberPath: _FiberPath) { self.fiberPath = fiberPath }
-  package init(path: [_FiberKey]) { fiberPath = _FiberPath(path) }
+/// A fiber's identity: the keys from the root, as a chain that shares its prefix with the identity of the parent. It is
+/// the same type as `_FiberPath`, not a wrapper of it: Embedded Swift emits its own copy of the `Dictionary`/`Set`
+/// code for every key type, and the tables keyed by an identity and by a path then share one.
+package typealias FiberIdentity = _FiberPath
+
+extension _FiberPath {
+  package init(fiberPath: _FiberPath) { self = fiberPath }
+  package init(path: [_FiberKey]) { self.init(path) }
+  package var fiberPath: _FiberPath { self }
   /// The keys from the root. Linear in the depth.
-  package var path: [_FiberKey] { fiberPath.keys }
-  package var description: String { fiberPath.description }
+  package var path: [_FiberKey] { keys }
   /// The identity of the child under `key`.
-  package func child(_ key: _FiberKey) -> FiberIdentity { FiberIdentity(fiberPath: fiberPath.appending(key)) }
+  package func child(_ key: _FiberKey) -> _FiberPath { appending(key) }
 }
 
 /// Compact structural identity used by the retained graph. The semantic
@@ -95,6 +98,14 @@ package struct FiberIdentity: Hashable, CustomStringConvertible {
   public let generation: UInt32
   public init(index: UInt32, generation: UInt32) {
     self.index = index; self.generation = generation
+  }
+
+  /// The id as one integer, the generation above the index. Tables keyed by an id use it: Embedded Swift emits its own
+  /// copy of the `Dictionary`/`Set` code for every key type, and `UInt64` keys share the copy the owner tables use.
+  package var packed: UInt64 { UInt64(generation) << 32 | UInt64(index) }
+  package init(packed: UInt64) {
+    index = UInt32(truncatingIfNeeded: packed)
+    generation = UInt32(truncatingIfNeeded: packed >> 32)
   }
 }
 
@@ -367,7 +378,7 @@ final class BindingRuntime {
     var sources: Set<_StateSourceID> = []
   }
 
-  private struct CellKey: Hashable {
+  private struct CellKey: Equatable {
     let identity: FiberIdentity
     let source: _StateSourceID
     let operation: _LeafBindingOperation
@@ -379,14 +390,21 @@ final class BindingRuntime {
     var reader: () -> String
     var lastValue: String
     var live: Bool
+    /// The last `sync` that found the cell's binding on its fiber.
+    var seenPass: UInt64
   }
 
   private let store: StateStore
   private var cells: [BindingCell?] = []
   private var free: [Int] = []
-  private var indices: [CellKey: Int] = [:]
-  private var sourceCells: [_StateSourceID: [Int]] = [:]
-  private var sourceSubscriptions: [_StateSourceID: _StateSubscription] = [:]
+  /// The cells of each fiber, by its identity: a fiber declares a binding or two, so a cell is found by scanning its
+  /// fiber's few. A table keyed by identity rather than by `CellKey` shares its code with the framework's other
+  /// identity tables (Embedded Swift emits the hashed-collection code once per key and value type).
+  private var indices: [FiberIdentity: [Int]] = .init()
+  /// Counts `sync` calls; a cell whose `seenPass` is behind it after the walk is no longer declared.
+  private var pass: UInt64 = 0
+  private var sourceCells: [_StateSourceID: [Int]] = .init()
+  private var sourceSubscriptions: [_StateSourceID: _StateSubscription] = .init()
   private let dirtySourceBox = DirtySourceBox()
   private var dirtySources: Set<_StateSourceID> {
     get { dirtySourceBox.sources }
@@ -418,14 +436,21 @@ final class BindingRuntime {
   }
 
   func sync(root: Fiber) {
-    var seen = Set<CellKey>()
+    pass &+= 1
     var provenSources = Set<_StateSourceID>()
-    collect(root, seen: &seen, provenSources: &provenSources)
+    collect(root, provenSources: &provenSources)
 
-    let staleKeys = indices.keys.filter { !seen.contains($0) }
-    for key in staleKeys {
-      guard let index = indices.removeValue(forKey: key) else { continue }
-      retireCell(at: index)
+    // Retire the cells no fiber declared in this pass.
+    var changed: [(identity: FiberIdentity, indices: [Int])] = []
+    for (identity, candidates) in indices where candidates.contains(where: { !isCurrent($0) }) {
+      changed.append((identity, candidates))
+    }
+    for (identity, candidates) in changed {
+      var kept: [Int] = []
+      for index in candidates {
+        if isCurrent(index) { kept.append(index) } else { retireCell(at: index) }
+      }
+      indices[identity] = kept.isEmpty ? nil : kept
     }
 
     sourceCells.removeAll(keepingCapacity: true)
@@ -440,17 +465,36 @@ final class BindingRuntime {
     store._endRenderPass(provenLeafSources: provenSources)
   }
 
-  private func collect(_ root: Fiber, seen: inout Set<CellKey>, provenSources: inout Set<_StateSourceID>) {
+  /// Whether the cell at `index` was declared in the current pass.
+  private func isCurrent(_ index: Int) -> Bool {
+    index < cells.count && cells[index]?.seenPass == pass
+  }
+
+  private func index(of key: CellKey) -> Int? {
+    guard let candidates = indices[key.identity] else { return nil }
+    for index in candidates where index < cells.count && cells[index]?.key == key { return index }
+    return nil
+  }
+
+  private func removeIndex(of key: CellKey) -> Int? {
+    guard var candidates = indices[key.identity],
+          let position = candidates.firstIndex(where: { $0 < cells.count && cells[$0]?.key == key }) else { return nil }
+    let index = candidates.remove(at: position)
+    indices[key.identity] = candidates.isEmpty ? nil : candidates
+    return index
+  }
+
+  private func collect(_ root: Fiber, provenSources: inout Set<_StateSourceID>) {
     var pending = [root]
     while let fiber = pending.popLast() {
       for descriptor in fiber.renderNode.leafBindings {
         let key = CellKey(identity: fiber.identity, source: descriptor.sourceID, operation: descriptor.operation)
-        seen.insert(key)
         provenSources.insert(descriptor.sourceID)
         let value = descriptor.value()
-        if let index = indices[key], index < cells.count, cells[index]?.ownerID == fiber.structuralID {
+        if let index = index(of: key), cells[index]?.ownerID == fiber.structuralID {
           cells[index]!.reader = descriptor.value
           cells[index]!.live = true
+          cells[index]!.seenPass = pass
           // A structural pass has already committed the semantic value to the
           // DOM, so it is always the new baseline. Direct leaf commits do not
           // call sync and therefore retain their own previous-value comparison.
@@ -461,7 +505,7 @@ final class BindingRuntime {
             cells[index]!.lastValue = value
           }
         } else {
-          if let previousIndex = indices.removeValue(forKey: key), previousIndex < cells.count {
+          if let previousIndex = removeIndex(of: key) {
             retireCell(at: previousIndex)
           }
           let index: Int
@@ -471,9 +515,11 @@ final class BindingRuntime {
             index = cells.count
             cells.append(nil)
           }
-          cells[index] = BindingCell(key: key, ownerID: fiber.structuralID, reader: descriptor.value, lastValue: value, live: true)
+          cells[index] = BindingCell(
+            key: key, ownerID: fiber.structuralID, reader: descriptor.value, lastValue: value, live: true, seenPass: pass
+          )
           _RuntimeMemoryMetrics.recordBindingCellInit()
-          indices[key] = index
+          indices[key.identity, default: []].append(index)
         }
         if sourceSubscriptions[descriptor.sourceID] == nil {
           let dirtySourceBox = self.dirtySourceBox
@@ -538,10 +584,10 @@ package final class FiberTree {
   private let bindingRuntime: BindingRuntime
   // Owner and identity routing are hot paths during targeted Observation
   // updates. Keep direct indexes instead of walking the retained tree.
-  private var fibersByIdentity: [FiberIdentity: Fiber] = [:]
+  private var fibersByIdentity: [FiberIdentity: Fiber] = .init()
   /// The owner registry's size (see `_RenderOwnerRegistry._registeredOwnerCount`).
   package var _registeredOwnerCount: Int { renderOwnerRegistry._registeredOwnerCount }
-  private var fibersByOwnerToken: [UInt64: Fiber] = [:]
+  private var fibersByOwnerToken: [UInt64: Fiber] = .init()
   /// `_RenderNode.sealedWrites` when the pass being reconciled started to render, and whether its render wrote a node a
   /// Fiber holds (a modifier writing into the content it wraps): then a reused node is not taken for unchanged. The
   /// reconcile's own writes (the handlers it moves onto the node it keeps) do not count.
@@ -550,15 +596,15 @@ package final class FiberTree {
   private func noteRenderEnded() { renderWroteSealedNodes = _RenderNode.sealedWrites != sealedWritesAtRender }
   /// The tokens Fibers gave up while a pass reconciled (`updateFiber`); nil outside one.
   private var givenUpOwnerTokens: [UInt64]?
-  private var ownerPathsByToken: [UInt64: _FiberPath] = [:]
-  private var ownerTokensByPath: [_FiberPath: Set<UInt64>] = [:]
+  private var ownerPathsByToken: [UInt64: _FiberPath] = .init()
+  private var ownerTokensByPath: [_FiberPath: Set<UInt64>] = .init()
   /// A render-owner token can outlive the Fiber it was originally attached
   /// to by one observation turn. Preserve that Fiber's structural identity
   /// for a bounded window so a publication can route to the nearest mounted
   /// owner without guessing from _RenderContext paths (which do not mirror the
   /// retained Fiber key path).
   private let retiredOwnerIdentityLimit = 4096
-  private var retiredOwnerIdentities: [UInt64: _FiberPath] = [:]
+  private var retiredOwnerIdentities: [UInt64: _FiberPath] = .init()
   private var retiredOwnerIdentityTokens: [UInt64] = []
   private var retiredOwnerIdentityCursor = 0
   private let preferenceStore: _PreferenceStore
@@ -577,7 +623,7 @@ package final class FiberTree {
   /// description holds its children's numbers, not their whole keys, so a key is the size of one node, not of its
   /// subtree. Numbers are never reused: past the limit the table starts again empty, and a description seen again gets a
   /// new number, which only costs one reuse.
-  private var staticTemplateNumbers: [String: Int] = [:]
+  private var staticTemplateNumbers: [String: Int] = .init()
   private var nextStaticTemplateNumber = 0
   private let staticTemplateNumberLimit = 65_536
   private let staticTemplateCacheLimit = 2048
@@ -1322,21 +1368,21 @@ package final class FiberTree {
     /// CSS that reproduces the hovered look, or nil when styles alone cannot.
     let css: String?
   }
-  private var hoverEntries: [FiberIdentity: HoverEntry] = [:]
+  private var hoverEntries: [FiberIdentity: HoverEntry] = .init()
   private var hoverRulesDirty = false
   /// A short key per hovering fiber: what the host files that fiber's rules under.
-  private var hoverKeys: [FiberIdentity: Int] = [:]
+  private var hoverKeys: [FiberIdentity: Int] = .init()
   private var nextHoverKey = 0
   /// The rules by key the host holds once it has committed every publication so far.
-  private var hoverPublished: [Int: String] = [:]
+  private var hoverPublished: [Int: String] = .init()
   /// Changes by key (the new rules, or nil to remove them) published at `epoch` and not acknowledged yet, and the ones
   /// this pass found, published next (`_hoverRulesPublished`).
-  private var hoverUnacknowledged: [Int: (css: String?, epoch: UInt64)] = [:]
-  private var hoverChanges: [Int: String?] = [:]
+  private var hoverUnacknowledged: [Int: (css: String?, epoch: UInt64)] = .init()
+  private var hoverChanges: [Int: String?] = .init()
   /// Hovering fibers met for the first time whose CSS is learned later (`_learnDeferredHover`), with the node they showed
   /// and the Fiber of the owner that declares the state, found then: by the deferred pass the probe's token may be retired
   /// while that Fiber stays.
-  private var hoverDeferred: [FiberIdentity: (node: ObjectIdentifier, owner: FiberIdentity)] = [:]
+  private var hoverDeferred: [FiberIdentity: (node: ObjectIdentifier, owner: FiberIdentity)] = .init()
 
   private func nodeIDSelector(_ fiber: Fiber) -> String {
     "[data-embedded-node-id^=\"\(fiber.structuralID.index):\(fiber.structuralID.generation):\"]"
@@ -1398,7 +1444,7 @@ package final class FiberTree {
     let hovered = renderOwnerRegistry._renderSpeculative(renderToken)
     _ = probe.setSilently(previous)
     // The Fiber tree holds the current children; a node's own `children` can lag.
-    var fibersByNode: [ObjectIdentifier: Fiber] = [:]
+    var fibersByNode: [ObjectIdentifier: Fiber] = .init()
     var toIndex = [ownerFiber]
     while let fiber = toIndex.popLast() {
       fibersByNode[ObjectIdentifier(fiber.renderNode)] = fiber
@@ -1437,7 +1483,7 @@ package final class FiberTree {
     hoverUnacknowledged = hoverUnacknowledged.filter { $0.value.epoch > acked }
     if hoverRulesDirty {
       hoverRulesDirty = false
-      var current: [Int: String] = [:]
+      var current: [Int: String] = .init()
       for (identity, entry) in hoverEntries {
         guard let css = entry.css else { continue }
         let key: Int
@@ -2378,7 +2424,7 @@ package final class FiberTree {
   /// Only duplicate semantic keys receive an occurrence scope, preventing two
   /// live Fibers from sharing the same identity path.
   private func effectiveChildKeys(_ children: [_RenderNode]) -> [_FiberKey] {
-    var occurrences: [_FiberKey: Int] = [:]
+    var occurrences: [_FiberKey: Int] = .init()
     return children.enumerated().map { offset, child in
       let semantic = child.key ?? _FiberKey(offset)
       let occurrence = occurrences[semantic, default: 0]
@@ -2537,7 +2583,7 @@ package final class FiberTree {
       tag: descriptor.spacerTag,
       columnCount: descriptor.spacerColumnCount
     ))
-    var seen = Set<Int>()
+    var seen = Set<UInt64>()
     var provenLeafSources = Set<_StateSourceID>()
     let closureOwnerToken = nearestOwnerToken(above: owner)
     // Materialization replaces the visible logical window of this owner. Use
@@ -2548,7 +2594,7 @@ package final class FiberTree {
     stateStore._beginSubtreeRenderPass(replacing: replacingOwnerTokens)
     sealedWritesAtRender = _RenderNode.sealedWrites
     for index in indices where index >= 0 && index < descriptor.count {
-      guard seen.insert(index).inserted else { continue }
+      guard seen.insert(UInt64(index)).inserted else { continue }
       let key = descriptor.keyAt(index)
       var rowContext = _RenderContext(
         environment: environment,
@@ -2579,7 +2625,7 @@ package final class FiberTree {
     }
     // Recorded whether or not rows changed: a later publication compares this window (its revision, range and row keys)
     // with the collection's current one to find rows rendered from data that has since changed.
-    let lower = seen.min() ?? 0, upper = seen.max().map { $0 + 1 } ?? 0
+    let lower = seen.min().map { Int($0) } ?? 0, upper = seen.max().map { Int($0) + 1 } ?? 0
     owner._lazyWindow = (descriptor.revision, lower, upper, descriptor.count, beforeExtent, (lower..<upper).map(descriptor.keyAt))
     stateStore._endSubtreeRenderPass(provenLeafSources: provenLeafSources)
     children.append(makeLazySpacer(
