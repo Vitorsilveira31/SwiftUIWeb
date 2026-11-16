@@ -325,6 +325,8 @@ function main() {
     const plainText = planFor("PlainText", "import SwiftUIWeb\nstruct V: View { @State var query = \"\"\n var body: some View { VStack { Text(\"\\(3) works\"); TextField(\"Search\", text: $query); Button(\"Add\") {} } } }\n");
     for (const define of launcherDefines) assert(!plainText.swiftDefines.includes(define), `a text-only application compiled in ${define}`);
     const launcherCases = [
+      ["ButtonImage", "struct V: View { var body: some View { Button(\"Share\", image: \"share\") {} } }", "IMAGES"],
+      ["TabImage", "struct V: View { var body: some View { TabView { Tab(\"Home\", image: \"home\") { Text(\"a\") } } } }", "IMAGES"],
       ["AppStorage", "struct V: View { @AppStorage(\"count\") var count = 0\n var body: some View { Text(\"a\") } }", "STORAGE"],
       ["SceneStorage", "struct V: View { @SceneStorage(\"tab\") var tab = 0\n var body: some View { Text(\"a\") } }", "STORAGE"],
       ["Defaults", "func read() -> Int { UserDefaults.standard.integer(forKey: \"n\") }", "STORAGE"],

@@ -257,9 +257,10 @@ const rules = {
   // `Image(systemName:)` is rendered by the icon adapter and must not pull
   // the image loader. The negative lookahead still keeps all source/asset and
   // AsyncImage initializers reachable.
-  // `Label(_, image:)` loads an asset image exactly like `Image(_)`; the lookbehind keeps
-  // `systemImage:` (an icon-adapter symbol) out of the rule.
-  images: /(?:\bAsyncImage\s*\(|\bImage\s*\(\s*(?!systemName\s*:|systemImage\s*:)|\bLabel\s*\([^\n]*(?<![A-Za-z])image\s*:)/.test(applicationText),
+  // `Label(_, image:)`, and every other initializer with an `image:` argument (`Button`, `Tab`, `Toggle`, `Menu`,
+  // `ContentUnavailableView`, ...), loads an asset image exactly like `Image(_)`; the lookbehind keeps `systemImage:` (an
+  // icon-adapter symbol) out of the rule. An `ImageResource` names an asset too.
+  images: /(?:\bAsyncImage\s*\(|\bImage\s*\(\s*(?!systemName\s*:|systemImage\s*:)|(?<![A-Za-z])image\s*:|\bImageResource\b)/.test(applicationText),
   adaptiveMedia: /\b(?:AVPlayer|AVAsset|AVURLAsset|VideoPlayer)\b/.test(applicationText),
   maps: /(?:MapLibre|\bMap\s*\(|MapProvider|Marker\s*\(|MapCameraPosition)/.test(applicationText),
   charts: /(?:\bChart\s*\(|BarMark|LineMark|PointMark|AreaMark|RuleMark)/.test(applicationText),
