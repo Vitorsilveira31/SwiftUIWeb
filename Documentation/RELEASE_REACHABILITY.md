@@ -10,7 +10,7 @@ compile gates, runtime helper scripts, the icon catalog and optional CSS.
 - **Application evidence** (`--source`) is the consumer's own code: for an
   external package its `Sources` and `Web`; for the framework's examples and test apps
   only `Examples/<product>` or `Tests/Apps/<product>`. Only this text switches a feature on (`MeshGradient`,
-  `Canvas`, `onDrop`, `PhotosPicker`, `URLSession`, `@AppStorage`, ...).
+  `Canvas`, `onDrop`, `onHover`, `PhotosPicker`, `URLSession`, `@AppStorage`, ...).
 - **Framework roots** (`--framework-source`, plus `SwiftUIWebCore` and
   `SwiftUIWebBrowser`) supply vocabulary only: CSS class names, the icon
   catalog and asset discovery. The framework mentioning a feature is never

@@ -283,6 +283,10 @@ function main() {
     assert(draggable.features.dragDrop === true, "`.draggable(` alone did not enable dragDrop");
     assert(draggable.swiftDefines.includes("SWIFTUIWEB_RELEASE_HAS_DRAGDROP"), "`.draggable(` alone did not keep BrowserDragDrop compiled in");
     assert(draggable.browserBindings.includes("drag-drop"), "`.draggable(` alone did not keep the drag-drop binding");
+    const hover = planFor("Hover", "import SwiftUIWeb\nstruct V: View { @State private var hovered = false\n var body: some View { Text(\"a\").onHover { hovered = $0 } } }\n");
+    assert(hover.features.hover === true, "`.onHover` did not enable hover");
+    assert(hover.swiftDefines.includes("SWIFTUIWEB_RELEASE_HAS_HOVER"), "`.onHover` did not keep the hover rules compiled in");
+    assert(!draggable.swiftDefines.includes("SWIFTUIWEB_RELEASE_HAS_HOVER"), "an app without `onHover` kept the hover rules");
     const labelImage = planFor("LabelImage", "import SwiftUIWeb\nstruct V: View { var body: some View { Label(\"Logo\", image: \"logo\") } }\n");
     assert(labelImage.features.images === true, "`Label(_, image:)` did not enable the image loader");
     assert(labelImage.swiftDefines.includes("SWIFTUIWEB_RELEASE_HAS_IMAGES"), "`Label(_, image:)` did not keep image support compiled in");

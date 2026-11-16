@@ -1307,6 +1307,16 @@ package final class FiberTree {
 
   // MARK: Hover rules
 
+  #if SWIFTUIWEB_RELEASE && !SWIFTUIWEB_RELEASE_HAS_HOVER
+  // A release of an application whose code never writes `onHover` (`Tools/release-reachability.js`, feature `hover`)
+  // learns no hovered look: a probe it meets anyway keeps its enter/leave events, so Swift answers that hover as it does
+  // for one styles cannot describe, and the release does not carry the speculative render, the comparison and the rules.
+  package func _resolveHover(for fiber: Fiber, deferringNew: Bool = false) -> Bool { false }
+  package var _hasDeferredHover: Bool { false }
+  package func _learnDeferredHover() {}
+  package func _hoverRuleChanges(acked: UInt64) -> String? { nil }
+  package func _hoverRulesPublished(epoch: UInt64) {}
+  #else
   private struct HoverEntry {
     let node: ObjectIdentifier
     /// CSS that reproduces the hovered look, or nil when styles alone cannot.
@@ -1455,6 +1465,7 @@ package final class FiberTree {
     for (key, css) in hoverChanges { hoverUnacknowledged[key] = (css, epoch) }
     hoverChanges.removeAll(keepingCapacity: true)
   }
+  #endif
 
   private func findFiber(ownerToken: UInt64) -> Fiber? { findOwner(ownerToken: ownerToken)?.fiber }
 
