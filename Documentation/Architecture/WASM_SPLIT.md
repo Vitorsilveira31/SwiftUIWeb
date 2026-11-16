@@ -67,34 +67,38 @@ is a same-origin fetch and compiles under the `'wasm-unsafe-eval'` the page alre
 
 ## 3. Measured
 
-Measured on 2026-11-16 on an Apple-silicon Mac shared with other work, Chromium, brotli sizes (quality 11). Sizes are
-deterministic; the timings are medians of interleaved runs (the split and the unsplit bundle alternate, each in a fresh
+Measured on 2026-11-16 (main at dbc7cb8f) on an Apple-silicon Mac shared with other work, Chromium, brotli sizes
+(quality 11). Sizes are deterministic; the timings are medians of interleaved runs (the split and the unsplit bundle alternate, each in a fresh
 browser), with the 99 percent bootstrap interval and signed-rank test of `Tools/perf-ab-stats.mjs`.
 
 | Module sizes (brotli) | Unsplit `app.wasm` | `app.wasm` (first screen) | `app-rest.wasm` | Total |
 |---|---|---|---|---|
-| Board | 430.2 KB | 270.5 KB (−37%) | 198.1 KB | 468.6 KB (+9%) |
-| Showcase | 947.0 KB | 365.9 KB (−61%) | 676.6 KB | 1,042.5 KB (+10%) |
-| Project site | 801.3 KB | 519.3 KB (−35%) | 370.0 KB | 889.3 KB (+11%) |
+| Board | 378.8 KB | 226.5 KB (−40%) | 187.3 KB | 413.8 KB (+9%) |
+| Showcase | 895.8 KB | 344.3 KB (−62%) | 641.5 KB | 985.8 KB (+10%) |
+| Project site | 751.3 KB | 493.0 KB (−34%) | 340.5 KB | 833.5 KB (+11%) |
 
 The total grows by the placeholders (one import per moved function), the exports the second module needs, the calls of the
 first module to a moved function, which go through a table, and the two halves being compressed apart (about 15 KB of the
-Board's 38 KB).
+Board's 35 KB).
 
 Board, cold load (Worker, the default):
 
 | | Unsplit | Split | Change |
 |---|---|---|---|
-| Transferred to show the board (the page's own requests) | 616.2 KB | 458.9 KB | −25.5% |
-| Every byte of the visit, the Worker's request for `app-rest.wasm` included | 592.9 KB | 633.0 KB | +6.8% |
-| Cold load to the board on screen, local network (15 rounds) | 74.2 ms | 74.7 ms | no significant difference |
-| Cold load to the board on screen, Slow 4G (12 rounds) | 3,406 ms | 2,609 ms | −23.4% |
-| A key typed in the search right when the board shows, Slow 4G (6 rounds) | 118 ms | 1,133 ms | it waits for `app-rest.wasm` |
-| The same key 1 s after the board shows, Slow 4G (12 rounds) | 118 ms | 220 ms | the end of the download |
+| Transferred to show the board (the page's own requests) | 564.0 KB | 414.3 KB | −26.5% |
+| Every byte of the visit, the Worker's request for `app-rest.wasm` included | 540.8 KB | 577.6 KB | +6.8% |
+| Cold load to the board on screen, local network (12 rounds) | 75.7 ms | 81.9 ms | no significant difference |
+| Cold load to the board on screen, Slow 4G (12 rounds) | 3,151 ms | 2,372 ms | −24.7% |
+| A key typed in the search right when the board shows, Slow 4G (6 rounds) | 123 ms | 1,139 ms | it waits for `app-rest.wasm` |
+| The same key 1 s after the board shows, Slow 4G (12 rounds) | 124 ms | 122 ms | no significant difference |
 
-On the main thread (`?render-in-worker=0`, Slow 4G, 10 rounds) the split costs what its extra bytes cost: 3,402 ms against
-3,621 ms (+6.5%), both modules downloading side by side. Every interaction of `Tools/compare-react.mjs` on a local network
-starts after `app-rest.wasm` has arrived; its numbers are in the pull request.
+On the main thread (`?render-in-worker=0`, Slow 4G, 10 rounds) the split costs what its extra bytes cost: 3,153 ms against
+3,346 ms (+6.2%), both modules downloading side by side. On a local network the split costs a few milliseconds at the start: the interleaved runs above put the
+Worker at 75.7 against 81.9 ms (not a significant difference); two separate `Tools/compare-react.mjs` runs put it at 69 against
+75 ms, and the main thread, which compiles both modules before it starts, at 53 against 66 ms. Delaying the background
+download by 2 s does not change it (81.5 against 86.8 ms, not significant), so it is the start of the split module itself,
+not the download competing with the first screen. Every interaction of `Tools/compare-react.mjs` starts after
+`app-rest.wasm` has arrived and none of them moves beyond the spread of separate runs; the tables are in the pull request.
 
 ## 4. Limits
 
