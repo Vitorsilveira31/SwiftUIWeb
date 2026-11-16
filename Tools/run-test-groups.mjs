@@ -7,8 +7,9 @@
 //
 // Each target's output goes to .build/test-logs/<target>.log; the console gets one line per target, and the end of the
 // log of every target that failed. The exit status is 1 when any target failed. Every group runs to its end, so one
-// failure does not hide the others. TEST_GROUPS_JOBS (default 8) caps how many groups run together; 1 runs them in order.
+// failure does not hide the others. TEST_GROUPS_JOBS (default: the number of cores, at most 8) caps how many groups run together; 1 runs them in order. A group opens its own browsers, so more groups than cores slow every test until the ones that wait for the page give up.
 import { spawn } from "node:child_process";
+import { availableParallelism } from "node:os";
 import { mkdirSync, openSync, closeSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,7 +38,7 @@ function runTarget(target, make) {
   });
 }
 
-export async function runGroups(groups, { make = process.env.MAKE || "make", jobs = Number(process.env.TEST_GROUPS_JOBS || 8), print = console.log } = {}) {
+export async function runGroups(groups, { make = process.env.MAKE || "make", jobs = Number(process.env.TEST_GROUPS_JOBS || Math.max(1, Math.min(8, availableParallelism()))), print = console.log } = {}) {
   mkdirSync(LOGS, { recursive: true });
   const results = [];
   const queue = [...groups];

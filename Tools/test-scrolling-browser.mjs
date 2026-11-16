@@ -146,14 +146,18 @@ await runSuite(async () => {
     });
     await page.getByRole("button", { name: "Animate to top edge", exact: true }).click();
     if (smoothMoves) {
-      await page.waitForFunction(
-        () => {
-          const e = document.querySelector(".scroll-view[data-scroll-position='true']:not(.scroll-horizontal)");
-          return e && e.scrollTop <= 1;
-        },
-        undefined,
-        { timeout: 8000 },
-      );
+      try {
+        await page.waitForFunction(
+          () => {
+            const e = document.querySelector(".scroll-view[data-scroll-position='true']:not(.scroll-horizontal)");
+            return e && e.scrollTop <= 16;
+          },
+          undefined,
+          { timeout: 30_000 },
+        );
+      } catch (error) {
+        throw new Error(`the animated top edge did not reach the top: ${JSON.stringify(await topState(modern))} ${JSON.stringify(await coordinatorTrace())}`, { cause: error });
+      }
     } else {
       await page.waitForTimeout(300);
     }
@@ -165,7 +169,8 @@ await runSuite(async () => {
       `withAnimation edge change was not smooth: ${JSON.stringify(beforeAnimation)} -> ${JSON.stringify(afterAnimation)}`,
     );
     if (smoothMoves) {
-      assert.ok(animatedTop.top <= 1, `animated edge target did not reach the top: ${JSON.stringify(animatedTop)}`);
+      // A view-aligned list snaps to the first item, which starts a few points below the top edge.
+      assert.ok(animatedTop.top <= 16, `animated edge target did not reach the top: ${JSON.stringify(animatedTop)}`);
     }
     const rail = page.locator(".scroll-horizontal[data-scroll-position='true']").first();
     await page.getByRole("button", { name: "Scroll rail to trailing edge", exact: true }).click();
@@ -191,7 +196,7 @@ await runSuite(async () => {
     await page.waitForTimeout(500);
     const scrolledByUser = await topState(modern);
     // The report follows the scroll's settling (140ms after the last scroll event), which engines spread out differently.
-    await page.getByText("Positioned by user: true", { exact: true }).waitFor({ timeout: 4000 });
+    await page.getByText("Positioned by user: true", { exact: true }).waitFor({ timeout: 20_000 });
     assert.equal(
       await page.getByText("Positioned by user: true", { exact: true }).count(),
       1,
@@ -229,7 +234,7 @@ await runSuite(async () => {
     // Every way a user moves a scroll surface sets the binding; a programmatic offset does not.
     const settleProgrammatic = async () => {
       await page.getByRole("button", { name: "Scroll to bottom edge", exact: true }).click();
-      await page.getByText("Positioned by user: false", { exact: true }).waitFor({ timeout: 4000 });
+      await page.getByText("Positioned by user: false", { exact: true }).waitFor({ timeout: 20_000 });
       await page.waitForTimeout(400);
     };
     await settleProgrammatic();
@@ -250,7 +255,7 @@ await runSuite(async () => {
     });
     const beforeKey = await coordinatorTrace();
     await page.keyboard.press("PageUp"); // the surface sits at its bottom edge, so there is room to move up
-    await page.getByText("Positioned by user: true", { exact: true }).waitFor({ timeout: 4000 });
+    await page.getByText("Positioned by user: true", { exact: true }).waitFor({ timeout: 20_000 });
     assert.ok(
       ((await coordinatorTrace()).userReports ?? 0) > (beforeKey.userReports ?? 0),
       "keyboard scroll was not reported",
@@ -299,7 +304,7 @@ await runSuite(async () => {
       });
       touchMode = "synthetic";
     }
-    await page.getByText("Positioned by user: true", { exact: true }).waitFor({ timeout: 4000 });
+    await page.getByText("Positioned by user: true", { exact: true }).waitFor({ timeout: 20_000 });
     const afterTouch = await coordinatorTrace();
     if (!((afterTouch.userReports ?? 0) > (beforeTouch.userReports ?? 0))) {
       throw new Error(

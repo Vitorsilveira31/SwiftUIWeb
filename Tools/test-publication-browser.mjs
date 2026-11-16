@@ -25,6 +25,9 @@ function normalizedDOM() {
     // A node id is `slot:generation:type`. The slot is where the arena put the node and the generation counts the nodes that
     // held it before; both follow how many publications were made and dropped on the way (a page that reads only the newest of
     // several), so neither is part of what the page shows.
+    // The size of a lazy list's spacer is its rows' measured heights added up, which follows where the window was when it
+    // measured: a page that dropped publications measured at other positions.
+    if (element.hasAttribute("data-lazy-spacer")) { element.removeAttribute("data-size-h"); element.removeAttribute("data-size-w"); element.removeAttribute("style"); }
     if (element.hasAttribute("data-embedded-node-id")) element.setAttribute("data-embedded-node-id", element.getAttribute("data-embedded-node-id").replace(/^\d+:\d+:/, "*:*:"));
     // The order of attributes and of style declarations depends on which patch wrote them last, not on what the page
     // shows.
