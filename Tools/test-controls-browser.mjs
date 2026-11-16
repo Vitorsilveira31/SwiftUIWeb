@@ -181,22 +181,21 @@ await runSuite(async () => {
     const bold = page.getByRole("button", { name: "Bold" });
     assert.equal(await bold.getAttribute("aria-pressed"), "false");
     await bold.click();
-    await page.waitForTimeout(100);
-    assert.equal(await bold.getAttribute("aria-pressed"), "true");
+    assert.equal(await until(() => bold.getAttribute("aria-pressed"), (pressed) => pressed === "true"), "true");
     const quiet = page.getByRole("switch", { name: "Quiet hours" });
     assert.equal(await quiet.evaluate((e) => e.closest("label").textContent.trim()), "");
-    assert.equal(await labText("lab-toggles"), "Toggles: checked bold quiet");
+    assert.equal(await labTextWhen("lab-toggles", "Toggles: checked bold quiet"), "Toggles: checked bold quiet");
     const hold = page.locator("button", { hasText: "Hold me" });
     await hold.scrollIntoViewIfNeeded();
     const holdBox = await hold.boundingBox();
     await page.mouse.move(holdBox.x + 5, holdBox.y + 5);
     await page.mouse.down();
     await page.waitForTimeout(150);
-    const pressedText = await hold.innerText();
+    const pressedText = await until(() => hold.innerText(), (text) => text.includes("Pressed"));
     assert.ok(pressedText.includes("Pressed"), pressedText);
     await page.mouse.up();
     await page.waitForTimeout(150);
-    const idleText = await hold.innerText();
+    const idleText = await until(() => hold.innerText(), (text) => text.includes("Idle"));
     assert.ok(idleText.includes("Idle"), idleText);
 
     if (values.mode === "accessibility") {
