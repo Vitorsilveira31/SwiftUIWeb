@@ -1,7 +1,7 @@
 import {writeEventValue, readSecureBytes, concatBytes} from './event-value.js';
 import {SemanticLayoutHost, ownsLayoutStyle, ownsLayoutAttribute} from './layout-host.js';
 import {CssLayout} from './css-layout.js';
-import {FocusCoordinator, ScrollCoordinator, PresentationCoordinator, KeyboardShortcutCoordinator, HistoryCoordinator, NativeDragDropCoordinator, shareContent, moveFiles} from './host-interactions.js';
+import {FocusCoordinator, ScrollCoordinator, KeyboardShortcutCoordinator, HistoryCoordinator} from './host-interactions.js';
 import {takeFirstPaint} from './first-paint-host.js';
 import {AdaptiveTabShell} from './tab-shell.js';
 import {GeometryHost} from './geometry-host.js';
@@ -196,6 +196,29 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   markHighlightInheritance(document);
   const motion = new MotionHost(root, window);
   let layout, focusCoordinator, scrolls, presentations, historyHost, shortcuts;
+  // The hosts the first screen does not run arrive in their own file (deferred-hosts.js), requested by the commit that puts
+  // the first publication on screen. `installDeferredHosts` sets them in place of their stand-ins. The module is named by
+  // URL, as the worker is (embedded-worker-client.js): a bundle builds it as an entry of its own, which index.js does not
+  // import (Tools/build-runtime-bundle.mjs).
+  let deferredHosts = null, deferredLoad = null, installDeferredHosts = null;
+  function loadDeferredHosts() {
+    deferredLoad ??= import(new URL('./deferred-hosts.js', import.meta.url).href).then(hosts => {
+      if (!disposed) { deferredHosts = hosts; installDeferredHosts(hosts); }
+      return hosts;
+    }, error => {
+      // Asked again by the next commit.
+      deferredLoad = null;
+      console.error('[SwiftUIWeb] the deferred browser hosts did not load', error);
+      throw error;
+    });
+    return deferredLoad;
+  }
+  // Runs `use` with the deferred hosts: at once when they are here, which keeps a call that needs the person's activation
+  // (sharing, a file picker) inside the event that asked for it, else when they arrive.
+  const withDeferredHosts = use => deferredHosts ? use(deferredHosts) : loadDeferredHosts().then(use);
+  // A document keydown listener registered now for a coordinator that arrives later (deferred-hosts.js): listeners run in the
+  // order they were added, so the keys reach it where they did when it was constructed here. The result sets its handler.
+  function keySlot(capture) { let handler = null; listen(document, 'keydown', event => handler?.(event), capture); return next => { handler = next; }; }
   const plugins=[];
   let platformSignature='';
   const listenerController = new window.AbortController();
@@ -2006,7 +2029,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
       let entries;try{entries=(host.getAttribute('data-file-mover-files')||'').split(';').filter(Boolean).map(record=>{const [name,type,data]=record.split(',');return {name:decodeText(name),type:decodeText(type),bytes:data==='-'?null:Uint8Array.from(atob(data),c=>c.charCodeAt(0))};});}catch(e){dispatchNamed(host,'fileMover',`error:${e?.message||e}`);continue;}
       // A moved answer names the request it answers with the token Swift wrote, so it cannot be taken for another mover's.
       const token=host.getAttribute('data-file-mover-token')||'';
-      moveFiles(entries).then(result=>{if(!host.isConnected)return;dispatchNamed(host,'fileMover',result.startsWith('moved:')?'moved:tok='+token+';'+result.slice(6):result);});
+      withDeferredHosts(hosts=>hosts.moveFiles(entries)).then(result=>{if(!host.isConnected)return;dispatchNamed(host,'fileMover',result.startsWith('moved:')?'moved:tok='+token+';'+result.slice(6):result);},error=>{if(host.isConnected)dispatchNamed(host,'fileMover',`error:${error?.message||error}`);});
     }
     for(const host of root.querySelectorAll('[data-file-exporter-presented="false"]'))completedExports.delete(host);
     for (const host of root.querySelectorAll('[data-file-importer="true"][data-file-importer-presented="true"]')) {
@@ -2067,7 +2090,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
       const share=elementOf(event.target)?.closest('.share-link[data-share-item]');
       if(!share||share.closest('[disabled],[aria-disabled="true"],[inert]'))return;
       event.preventDefault();
-      try{const result=await shareContent(share,window.navigator);window.dispatchEvent(new window.CustomEvent('share-result',{detail:result}));
+      try{const result=await withDeferredHosts(hosts=>hosts.shareContent(share,window.navigator));window.dispatchEvent(new window.CustomEvent('share-result',{detail:result}));
         if(result.status==='unsupported'){const output=document.createElement('div');output.setAttribute('role','status');output.textContent='Sharing is unavailable. Copy: '+result.text;share.after(output);window.setTimeout(()=>output.remove(),15000);}
       }catch(error){window.dispatchEvent(new window.CustomEvent('share-failure',{detail:String(error)}));}
     },true);
@@ -2861,6 +2884,8 @@ export function mountEmbeddedBrowser(instance, options = {}) {
       metrics.commitDurationMs+=elapsed;
       metrics.maxCommitDurationMs=Math.max(metrics.maxCommitDurationMs,elapsed);
       committing=false; transaction=null;
+      // The first publication is on screen once a commit has patched the page: the rest of the runtime comes now.
+      if (metrics.commits && !deferredLoad && !disposed) loadDeferredHosts().catch(() => {});
       if (focusChain && !focusChain[0].isConnected) keepFocusInPlace(focusChain);
       if (sample) {
         if (observing) {
@@ -3386,11 +3411,35 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   // Registered before the presentation coordinator so a cancel shortcut
   // (`.keyboardShortcut(.cancelAction)`) handles Escape before dismissal.
   shortcuts = new KeyboardShortcutCoordinator(root,{presentations:()=>presentations?.top()||null});
-  presentations = new PresentationCoordinator(root,dispatchNamed);
+  // The presentation coordinator arrives after the first screen (deferred-hosts.js). Its keydown listeners are registered
+  // here, after the shortcuts' and before the context menus', where the coordinator always put them.
+  const presentationKeys=[keySlot(true),keySlot(false)];
+  // What stands in for it until then: no presentation is on top yet, and a sheet on the page already takes the height of
+  // its detent, as the coordinator's `syncDetent` gives it, since that is the part of a presentation the page draws. Focus
+  // containment and the page behind made inert come with the coordinator, which syncs with the whole page when it arrives.
+  presentations = Object.freeze({top: () => null, needsSync: () => true, dispose() {}, sync() {
+    for (const sheet of root.querySelectorAll('.sheet-panel')) {
+      const source = sheet.querySelector('[data-presentation-detent-height]'); if (!source) continue;
+      for (const name of ['data-presentation-detent-selection', 'data-presentation-detent-heights', 'data-presentation-detents']) if (source.hasAttribute(name) && sheet.getAttribute(name) !== source.getAttribute(name)) sheet.setAttribute(name, source.getAttribute(name));
+      const height = source.getAttribute('data-presentation-detent-height');
+      if (sheet.style.getPropertyValue('--presentation-detent-height') !== height) sheet.style.setProperty('--presentation-detent-height', height);
+    }
+  }});
   historyHost = new HistoryCoordinator(root,{window,ack:seq=>api.history_ack?.(seq),restore:key=>{sendValue(key);api.history_restore?.();schedule();},onPop:()=>{locationTabRestoreKey=null;locationTabRestoreView=null;restoreTabSelectionFromLocation({dispatch:false});openPathAddress();},onRoot:()=>{locationTabRestoreKey=null;locationTabRestoreView=null;locationStale=true;restoreRootTabSelections();},onLocation:()=>{sendValue(window.location.href);api.history_location?.();const host=root.querySelector('[data-open-url-handler]');if(host)dispatchNamed(host,'openURL',window.location.href);}});
   for(const factory of options.plugins||[])plugins.push(factory(root,{dispatchNamed,window,document}));
   session.layoutMetrics=layout.metrics;
-  const nativeDragDrop = (typeof SWIFTUIWEB_HAS_DRAG_DROP === 'undefined' || SWIFTUIWEB_HAS_DRAG_DROP) ? new NativeDragDropCoordinator(root,dispatchNamed) : INERT_HOST;
+  // Arrives with the other hosts of deferred-hosts.js.
+  let nativeDragDrop = INERT_HOST;
+  // The hosts the first screen does not run (deferred-hosts.js), requested as soon as the first publication is on screen
+  // (after the first commit below) and set in place when they arrive: the stand-ins above until then.
+  installDeferredHosts = hosts => {
+    presentations = new hosts.PresentationCoordinator(root,dispatchNamed,{listenKey:(handler,capture)=>presentationKeys[capture?0:1](handler)});
+    if (hosts.NativeDragDropCoordinator) nativeDragDrop = new hosts.NativeDragDropCoordinator(root,dispatchNamed);
+    geometry.useTextLayout(hosts);
+    // What the commits since the first publication left for the presentations: one sync with the whole page.
+    api.batch_begin?.();
+    try { syncPresentationsPhase(); } catch (error) { report(error); } finally { api.batch_end?.(); }
+  };
   installGestures();installSharing();installContextMenus();
   // Called without the event: `syncPlatform` takes a resolved scheme.
   const syncPlatformNow=()=>syncPlatform();

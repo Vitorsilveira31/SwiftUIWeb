@@ -45,6 +45,12 @@ await runSuite(async () => {
     for (const module of ["layout-host", "css-layout", "host-interactions", "first-paint-host", "tab-shell", "event-value", "geometry-host", "media-host", "split-view-host", "transition-host"]) {
       hostSource = hostSource.replaceAll(`'./${module}.js'`, `'${dataUrl(`Tools/${module}.js`)}'`);
     }
+    // The hosts embedded-dom.js imports after the first screen, with the modules they gather.
+    let deferredSource = read("Tools/deferred-hosts.js").toString();
+    for (const module of ["presentation-host", "transfer-host", "text-layout-host"]) {
+      deferredSource = deferredSource.replaceAll(`'./${module}.js'`, `'${dataUrl(`Tools/${module}.js`)}'`);
+    }
+    hostSource = hostSource.replaceAll("'./deferred-hosts.js'", `'data:text/javascript;base64,${Buffer.from(deferredSource).toString("base64")}'`);
     // The binary publication reader imports the atoms it was generated with, so its data URL needs the same treatment.
     const binarySource = read("Tools/binary-publication.js").toString().replaceAll("'./binary-atoms.generated.js'", `'${dataUrl("Tools/binary-atoms.generated.js")}'`);
     hostSource = hostSource.replaceAll("'./binary-atoms.generated.js'", `'${dataUrl("Tools/binary-atoms.generated.js")}'`);

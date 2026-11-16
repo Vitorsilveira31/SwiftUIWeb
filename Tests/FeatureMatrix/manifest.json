@@ -18,7 +18,7 @@
     {"id":"lazyCollections","status":"supported","evidence":["Sources/SwiftUIWebFiber/LazyLayout.swift","Tools/embedded-dom.js"]},
     {"id":"geometry","status":"supported","evidence":["Sources/SwiftUIWebCore/Geometry.swift","Sources/SwiftUIWebCore/GeometryMeasurement.swift","Tools/geometry-host.js","Tools/layout-host.js","Tools/test-geometry-browser.mjs"]},
     {"id":"navigation","status":"supported","evidence":["Sources/SwiftUIWebCore/Navigation.swift","Tools/host-interactions.js"]},
-    {"id":"dragDrop","status":"supported","evidence":["Sources/SwiftUIWebCore/DragDrop.swift","Tools/host-interactions.js"]},
+    {"id":"dragDrop","status":"supported","evidence":["Sources/SwiftUIWebCore/DragDrop.swift","Tools/transfer-host.js"]},
     {"id":"networking","status":"supported","evidence":["Sources/SwiftUIWebNetworking/Networking.swift","Tools/BrowserIO/browser-io.mjs"]},
     {"id":"storage","status":"supported","evidence":["Sources/SwiftUIWebBrowser/WebStorage.swift","Tools/BrowserIO/browser-io.mjs"]},
     {"id":"containerRelativeFrame","status":"supported","evidence":["Sources/SwiftUIWebFeatures/ContainerRelativeFrame.swift","Tools/css-layout.js"]},
@@ -29,7 +29,7 @@
     {"id":"animatedShapeTrim","status":"supported","evidence":["Sources/SwiftUIWebCore/Modifiers.swift","Tools/embedded-dom.js"]},
     {"id":"sensoryFeedbackNoOp","status":"no-op","evidence":["Sources/SwiftUIWebCore/TextAndSymbolModifiers.swift"]},
     {"id":"keyboardShortcuts","status":"supported","evidence":["Sources/SwiftUIWebCore/KeyboardShortcut.swift","Sources/SwiftUIWebCore/KeyPress.swift","Tools/host-interactions.js","Tools/embedded-dom.js"]},
-    {"id":"presentationDetents","status":"supported","evidence":["Sources/SwiftUIWebFeatures/PresentationDetents.swift","Tools/host-interactions.js"]},
+    {"id":"presentationDetents","status":"supported","evidence":["Sources/SwiftUIWebFeatures/PresentationDetents.swift","Tools/presentation-host.js"]},
     {"id":"controlStyles","status":"supported","evidence":["Sources/SwiftUIWebCore/PickerSegmented.swift","Sources/SwiftUIWebCore/ToggleStyles.swift","Sources/SwiftUIWebCore/ButtonPressState.swift"]},
     {"id":"optionalTintNoOp","status":"no-op","evidence":["Sources/SwiftUIWebCore/MissingFeatures.swift"]},
     {"id":"nativeFoundation","status":"unsupported","evidence":["Sources/WebFoundation"]}
