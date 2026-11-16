@@ -321,7 +321,7 @@ function main() {
     assert(labelImage.swiftDefines.includes("SWIFTUIWEB_RELEASE_HAS_IMAGES"), "`Label(_, image:)` did not keep image support compiled in");
     // The browser capabilities the launcher installs (BrowserApp.swift) compile into a release only for an application
     // that uses them; each construct below must keep its own.
-    const launcherDefines = ["STORAGE", "NETWORKING", "NAVIGATION", "WEBMOUNT", "IMAGES", "CANVAS"].map((name) => `SWIFTUIWEB_RELEASE_HAS_${name}`);
+    const launcherDefines = ["STORAGE", "NETWORKING", "NAVIGATION", "WEBMOUNT", "IMAGES", "CANVAS", "HOVER"].map((name) => `SWIFTUIWEB_RELEASE_HAS_${name}`);
     const plainText = planFor("PlainText", "import SwiftUIWeb\nstruct V: View { @State var query = \"\"\n var body: some View { VStack { Text(\"\\(3) works\"); TextField(\"Search\", text: $query); Button(\"Add\") {} } } }\n");
     for (const define of launcherDefines) assert(!plainText.swiftDefines.includes(define), `a text-only application compiled in ${define}`);
     const launcherCases = [
