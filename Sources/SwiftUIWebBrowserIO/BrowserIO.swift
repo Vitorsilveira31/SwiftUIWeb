@@ -236,7 +236,7 @@ public struct BrowserHTTPRequest: Sendable {
     case reload
     case noCache = "no-cache"
   }
-  public init(url: String, method: String = "GET", headers: [String: String] = .init(), body: [UInt8]? = nil,
+  public init(url: String, method: String = "GET", headers: [String: String] = [:], body: [UInt8]? = nil,
               timeoutMilliseconds: UInt32 = 30000, maximumResponseBytes: UInt32 = 16777216,
               credentials: Credentials = .sameOrigin, redirect: Redirect = .follow, cache: Cache = .default) {
     self.url = url; self.method = method; self.headers = headers; self.body = body

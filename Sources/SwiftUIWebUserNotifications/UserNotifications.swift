@@ -108,7 +108,7 @@ public struct NotificationContent: Hashable, Sendable {
     sound: NotificationSound? = nil,
     threadIdentifier: String? = nil,
     categoryIdentifier: String? = nil,
-    userInfo: [String: String] = .init(),
+    userInfo: [String: String] = [:],
     requireInteraction: Bool = false,
     silent: Bool = false
   ) {
@@ -377,7 +377,7 @@ public struct WebPushSubscription: Hashable, Sendable {
   /// ArrayBuffer or JavaScript value.
   public let keys: [String: String]
 
-  public init(endpoint: String, expirationTime: Double? = nil, keys: [String: String] = .init()) {
+  public init(endpoint: String, expirationTime: Double? = nil, keys: [String: String] = [:]) {
     self.endpoint = endpoint
     self.expirationTime = expirationTime
     self.keys = keys

@@ -470,18 +470,25 @@ final class BindingRuntime {
     index < cells.count && cells[index]?.seenPass == pass
   }
 
-  private func index(of key: CellKey) -> Int? {
+  /// Where the cell of `key` is among its fiber's cells, and its index in `cells`.
+  private func position(of key: CellKey) -> (position: Int, index: Int)? {
     guard let candidates = indices[key.identity] else { return nil }
-    for index in candidates where index < cells.count && cells[index]?.key == key { return index }
+    for (position, index) in candidates.enumerated() where index < cells.count {
+      if let cell = cells[index], cell.key.source == key.source, cell.key.operation == key.operation,
+         cell.key.identity == key.identity {
+        return (position, index)
+      }
+    }
     return nil
   }
 
+  private func index(of key: CellKey) -> Int? { position(of: key)?.index }
+
   private func removeIndex(of key: CellKey) -> Int? {
-    guard var candidates = indices[key.identity],
-          let position = candidates.firstIndex(where: { $0 < cells.count && cells[$0]?.key == key }) else { return nil }
-    let index = candidates.remove(at: position)
-    indices[key.identity] = candidates.isEmpty ? nil : candidates
-    return index
+    guard let found = position(of: key), var candidates = indices.removeValue(forKey: key.identity) else { return nil }
+    candidates.remove(at: found.position)
+    if !candidates.isEmpty { indices[key.identity] = candidates }
+    return found.index
   }
 
   private func collect(_ root: Fiber, provenSources: inout Set<_StateSourceID>) {

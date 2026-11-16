@@ -16058,6 +16058,12 @@
     {
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/NodeValues.swift",
+      "signature": "public func hasSameNames(as other: _NodeEvents) -> Bool",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebCore",
+      "file": "Sources/SwiftUIWebCore/NodeValues.swift",
       "signature": "public func hash(into hasher: inout Hasher)",
       "availability": []
     },
@@ -16088,6 +16094,12 @@
     {
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/NodeValues.swift",
+      "signature": "public init(dictionaryLiteral elements: (String, _EventHandler)...)",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebCore",
+      "file": "Sources/SwiftUIWebCore/NodeValues.swift",
       "signature": "public mutating func merge(_ other: _NodeValues, uniquingKeysWith combine: (String, String) throws -> String) rethrows",
       "availability": []
     },
@@ -16095,6 +16107,12 @@
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/NodeValues.swift",
       "signature": "public mutating func removeValue(forKey key: String) -> String?",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebCore",
+      "file": "Sources/SwiftUIWebCore/NodeValues.swift",
+      "signature": "public mutating func removeValue(forKey key: String) -> _EventHandler?",
       "availability": []
     },
     {
@@ -16112,6 +16130,12 @@
     {
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/NodeValues.swift",
+      "signature": "public struct _NodeEvents: Sequence, ExpressibleByDictionaryLiteral",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebCore",
+      "file": "Sources/SwiftUIWebCore/NodeValues.swift",
       "signature": "public struct _NodeValues: Hashable, Sendable, Sequence, ExpressibleByDictionaryLiteral",
       "availability": []
     },
@@ -16124,7 +16148,19 @@
     {
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/NodeValues.swift",
+      "signature": "public subscript(key: String) -> _EventHandler?",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebCore",
+      "file": "Sources/SwiftUIWebCore/NodeValues.swift",
       "signature": "public typealias Element = (key: String, value: String) @usableFromInline var entries: [Element]",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebCore",
+      "file": "Sources/SwiftUIWebCore/NodeValues.swift",
+      "signature": "public typealias Element = (key: String, value: _EventHandler) @usableFromInline var entries: [Element]",
       "availability": []
     },
     {
@@ -16664,7 +16700,7 @@
     {
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/RenderNode.swift",
-      "signature": "public var events: [String: _EventHandler]",
+      "signature": "public var events: _NodeEvents",
       "availability": []
     },
     {
@@ -18128,12 +18164,6 @@
     {
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/State.swift",
-      "signature": "public let rawValue: UInt64",
-      "availability": []
-    },
-    {
-      "target": "SwiftUIWebCore",
-      "file": "Sources/SwiftUIWebCore/State.swift",
       "signature": "public let sourceCount: Int",
       "availability": []
     },
@@ -18188,12 +18218,6 @@
     {
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/State.swift",
-      "signature": "public static let environment",
-      "availability": []
-    },
-    {
-      "target": "SwiftUIWebCore",
-      "file": "Sources/SwiftUIWebCore/State.swift",
       "signature": "public static subscript<EnclosingSelf: ObservableObject>( _enclosingInstance instance: EnclosingSelf, wrapped _: ReferenceWritableKeyPath<EnclosingSelf, Value>, storage storageKeyPath: ReferenceWritableKeyPath<EnclosingSelf, Published<Value>> ) -> Value",
       "availability": []
     },
@@ -18201,6 +18225,12 @@
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/State.swift",
       "signature": "public static var _stateSnapshotTag: String",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebCore",
+      "file": "Sources/SwiftUIWebCore/State.swift",
+      "signature": "public static var environment: UInt64",
       "availability": []
     },
     {
@@ -18278,12 +18308,6 @@
     {
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/State.swift",
-      "signature": "public struct _StateSourceID: Hashable, Sendable",
-      "availability": []
-    },
-    {
-      "target": "SwiftUIWebCore",
-      "file": "Sources/SwiftUIWebCore/State.swift",
       "signature": "public struct _StateStoreObservationDiagnostics: Sendable, Equatable",
       "availability": []
     },
@@ -18356,6 +18380,12 @@
     {
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/State.swift",
+      "signature": "public typealias _StateSourceID = UInt64",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebCore",
+      "file": "Sources/SwiftUIWebCore/State.swift",
       "signature": "public var _isDisposed: Bool",
       "availability": []
     },
@@ -18423,6 +18453,12 @@
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/State.swift",
       "signature": "public var projectedValue: Publisher",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebCore",
+      "file": "Sources/SwiftUIWebCore/State.swift",
+      "signature": "public var rawValue: UInt64",
       "availability": []
     },
     {
