@@ -89,7 +89,8 @@ public struct Text {
   @MainActor public func _render(in context: _RenderContext) -> _RenderNode {
     // Below `textRenderer(_:)`, the renderer draws the text (`TextRenderer.swift`).
     let renderer = context.environment._textRenderer
-    if renderer != nil || context.environment._publishesTextLayout { return _renderMeasured(drawnBy: renderer, in: context) }
+    // Called through the value the views that ask for a measured text install (`Text._installMeasuredRendering`).
+    if renderer != nil || context.environment._publishesTextLayout, let measured = Text._measuredRendering { return measured(self, renderer, context) }
     return _renderPlain(in: context)
   }
 
@@ -127,11 +128,29 @@ public struct Text {
   }
 }
 
+/// What splits a string at the image markers into runs (`Text._splitInlineImages`). `appendInterpolation(_: Image)`, the only
+/// writer of the markers, installs it, so an application that never sets an image in a line of text does not carry the
+/// runs, the inline images and the symbol glyphs in a release. Every access happens under `lock`.
+private enum _InlineImageSplitting {
+  static let lock = _RuntimeLock()
+  nonisolated(unsafe) static var split: ((inout Text) -> Void)?
+}
+
 extension Text {
+  static func _installInlineImageSplitting() {
+    _InlineImageSplitting.lock.withLock {
+      if _InlineImageSplitting.split == nil { _InlineImageSplitting.split = { $0._splitInlineImages() } }
+    }
+  }
+
   /// Splits a resolved string at the image markers `appendInterpolation(_: Image)` left, so the images become runs.
   mutating func _expandInlineImages() {
+    guard value.contains("\u{FFFC}" as Character), let split = _InlineImageSplitting.lock.withLock({ _InlineImageSplitting.split }) else { return }
+    split(&self)
+  }
+
+  mutating func _splitInlineImages() {
     let marker: Character = "\u{FFFC}"
-    guard value.contains(marker) else { return }
     var runs: [Text] = []
     var literal = ""
     var index = value.startIndex

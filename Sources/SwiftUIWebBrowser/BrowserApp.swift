@@ -348,7 +348,9 @@ private func _embeddedEnvironmentValue(_ key: String) -> String? {
   _embeddedBrowserHTMLBuffer = nil
   _embeddedBrowserHTMLCount = 0
   _embeddedBrowserHTMLCapacity = 0
+  #if !SWIFTUIWEB_RELEASE || SWIFTUIWEB_RELEASE_HAS_NAVIGATION
   BrowserHistoryAdapter.embeddedReset()
+  #endif
   _BrowserDateFormatting.install(nil)
   _TextHost.formatNumber = nil
   _TextHost.fold = nil
@@ -778,9 +780,11 @@ private let _embeddedHoverLearningDelay = 0.25
       _embeddedBrowserEventNodes.removeValue(forKey: UInt64(_HeadlessMedia.eventToken))
     }
   }
+  #if !SWIFTUIWEB_RELEASE || SWIFTUIWEB_RELEASE_HAS_NAVIGATION
   if let operations = BrowserHistoryAdapter.embeddedOperations() {
     annotations.values.append(["data-history-operations": operations])
   }
+  #endif
   // Numbered, so that two animated commits in a row with the same animation still differ: an update sends the root's first
   // element only when its attributes changed, and an unchanged transaction would reach the page as no transaction at all.
   annotations.transaction = tree.root.stateStore._takeAnimationTransactionCSS().map { css in
@@ -1138,7 +1142,9 @@ public extension BrowserAppLauncher {
     // makes `WebEnvironment` real in the browser and carries the generated
     // asset-catalog image manifest.
     WebEnvironment.install(provider: { key in _embeddedEnvironmentValue(key) })
+    #if !SWIFTUIWEB_RELEASE || SWIFTUIWEB_RELEASE_HAS_IMAGES
     _ImageAssets.install(manifest: _embeddedEnvironmentValue("SWIFTUIWEB_IMAGE_ASSETS") ?? "")
+    #endif
     // The host passes navigator.language unless the application pinned a
     // language meta; nil keeps the development language of the strings table.
     LocalizationTable.preferredLanguage = _embeddedEnvironmentValue("SWIFTUIWEB_LANGUAGE")
@@ -1154,10 +1160,17 @@ public extension BrowserAppLauncher {
     // Install browser capabilities before evaluating app.body. SwiftUI lifecycle
     // tasks and @AppStorage may run during the first Fiber evaluation.
     _swiftUIWebCreateBrowserExecutors()
+    // A release compiles in only the capabilities its manifest found the application using (Documentation/RELEASE_REACHABILITY.md).
+    #if !SWIFTUIWEB_RELEASE || SWIFTUIWEB_RELEASE_HAS_STORAGE
     _embeddedInstallStorage()
+    #endif
+    #if !SWIFTUIWEB_RELEASE || SWIFTUIWEB_RELEASE_HAS_NETWORKING
     _embeddedInstallNetworking()
+    #endif
     _embeddedInstallAnimationCompletions()
+    #if !SWIFTUIWEB_RELEASE || SWIFTUIWEB_RELEASE_HAS_WEBMOUNT
     _DOMViewRuntime.install()
+    #endif
     _BrowserDateFormatting.install { request in
       BrowserIntl.format(
         epochSeconds: request.epochSeconds,
@@ -1177,7 +1190,9 @@ public extension BrowserAppLauncher {
     _TextHost.formatNumber = { BrowserText.formatNumber($0, options: $1) }
     _TextHost.fold = { BrowserText.fold($0, diacritics: $1, case: $2) }
     var environment = configuration.rootEnvironment
+    #if !SWIFTUIWEB_RELEASE || SWIFTUIWEB_RELEASE_HAS_NAVIGATION
     if environment.navigationHistory == nil { environment.navigationHistory = BrowserHistoryAdapter() }
+    #endif
     if environment._geometryHint == nil, let viewport = _embeddedInitialViewport { environment._geometryHint = viewport }
     #if DEBUG
     // Development loop: the page this one replaces may have left the values of its states (StateSnapshot.swift). They are
@@ -1210,17 +1225,21 @@ public extension BrowserAppLauncher {
       // @State with its defaults and turn a resize/tab switch into a logout.
       _ = tree._updateEnvironmentForRenderer(environment)
     }
+    #if !SWIFTUIWEB_RELEASE || SWIFTUIWEB_RELEASE_HAS_STORAGE
     _embeddedBrowserStorageObservation = BrowserWebStorage.observeChanges(namespace: "swiftuiweb") { change in
       let scope: StorageScope = change.scope == .local ? .app : .scene
       StorageRuntime.invalidateCache(scope: scope, key: change.key)
       if let liveTree = _embeddedBrowserTree { _embeddedBrowserPublish(liveTree) }
     }
+    #endif
     // The page was opened at an address: apply it before the first publication and before the lazy collections are sized (the route can replace them), so the first frame already shows the
     // requested screen instead of the declared default followed by a switch. A TabView selection comes from `?tab-selection=`;
     // a deep link reaches `onOpenURL`, as a URL launch does on Apple platforms. A history entry that carries a typed
     // NavigationStack snapshot owns the route, so the path is not replayed over it.
     if let location = _embeddedEnvironmentValue("SWIFTUIWEB_INITIAL_LOCATION") {
+      #if !SWIFTUIWEB_RELEASE || SWIFTUIWEB_RELEASE_HAS_NAVIGATION
       BrowserHistoryAdapter.embeddedLocation(location)
+      #endif
       if _embeddedEnvironmentValue("SWIFTUIWEB_INITIAL_NAVIGATION_STATE") == nil, _embeddedIsDeepLink(location) {
         tree.dispatch(event: "openURL", value: location)
       }
@@ -1375,18 +1394,26 @@ public extension BrowserAppLauncher {
   }
 
   static func embeddedBrowserCookiesChanged() {
+    #if !SWIFTUIWEB_RELEASE || SWIFTUIWEB_RELEASE_HAS_NETWORKING
     NotificationCenter.default._post(name: .NSHTTPCookieManagerCookiesChanged, sender: HTTPCookieStorage.shared)
     CookieJarRuntime.notifyChanged()
     if let tree = _embeddedBrowserTree {
       _ = tree._hostTimelineTick()
       _embeddedBrowserPublish(tree)
     }
+    #endif
   }
 
-  static func embeddedBrowserHistoryAcknowledge(_ sequence: UInt32) { BrowserHistoryAdapter.embeddedAcknowledge(sequence) }
+  // A release without navigation keeps these entry points (the page calls them by name) and drops the history behind them.
+  static func embeddedBrowserHistoryAcknowledge(_ sequence: UInt32) {
+    #if !SWIFTUIWEB_RELEASE || SWIFTUIWEB_RELEASE_HAS_NAVIGATION
+    BrowserHistoryAdapter.embeddedAcknowledge(sequence)
+    #endif
+  }
   static func embeddedBrowserHistoryLocation() {
     let url = _embeddedEventValueString()
     _embeddedEventValueClear()
+    #if !SWIFTUIWEB_RELEASE || SWIFTUIWEB_RELEASE_HAS_NAVIGATION
     // A location notification can update a typed TabView selection through
     // its history observer. History is a structural boundary, so force one
     // retained-root reconciliation even when the source graph coalesced the
@@ -1397,15 +1424,22 @@ public extension BrowserAppLauncher {
     guard BrowserHistoryAdapter.embeddedLocation(url), let tree = _embeddedBrowserTree else { return }
     _ = tree._hostTimelineTick()
     _embeddedBrowserPublish(tree)
+    #else
+    _ = url
+    #endif
   }
   static func embeddedBrowserHistoryRestore() {
     let key = _embeddedEventValueString()
     _embeddedEventValueClear()
+    #if !SWIFTUIWEB_RELEASE || SWIFTUIWEB_RELEASE_HAS_NAVIGATION
     BrowserHistoryAdapter.embeddedRestore(key)
     if let tree = _embeddedBrowserTree {
       _ = tree._hostTimelineTick()
       _embeddedBrowserPublish(tree)
     }
+    #else
+    _ = key
+    #endif
   }
 
   static func embeddedBrowserViewport(_ width: Double, height: Double, dark: UInt32, reducedMotion: UInt32) {
@@ -1541,7 +1575,11 @@ public extension BrowserAppLauncher {
   }
 
 
-  static func embeddedBrowserWebMountReconcile() { WebMountRegistry.shared.reconcileEmbedded() }
+  static func embeddedBrowserWebMountReconcile() {
+    #if !SWIFTUIWEB_RELEASE || SWIFTUIWEB_RELEASE_HAS_WEBMOUNT
+    WebMountRegistry.shared.reconcileEmbedded()
+    #endif
+  }
 
   /// Sequence number of the newest publication (the one in the HTML buffer).
   static func embeddedBrowserPublishSequence() -> UInt32 { _embeddedPublishSequence }

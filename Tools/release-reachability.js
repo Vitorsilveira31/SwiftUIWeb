@@ -218,19 +218,23 @@ const rules = {
   photos: /(?:PhotosPicker|PhotosPickerItem|\.photosPicker\s*\()/.test(applicationText),
   notifications: /(?:WebPush|WebNotification|requestAuthorization\s*\()/.test(applicationText),
   location: /(?:CLLocation|CLLocationCoordinate2D|LocationManager|LocationAccuracy)/.test(applicationText),
-  webMount: /(?:WebMount|WebElementHandle|webMount|data-web-mount)/.test(applicationText),
+  // `DOMViewRepresentable` mounts its DOM through the same registry as a WebMount.
+  webMount: /(?:WebMount|WebElementHandle|webMount|data-web-mount|DOMView)/.test(applicationText),
   paste: /\bPasteButton\s*\(/.test(applicationText),
   canvas: /\b(?:Canvas|GraphicsContext|ResolvedText)\b/.test(applicationText),
   meshGradient: /\bMeshGradient\b/.test(applicationText),
   lazyCollections: /\b(?:LazyVStack|LazyHStack|LazyVGrid|LazyHGrid|ForEach|List|OutlineGroup)\b/.test(applicationText),
   geometry: /\b(?:GeometryReader|ScrollView|Layout|AnyLayout)\b/.test(applicationText),
-  navigation: /\b(?:NavigationStack|NavigationView|NavigationLink|TabView|toolbar|sheet|fullScreenCover)\b/.test(applicationText),
+  // A release without navigation drops the browser history adapter (`SWIFTUIWEB_RELEASE_HAS_NAVIGATION`) that
+  // `NavigationStack` and `TabView` keep their state in, so any navigation type, tab or destination counts.
+  navigation: /\b(?:Navigation[A-Z]\w*|navigationDestination|TabView|Tab|TabSection|toolbar|sheet|fullScreenCover)\b/.test(applicationText),
   // `.draggable(_)` is `onDrag` for a Transferable value (DragDrop.swift).
   dragDrop: /(?:onDrag|onDrop|dropDestination|\.draggable\s*\(|Transferable)/.test(applicationText),
   // `.onHover { hovered = $0 }` is lowered to `onHover(_assigning:)`, whose hovered look the renderer learns and publishes as
   // CSS rules (FiberTree's hover rules). Without it a release leaves that machinery out (`SWIFTUIWEB_RELEASE_HAS_HOVER`).
   hover: /\bonHover\b/.test(applicationText),
-  networking: /(?:\bURLSession\b|\bURLRequest\b|\bURLComponents\b|\bWebSocket\b|NetworkRuntime|NetworkError|data\s*\(from:)/.test(applicationText),
+  // The networking runtime also backs the cookie jar (`HTTPCookieStorage`) and the URL cache.
+  networking: /(?:\bURLSession\b|\bHTTPCookie\w*|\bURLCache\b|\bURLProtocol\b|\bURLRequest\b|\bURLComponents\b|\bWebSocket\b|NetworkRuntime|NetworkError|data\s*\(from:)/.test(applicationText),
   storage: /(?:@AppStorage|@SceneStorage|WebIndexedDB|StorageRuntime|UserDefaults|IndexedDB)/.test(applicationText),
   // The browser hosts below leave a release's JavaScript when these are false (`bun build --define`, see
   // Tools/build-runtime-bundle.mjs); `navigation` and `dragDrop` above gate the tab shell and the native drag coordinator.
@@ -431,11 +435,14 @@ const compileFeatureFlags = {
   canvas: "SWIFTUIWEB_RELEASE_HAS_CANVAS",
   meshGradient: "SWIFTUIWEB_RELEASE_HAS_MESH_GRADIENT",
   networking: "SWIFTUIWEB_RELEASE_HAS_NETWORKING",
-  storage: "SWIFTUIWEB_RELEASE_HAS_STORAGE"
+  storage: "SWIFTUIWEB_RELEASE_HAS_STORAGE",
+  navigation: "SWIFTUIWEB_RELEASE_HAS_NAVIGATION"
 };
 for (const [feature, flag] of Object.entries(compileFeatureFlags)) {
   if (rules[feature]) swiftDefines.push(flag);
 }
+// The WebMount registry is the browser side of `WebMount`, `DOMViewRepresentable`, web content, maps and video.
+if (rules.webMount || rules.webView || rules.adaptiveMedia || rules.maps) swiftDefines.push("SWIFTUIWEB_RELEASE_HAS_WEBMOUNT");
 
 const browserBindings = [];
 if (rules.geometry || rules.lazyCollections) browserBindings.push("geometry", "intersection-observer");
