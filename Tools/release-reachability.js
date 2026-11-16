@@ -75,6 +75,59 @@ if (sourceArgument) {
 } else {
   const productRoot = productDirectory(product);
   if (productRoot) sourceRoots.push(productRoot);
+  // The local targets a product of this repository depends on outside `Sources/` (Examples/CloneKit under Lumio, Mailo,
+  // ...) are the application's code too: a URLSession client there is the application using networking.
+  if (productRoot) for (const dependency of localDependencyDirectories(productRoot)) sourceRoots.push(dependency);
+}
+
+/// The directories of the targets `Package.swift` lists, by name: `{ path, dependencies }`. A target without `path:` is
+/// `Sources/<name>`, a framework target.
+function packageTargets() {
+  const manifest = readText(path.join(root, "Package.swift"));
+  const targets = new Map();
+  for (const chunk of manifest.split(/\.(?:executableTarget|target|testTarget|plugin|macro|binaryTarget|systemLibrary)\s*\(/).slice(1)) {
+    const name = chunk.match(/^\s*name:\s*"([^"]+)"/)?.[1];
+    if (!name) continue;
+    const declared = chunk.match(/\bpath:\s*"([^"]+)"/)?.[1];
+    const dependencies = [];
+    const start = chunk.search(/\bdependencies:\s*\[/);
+    if (start >= 0) {
+      let depth = 0;
+      let index = chunk.indexOf("[", start);
+      const begin = index;
+      for (; index < chunk.length; index += 1) {
+        if (chunk[index] === "[") depth += 1;
+        else if (chunk[index] === "]" && --depth === 0) break;
+      }
+      const list = chunk.slice(begin, index);
+      // A product of another package (`.product(name:package:)`) is not a target of this manifest.
+      const withoutProducts = list.replace(/\.product\s*\([^)]*\)/g, "");
+      for (const match of withoutProducts.matchAll(/"([^"]+)"/g)) dependencies.push(match[1]);
+    }
+    if (!targets.has(name)) targets.set(name, { path: declared ?? path.join("Sources", name), dependencies });
+  }
+  return targets;
+}
+
+function localDependencyDirectories(productRoot) {
+  const targets = packageTargets();
+  const relative = path.relative(root, productRoot).split(path.sep).join("/");
+  const owner = [...targets.entries()].find(([, target]) => target.path.replace(/\/$/, "") === relative);
+  if (!owner) return [];
+  const result = [];
+  const seen = new Set([owner[0]]);
+  const queue = [...owner[1].dependencies];
+  while (queue.length > 0) {
+    const name = queue.shift();
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const target = targets.get(name);
+    if (!target || target.path.split("/")[0] === "Sources") continue;
+    const directory = path.join(root, target.path);
+    if (fs.existsSync(directory) && !result.includes(directory)) result.push(directory);
+    queue.push(...target.dependencies);
+  }
+  return result;
 }
 // Core source is included for CSS vocabulary and feature wrappers, but the
 // product source remains the authority for optional reachability decisions.

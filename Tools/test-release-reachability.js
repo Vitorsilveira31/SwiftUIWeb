@@ -342,6 +342,13 @@ function main() {
       // A `TextRenderer` draws on a canvas (`GraphicsContext`), which the canvas binding paints.
       ["Renderer", "struct R: TextRenderer { func draw(layout: Text.Layout, in context: inout GraphicsContext) {} }", "CANVAS"]
     ];
+    // A product of this repository is judged with the local targets it depends on: Lumio reaches URLSession through
+    // Examples/CloneKit, and a release without networking does not even link.
+    const lumioPath = path.join(temporary, "lumio.json");
+    run(process.execPath, [PLANNER, "--root", ROOT, "--product", "Lumio", "--configuration", "release", "--output", lumioPath]);
+    const lumio = JSON.parse(fs.readFileSync(lumioPath, "utf8"));
+    assert(lumio.sourceRoots.includes("Examples/CloneKit"), "the local CloneKit target Lumio depends on was not read as application code");
+    assert(lumio.swiftDefines.includes("SWIFTUIWEB_RELEASE_HAS_NETWORKING"), "Lumio's networking through CloneKit was not kept");
     for (const [name, source, define] of launcherCases) {
       const manifest = planFor(`Launcher${name}`, `import SwiftUIWeb\n${source}\n`);
       assert(manifest.swiftDefines.includes(`SWIFTUIWEB_RELEASE_HAS_${define}`), `${name} did not keep SWIFTUIWEB_RELEASE_HAS_${define} compiled in`);
