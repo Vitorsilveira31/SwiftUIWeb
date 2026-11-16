@@ -45,11 +45,15 @@ a module without placeholder imports is not split, and nothing of it runs.
   that loads it synchronously (a synchronous request and `new WebAssembly.Module`, which a Worker may do) and then calls the
   real function: the call waits, it does not fail.
 - **On the main thread** (`?render-in-worker=0`, or a browser whose Worker stack is too small): the page cannot block, so it
-  fetches `app-rest.wasm` while the first module instantiates and starts the app once both are there. Such a page downloads
-  everything before its first screen, as an unsplit build does.
+  requests `app-rest.wasm` as soon as it knows it will start there (at once for `?render-in-worker=0`, when the stack probe
+  answers otherwise), beside `app.wasm`, and starts the app once both are instantiated. Such a page downloads everything
+  before its first screen, as an unsplit build does, in two requests side by side.
 - **A move from the Worker to the main thread** (a stack overflow, see `Tools/embedded-host-core.js`): the main thread instantiates
   `app.wasm`, waits for `app-rest.wasm`, then copies the snapshot and replays the calls. The table is filled by the second
   module's element segment, so the snapshot of linear memory is all the state there is to carry, as before.
+
+The loader is in the scripts of a split build only: the launcher bundles the runtime with
+`globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER` defined as `false` otherwise, and the bundler drops it (it would cost 1.5 KB brotli).
 
 The thread's performance timeline gets the mark `swiftuiweb-app-rest` when the second module is instantiated, with
 `detail.waited` saying whether a call had to wait for it.

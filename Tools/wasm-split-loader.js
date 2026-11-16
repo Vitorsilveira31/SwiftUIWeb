@@ -32,9 +32,10 @@ export function isSplitModule(module) {
 
 /**
  * The loader of the second module for one instance of the first. `url` is the second module's address; `canBlock` says
- * whether this thread may load it synchronously (a Worker), and `onLoaded` runs once it is instantiated.
+ * whether this thread may load it synchronously (a Worker), `response` is a request for it already on its way (a promise
+ * of a Response), and `onLoaded` runs once it is instantiated.
  */
-export function createSplitLoader(module, { url, canBlock = false, onLoaded = null } = {}) {
+export function createSplitLoader(module, { url, canBlock = false, response: early = null, onLoaded = null } = {}) {
   let primary = null, table = null, secondary = null, compiled = null, pending = null;
   // The placeholders, by namespace: what the first module's imports are completed with.
   const placeholders = Object.create(null);
@@ -84,7 +85,9 @@ export function createSplitLoader(module, { url, canBlock = false, onLoaded = nu
   }
 
   async function compile() {
-    const response = await fetch(url);
+    const started = early;
+    early = null;
+    const response = started ? await started.catch(() => fetch(url)) : await fetch(url);
     if (!response.ok) throw new Error(`Unable to fetch ${url}: ${response.status}`);
     return WebAssembly.compileStreaming(response.clone()).catch(async () => WebAssembly.compile(await response.arrayBuffer()));
   }

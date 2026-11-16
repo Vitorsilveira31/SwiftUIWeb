@@ -12,6 +12,8 @@ import { createSplitLoader, isSplitModule } from './wasm-split-loader.js';
 // `globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER` as false for such a bundle, so the loader is not in its scripts at all; where it
 // is not defined (development, the tests) the loader stays.
 const SECONDARY_MODULE = './app-rest.wasm';
+// The request for it that `instantiate` started early for a start on this thread, taken by the first loader that uses it.
+let restRequest = null;
 
 const encoder = new TextEncoder();
 let instance = null;
@@ -115,6 +117,13 @@ export async function instantiate(url = new URL('./app.wasm', import.meta.url), 
   // Unless a worker was asked for explicitly, check while the app module downloads that a Worker's
   // WebAssembly stack can hold a deep view tree (see `workerStackSufficient`).
   const stackCheck = wantsWorker && !workerForced(options) ? workerStackSufficient() : Promise.resolve(wantsWorker);
+  // A split build that will run on this thread needs its second module before it starts: its download goes beside the
+  // first one instead of after it (a Worker fetches it once the first screen is up). Only a split build defines the flag true.
+  restRequest = null;
+  if (globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER === true) {
+    const requestRest = () => { restRequest ||= fetch(new URL(SECONDARY_MODULE, import.meta.url)); restRequest.catch(() => {}); };
+    if (!wantsWorker) requestRest(); else stackCheck.then(sufficient => { if (!sufficient) requestRest(); });
+  }
   // The page started this download itself (Tools/browser-index.html); a page without that script, or one that names
   // another module, is fetched here.
   const early = globalThis.__appModuleFetch;
@@ -180,7 +189,8 @@ async function startOnMainThread(module, options, url) {
   // application runs; the download of the second starts with the instantiation of the first.
   let split = null, secondHalf = null;
   if (globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER !== false && !hot && isSplitModule(module)) {
-    split = createSplitLoader(module, { url: new URL(SECONDARY_MODULE, import.meta.url).href });
+    split = createSplitLoader(module, { url: new URL(SECONDARY_MODULE, import.meta.url).href, response: restRequest });
+    restRequest = null;
     secondHalf = split.load();
     // Awaited below; a failure that lands while the first half instantiates is not an unhandled rejection meanwhile.
     secondHalf.catch(() => {});

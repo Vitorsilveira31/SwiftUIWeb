@@ -9,7 +9,7 @@
 // 2. With WASM_SPLIT_BUNDLE (a bundle built with SWIFTUIWEB_WASM_SPLIT=1, for example the Board:
 //    `SWIFTUIWEB_WASM_SPLIT=1 BUILD_ONLY=1 CONFIGURATION=release Tools/run-browser.sh board`), the app reaches its first
 //    screen in the Worker without waiting for app-rest.wasm, which arrives behind it; on the main thread
-//    (`?render-in-worker=0`), and after a move from the Worker to the main thread (the performance diagnostics'
+//    (`?render-in-worker=0`, where both modules download side by side), and after a move from the Worker to the main thread (the performance diagnostics'
 //    forced overflow), it keeps working. WASM_SPLIT_ROUTE (default /) is the page it opens.
 //
 // Needs Binaryen (wasm-as, wasm-split); without it part 1 is skipped with a message.
@@ -141,6 +141,17 @@ async function splitBundle(browser, bundle) {
       const errors = [];
       page.on("pageerror", (error) => errors.push(String(error)));
       if (init) await page.addInitScript(init);
+      // On the main thread the second module is needed before the start, so its request must not wait for the first one:
+      // app.wasm is held until app-rest.wasm has been asked for (or 10 s).
+      let restAsked = false, restAskedWhileHeld = null;
+      if (label === "main thread") {
+        await page.route(/\/app-rest(\.[0-9a-f]{8})?\.wasm$/, (route) => { restAsked = true; return route.continue(); });
+        await page.route(/\/app(\.[0-9a-f]{8})?\.wasm$/, async (route) => {
+          for (let waited = 0; waited < 100 && !restAsked; waited++) await new Promise((done) => setTimeout(done, 100));
+          restAskedWhileHeld = restAsked;
+          await route.continue();
+        });
+      }
       await page.goto(`${server.base}${route}${query ? `?${query}` : ""}`, { waitUntil: "domcontentloaded" });
       await page.waitForSelector('html[data-embedded-mounted="true"]', { timeout: 60_000, state: "attached" });
       // The rest arrives behind the first screen (the Worker), or before it (the main thread).
@@ -148,6 +159,7 @@ async function splitBundle(browser, bundle) {
       for (let tries = 0; tries < 100 && !(await marks(page)).length; tries++) await new Promise((done) => setTimeout(done, 100));
       const loaded = await marks(page);
       assert.ok(loaded.length >= 1, `${label}: app-rest.wasm was instantiated`);
+      if (label === "main thread") assert.equal(restAskedWhileHeld, true, `${label}: app-rest.wasm was asked for while app.wasm was still on its way`);
       if (label === "worker") assert.ok(loaded.every((detail) => detail?.waited === false), `${label}: the first screen did not wait for app-rest.wasm`);
       if (label === "moved to the main thread") {
         await page.evaluate(() => window.__renderWorker.forceOverflow());
