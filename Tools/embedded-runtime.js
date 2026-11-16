@@ -57,7 +57,7 @@ function trapped(error) {
 }
 
 function scheduleTaskDrain() {
-  if (drainScheduled || !instance) return;
+  if (drainScheduled || !instance || browserSession?.failed) return;
   const drain = instance.exports?.embedded_browser_drain_tasks;
   if (typeof drain !== 'function') return;
   drainScheduled = true;
@@ -72,6 +72,19 @@ function scheduleTaskDrain() {
   });
 }
 
+/** The page's cookies changed (another tab, a server response): HTTPCookieStorage's notification, then the commit of
+ * what the app published. It is entered from an event, outside any call the session made, so a trap here is handled
+ * like a trap in a drain: the instance is not used again, and the session reports the error. An instance whose session
+ * already failed is not called. */
+function notifyCookiesChanged() {
+  if (!instance || browserSession?.failed) return;
+  const changed = instance.exports?.embedded_browser_cookies_changed;
+  if (typeof changed !== 'function') return;
+  try { changed(); } catch (error) { trapped(error); return; }
+  browserSession?.flush();
+  scheduleTaskDrain();
+}
+
 // The same document environment the worker client forwards, so both modes
 // expose identical `WebEnvironment` values to Swift.
 const wasiFunction = createWasiHost(() => instance, { environment: readDocumentEnvironment(globalThis.document, globalThis.navigator) });
@@ -84,7 +97,7 @@ function importsFor(module) {
   }
   let stackMeter = null;
   if (stackDiagnosticsRequested(globalThis.document)) { stackMeter = createHeadroomMeter(); globalThis.__stackProbe = stackMeter; }
-  const browserIO = createBrowserIO({ getInstance: () => instance, wake: scheduleTaskDrain, stackMeter });
+  const browserIO = createBrowserIO({ getInstance: () => instance, wake: scheduleTaskDrain, stackMeter, onCookieWrite: () => cookieWatch?.wrote() });
   browserIOHost = browserIO;
   imports.browser_io = browserIO.imports;
   return imports;
@@ -243,12 +256,9 @@ function finishMainThreadStart(options) {
     return taken;
   };
   // The page's jar is read directly here. A change reaches the app through the export the worker also calls, then the
-  // session commits the DOM the app publishes and any tasks its observers queued run.
-  cookieWatch = watchCookies({ window: globalThis.window, onChange: () => {
-    instance?.exports?.embedded_browser_cookies_changed?.();
-    browserSession?.flush();
-    scheduleTaskDrain();
-  } });
+  // session commits the DOM the app publishes and any tasks its observers queued run. The app's own writes are
+  // announced to the watcher (`onCookieWrite` above), so they do not come back as a change, and other tabs hear them.
+  cookieWatch = watchCookies({ window: globalThis.window, onChange: notifyCookiesChanged });
   // The first lifecycle pass can enqueue URLSession/BrowserIO work. Drain it
   // only after the DOM session exists so an immediate response can publish its
   // state transition instead of losing the flush while browserSession is nil.
