@@ -93,6 +93,10 @@ Board, cold load (Worker, the default):
 | A key typed in the search right when the board shows, Slow 4G (6 rounds) | 123 ms | 1,139 ms | it waits for `app-rest.wasm` |
 | The same key 1 s after the board shows, Slow 4G (12 rounds) | 124 ms | 122 ms | no significant difference |
 
+With the runtime in one shared chunk (main at 27716de3) the Board transfers 508.3 KB unsplit and 357.5 KB split to show
+its board (−29.7%), and 492.0 against 527.7 KB over the whole visit (+7.3%); the split build's scripts carry the loader,
+0.9 KB brotli more.
+
 On the main thread (`?render-in-worker=0`, Slow 4G, 10 rounds) the split costs what its extra bytes cost: 3,153 ms against
 3,346 ms (+6.2%), both modules downloading side by side. On a local network the split costs a few milliseconds at the start: the interleaved runs above put the
 Worker at 75.7 against 81.9 ms (not a significant difference); two separate `Tools/compare-react.mjs` runs put it at 69 against
