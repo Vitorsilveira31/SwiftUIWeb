@@ -451,13 +451,16 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
     return result == null ? new Writer().u32(0).bytes() : new Writer().u32(1).text(result).bytes();
   }
 
-  const predicates = createPredicates();
+  // A release whose application builds no NSPredicate leaves the engine out (Tools/build-runtime-bundle.mjs); a request
+  // then answers as for a format Foundation rejects.
+  const predicates = (typeof SWIFTUIWEB_HAS_PREDICATES === 'undefined' || SWIFTUIWEB_HAS_PREDICATES) ? createPredicates() : null;
   /** NSPredicate: the predicate's id, format, argument values, variable dictionaries and, to evaluate it, the object under
    * test. Without an object the answer is whether the format parses, with its `predicateFormat` and the keys it reads. */
   function predicateRequest(packet) {
     const input = new Reader(packet);
     const id = input.u32(), format = input.text(), args = input.data(), bindings = input.data(), object = input.data();
     input.finish();
+    if (!predicates) return new Writer().u32(0).bytes();
     if (object.length) return new Writer().u32(predicates.evaluate(id, format, args, bindings, object)).bytes();
     const found = predicates.describe(id, format, args, bindings);
     if (!found) return new Writer().u32(0).bytes();

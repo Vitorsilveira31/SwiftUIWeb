@@ -32,6 +32,14 @@ for (const asset of [
   html = html.replace(new RegExp(`^\\s*<script[^>]+${escaped}[^>]*></script>\\s*\\n?`, "gm"), "");
 }
 
+// index.js and render-worker.js share one chunk (Tools/build-runtime-bundle.mjs) that index.js imports first thing;
+// announced next to the runtime module, it downloads with it instead of after index.js has been parsed.
+const runtimePreload = /^([ \t]*)<link rel="modulepreload" href="\.\/index\.js">[ \t]*\n/m;
+const sharedPreload = '<link rel="modulepreload" href="./runtime-shared.js">';
+if (!html.includes(sharedPreload) && runtimePreload.test(html)) {
+  html = html.replace(runtimePreload, (line, indent) => line + indent + sharedPreload + "\n");
+}
+
 // The Swift side runs in a Worker unless the page opts out (`?render-in-worker=0`,
 // `window.__renderWorker = false`). Without a hint the worker script only starts
 // downloading after index.js has been fetched and evaluated, so announce it next to
@@ -40,7 +48,8 @@ for (const asset of [
 const workerActive = !process.argv.includes("--no-worker") && manifest.runtime?.worker !== false;
 const workerPreload = '<link rel="modulepreload" href="./render-worker.js">';
 if (workerActive && !html.includes(workerPreload)) {
-  const runtimePreload = /^([ \t]*)<link rel="modulepreload" href="\.\/index\.js">[ \t]*\n/m;
-  if (runtimePreload.test(html)) html = html.replace(runtimePreload, (line, indent) => line + indent + workerPreload + "\n");
+  // After the runtime's preloads: index.js, then its shared chunk.
+  const anchor = html.includes(sharedPreload) ? /^([ \t]*)<link rel="modulepreload" href="\.\/runtime-shared\.js">[ \t]*\n/m : runtimePreload;
+  if (anchor.test(html)) html = html.replace(anchor, (line, indent) => line + indent + workerPreload + "\n");
 }
 fs.writeFileSync(indexPath, html);

@@ -56,7 +56,14 @@ pipeline may prune, and `proof` records the evidence behind each decision. Other
   `rewrite-release-index.js` drops the unreachable `<script>` tags;
 - generates `icon-adapter.js` from `icons.symbols` unless `icons.dynamic`;
 - runs `prune-release-css.js` on `styles.css`, which removes optional
-  rules for absent features and is a no-op when `css.dynamic`.
+  rules for absent features and is a no-op when `css.dynamic`;
+- builds the JavaScript runtime with `Tools/build-runtime-bundle.mjs`, which leaves out the browser hosts of
+  unreachable features through `bun build --define` constants and dead-code elimination (nothing is loaded
+  later): `motion` (transition-host.js: transitions, `.animation`, matched geometry, symbol and content effects,
+  and the motion of presentations and navigation), `media` (media-host.js), `splitViews` (split-view-host.js),
+  `predicates` (the NSPredicate engine, in the page and the worker), `navigation` (the adaptive TabView shell)
+  and `dragDrop` (the native drag coordinator). Their rules are deliberately wider than the API they serve: a
+  false positive only keeps a host.
 
 Debug builds compile every feature in and skip the defines, so a feature can
 work in debug yet be absent from release. Check release with a release build of the consuming app (`make browser-release

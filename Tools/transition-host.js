@@ -15,6 +15,8 @@
  */
 
 const LEAVING = 'data-transition-leaving';
+// The tables below that are built by a call are marked pure, so a release that leaves this module out
+// (Tools/build-runtime-bundle.mjs) drops them too: a bundler keeps a top-level call it cannot prove free of effects.
 // Elements the framework or another host owns the arrival of (presentations, navigation, lazy windows, tab panels), and
 // nodes that are not views. They keep their own motion; only an explicit `.transition` overrides that.
 const OWN_MOTION = '[data-lazy-cell],[data-lazy-spacer],[data-lazy-owner],.presentation-root,[data-presentation-id],.navigation-destination,[data-tab-panel],[data-tab-content],[popover],dialog,.context-menu-panel,[data-measurement-island],[data-hover-rules],[data-geometry-host],[data-timeline-view="true"]';
@@ -40,18 +42,18 @@ const MOTION_PROPERTIES = ['--motion-surface', '--motion-left', '--motion-top', 
 // the host marks one when it is inserted after the first commit, and unmarks it when its animation ends.
 const ENTERING_SURFACES = '.presentation-root,.sheet-panel,.full-screen-cover,.popover-card,.alert-panel,.confirmation-dialog,.navigation-destination,.toast-banner,[role="status"],[aria-live="polite"],.tooltip-bubble,[data-tooltip]';
 const VIEW_TRANSITION_NAMED = '[style*="view-transition-name"]';
-const NOT_VIEWS = new Set(['style', 'script', 'template', 'link', 'meta', 'source', 'track', 'option', 'optgroup']);
+const NOT_VIEWS = /* @__PURE__ */ new Set(['style', 'script', 'template', 'link', 'meta', 'source', 'track', 'option', 'optgroup']);
 // The siblings of one parent that FLIP measures at most; a bigger list (a long eager stack) only plays its transitions.
 const FLIP_LIMIT = 64;
 const RUN = 'data-content-run';
 // The `scopedTiming` of a `.transaction` that disables animation: distinct from "no transaction" (null), which lets the
 // ancestor's `.animation` decide.
-const DISABLED = Object.freeze({disabled: true});
+const DISABLED = /* @__PURE__ */ Object.freeze({disabled: true});
 const numberIn = text => { const match = (text || '').replace(/[^\d.,-]/g, '').replace(/,/g, '').match(/-?\d+(?:\.\d+)?/); return match ? Number(match[0]) : NaN; };
 // The discrete symbol effects (`symbolEffect(_:options:value:)`): keyframes of the glyph's individual transform properties,
 // so they compose with the view's own transform, and how long one run lasts.
 const swing = (axis, sign) => [0, 1, -0.7, 0.45, -0.2, 0].map(step => ({translate: axis === 'x' ? `${sign * step * 14}% 0` : `0 ${sign * step * 14}%`}));
-const SYMBOL_EFFECTS = {
+const SYMBOL_EFFECTS = /* @__PURE__ */ (() => ({
   'bounce': [[{translate: '0 0', scale: '1'}, {translate: '0 -22%', scale: '1.04 0.96', offset: 0.3}, {translate: '0 4%', scale: '0.98 1.02', offset: 0.62}, {translate: '0 0', scale: '1'}], 600],
   'bounce-down': [[{translate: '0 0', scale: '1'}, {translate: '0 18%', scale: '1.04 0.96', offset: 0.3}, {translate: '0 -3%', scale: '0.98 1.02', offset: 0.62}, {translate: '0 0', scale: '1'}], 600],
   'pulse': [[{opacity: 1}, {opacity: 0.35}, {opacity: 1}], 700],
@@ -75,7 +77,7 @@ const SYMBOL_EFFECTS = {
   'rotate-counter-clockwise': [[{rotate: '0deg'}, {rotate: '-360deg'}], 900],
   'breathe': [[{scale: '1'}, {scale: '1.15'}, {scale: '1'}], 1200],
   'breathe-pulse': [[{scale: '1', opacity: 1}, {scale: '1.15', opacity: 0.6}, {scale: '1', opacity: 1}], 1200],
-};
+}))();
 // How a replace takes the old symbol out and brings the new one in, each half on its own glyph, and how long it lasts.
 const REPLACE_HALVES = {
   'replace-down-up': [[{opacity: 1, scale: '1'}, {opacity: 0, scale: '0.6'}], [{opacity: 0, scale: '0.6'}, {opacity: 1, scale: '1'}], 500],
@@ -829,7 +831,7 @@ export function scrollNudge(view) {
 /** What configures a scroll transition, after `data-scroll-transition-`: a change of any of them builds its animations again
  * (`sync`), so the commit phase that calls `sync` watches them all. */
 const SCROLL_TRANSITION_PARTS = ['leading', 'identity', 'trailing', 'mode', 'curve', 'timing', 'threshold', 'inset', 'axis', 'trailing-mode', 'trailing-curve', 'trailing-timing', 'trailing-threshold', 'trailing-inset'];
-export const SCROLL_TRANSITION_ATTRIBUTES = ['data-scroll-transition', ...SCROLL_TRANSITION_PARTS.map(name => 'data-scroll-transition-' + name)];
+export const SCROLL_TRANSITION_ATTRIBUTES = /* @__PURE__ */ (() => ['data-scroll-transition', ...SCROLL_TRANSITION_PARTS.map(name => 'data-scroll-transition-' + name)])();
 
 export class ScrollTransitionHost {
   constructor({window, root, reducedMotion, motionTiming, supportedTransition}) {
@@ -1029,7 +1031,7 @@ function effectFrame(text) {
   return frame;
 }
 
-const TRANSFORMS = new Set(['transform', 'translate', 'scale', 'rotate']);
+const TRANSFORMS = /* @__PURE__ */ new Set(['transform', 'translate', 'scale', 'rotate']);
 /** Where each part of a scroll-transition effect goes. A snap target (`scrollTargetBehavior(.viewAligned)`) keeps its box:
  * the browser computes snap positions from transformed boxes and would snap back as the effect changes them, while in
  * SwiftUI the effect is visual only. Its transforms go to its children; opacity and filters stay on it. */
