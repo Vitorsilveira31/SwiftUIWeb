@@ -26,7 +26,10 @@ build → strip + wasm-opt → … → scope-resize-transitions → wasm-split �
 3. `wasm-split --split --profile` writes the two modules. They do not go through `wasm-opt` again: on the Board that made
    them larger over the wire (+0.9 KB brotli) for 5 KB less raw.
 4. The split bundle is loaded once more at each viewport and must reach its first screen with no page error. A first screen
-   that had to wait for `app-rest.wasm` (a function the profile missed) is reported as a warning.
+   that had to wait for `app-rest.wasm` (a function the profile missed) is reported as a warning. A split that
+   moved a mutable global into `app-rest.wasm` fails the build: a move from the Worker to the main thread carries linear
+   memory only, and that global would start over (a Swift module's only mutable global is its stack pointer, which stays in
+   `app.wasm`).
 
 The profile belongs to the exact binary, so it is taken again on each build (a few seconds). It is kept in the build logs
 (`.build/browser-logs/<Product>/first-screen.prof`).
@@ -64,13 +67,44 @@ is a same-origin fetch and compiles under the `'wasm-unsafe-eval'` the page alre
 
 ## 3. Measured
 
-Measured on the Board (`Tests/Apps/BoardBenchmarkApp`), see the pull request that added the split for the numbers of that date.
+Measured on 2026-11-16 on an Apple-silicon Mac shared with other work, Chromium, brotli sizes (quality 11). Sizes are
+deterministic; the timings are medians of interleaved runs (the split and the unsplit bundle alternate, each in a fresh
+browser), with the 99 percent bootstrap interval and signed-rank test of `Tools/perf-ab-stats.mjs`.
+
+| Module sizes (brotli) | Unsplit `app.wasm` | `app.wasm` (first screen) | `app-rest.wasm` | Total |
+|---|---|---|---|---|
+| Board | 430.2 KB | 270.5 KB (−37%) | 198.1 KB | 468.6 KB (+9%) |
+| Showcase | 947.0 KB | 365.9 KB (−61%) | 676.6 KB | 1,042.5 KB (+10%) |
+| Project site | 801.3 KB | 519.3 KB (−35%) | 370.0 KB | 889.3 KB (+11%) |
+
+The total grows by the placeholders (one import per moved function), the exports the second module needs, the calls of the
+first module to a moved function, which go through a table, and the two halves being compressed apart (about 15 KB of the
+Board's 38 KB).
+
+Board, cold load (Worker, the default):
+
+| | Unsplit | Split | Change |
+|---|---|---|---|
+| Transferred to show the board (the page's own requests) | 616.2 KB | 458.9 KB | −25.5% |
+| Every byte of the visit, the Worker's request for `app-rest.wasm` included | 592.9 KB | 633.0 KB | +6.8% |
+| Cold load to the board on screen, local network (15 rounds) | 74.2 ms | 74.7 ms | no significant difference |
+| Cold load to the board on screen, Slow 4G (12 rounds) | 3,406 ms | 2,609 ms | −23.4% |
+| A key typed in the search right when the board shows, Slow 4G (6 rounds) | 118 ms | 1,133 ms | it waits for `app-rest.wasm` |
+| The same key 1 s after the board shows, Slow 4G (12 rounds) | 118 ms | 220 ms | the end of the download |
+
+On the main thread (`?render-in-worker=0`, Slow 4G, 10 rounds) the split costs what its extra bytes cost: 3,402 ms against
+3,621 ms (+6.5%), both modules downloading side by side. Every interaction of `Tools/compare-react.mjs` on a local network
+starts after `app-rest.wasm` has arrived; its numbers are in the pull request.
 
 ## 4. Limits
 
 - A first screen that depends on data the profile run did not see (a signed-in user, a different route) runs functions that
   are in `app-rest.wasm`; the Worker then waits for it at that call. Profile the route most visitors open first.
-- The main-thread runtime gains nothing: it loads both modules before its first screen.
+- The main-thread runtime gains nothing: it loads both modules before its first screen, and pays for the larger total. A
+  failed download of `app-rest.wasm` stops its start (the Worker still starts, and loads it when a call needs it).
+- What the first screen did not run waits for `app-rest.wasm` when it is first needed: on the Board, the search's filter is
+  in it, so a key typed under Slow 4G at the moment the board shows waits about a second for the download to finish. A call
+  waits on the Worker; the page itself (the field's text, scrolling) does not.
 - The total is larger than one module (the moved functions' exports and placeholders, and two compressed streams).
-- A call that waits for `app-rest.wasm` while the background download is still on its way may make a second request for it;
-  the browser's HTTP cache usually serves the second from the first.
+- A call that waits for `app-rest.wasm` while the background download is still on its way makes a second request for it;
+  Chromium serves that one from the first (its `transferSize` is 0 on the Board), so no byte comes twice there.
