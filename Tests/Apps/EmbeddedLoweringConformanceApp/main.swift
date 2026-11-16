@@ -199,6 +199,7 @@ private struct LoweringRoot: View {
           EmbeddedBuilderIdentityFixture()
           EmbeddedTabViewFixture()
           EmbeddedMeasurementFixtureView()
+          EmbeddedUnicodeFixtureView()
           EmbeddedJSONStreamFixtureView()
           EmbeddedJSONCorpusFixtureView()
           Button("Open deep review fixture") { showsDeepReviewFixture = true }

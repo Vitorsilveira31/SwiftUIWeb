@@ -2798,7 +2798,7 @@ private func _colorInputValue(_ color: Color) -> String {
       var number = 0
       var seenDigit = false
       for character in part {
-        guard let digit = character.wholeNumberValue, character.isASCII else { break }
+        guard let digit = character._asciiDigitValue else { break }
         // Capped: the channel is clamped to 255 anyway, and a long run of digits would overflow a 32-bit Int.
         number = min(number * 10 + digit, 1_000)
         seenDigit = true

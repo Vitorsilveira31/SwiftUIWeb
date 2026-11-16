@@ -493,12 +493,12 @@ extension String {
       var zero = false
       if chars[index] == "0" { zero = true; index += 1 }
       var width = 0
-      while index < chars.count, chars[index].isASCII, let digit = chars[index].wholeNumberValue { width = Swift.min(width * 10 + digit, _printfFieldLimit); index += 1 }
+      while index < chars.count, let digit = chars[index]._asciiDigitValue { width = Swift.min(width * 10 + digit, _printfFieldLimit); index += 1 }
       var precision: Int?
       if index < chars.count, chars[index] == "." {
         index += 1
         var value = 0
-        while index < chars.count, chars[index].isASCII, let digit = chars[index].wholeNumberValue { value = Swift.min(value * 10 + digit, _printfFieldLimit); index += 1 }
+        while index < chars.count, let digit = chars[index]._asciiDigitValue { value = Swift.min(value * 10 + digit, _printfFieldLimit); index += 1 }
         precision = value
       }
       while index < chars.count, chars[index] == "h" || chars[index] == "l" { index += 1 }

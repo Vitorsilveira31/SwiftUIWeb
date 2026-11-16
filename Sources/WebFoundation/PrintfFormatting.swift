@@ -165,10 +165,7 @@ private func _starArgument(_ arguments: [_PrintfValue], _ next: inout Int) -> In
   return Int(min(max(_integerValue(arguments[next]), Int64(-_printfFieldLimit)), Int64(_printfFieldLimit)))
 }
 
-private func _asciiDigit(_ character: Character) -> Int? {
-  guard character.isASCII else { return nil }
-  return character.wholeNumberValue
-}
+private func _asciiDigit(_ character: Character) -> Int? { character._asciiDigitValue }
 
 private func _integerValue(_ value: _PrintfValue) -> Int64 {
   switch value {

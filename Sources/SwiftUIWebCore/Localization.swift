@@ -282,9 +282,9 @@ package enum LocalizedValue: Hashable, Sendable {
       var position: Int?
       var digits = 0
       var scan = cursor
-      while scan < characters.count, let digit = characters[scan].wholeNumberValue, characters[scan].isASCII { digits = min(digits * 10 + digit, _formatFieldLimit); scan += 1 }
+      while scan < characters.count, let digit = characters[scan]._asciiDigitValue { digits = min(digits * 10 + digit, _formatFieldLimit); scan += 1 }
       if scan > cursor, scan < characters.count, characters[scan] == "$" { position = digits - 1; cursor = scan + 1 }
-      while cursor < characters.count, characters[cursor] == "l" || characters[cursor] == "." || characters[cursor].isNumber { cursor += 1 }
+      while cursor < characters.count, characters[cursor] == "l" || characters[cursor] == "." || characters[cursor]._asciiDigitValue != nil { cursor += 1 }
       guard cursor < characters.count else { result.append(character); index += 1; continue }
       let specifier = characters[cursor]
       guard specifier == "@" || specifier == "d" || specifier == "i" || specifier == "f" || specifier == "s" || specifier == "u" else {
@@ -319,7 +319,7 @@ private func _padded(_ argument: _LocalizedStringArgument, specifier: Character,
       width = _boundedField(digits)
       digits = ""
       seenDot = true
-    } else if let digit = character.wholeNumberValue, character.isASCII {
+    } else if let digit = character._asciiDigitValue {
       if offset == 0, digit == 0 { zero = true } else { digits.append(character) }
     }
   }
