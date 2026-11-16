@@ -128,7 +128,7 @@ await runSuite(async () => {
     await text.evaluate((el) =>
       el.dispatchEvent(new CompositionEvent("compositionupdate", { bubbles: true, data: "日本" })),
     );
-    assert.equal(await text.getAttribute("data-ime-composing"), "true");
+    assert.equal(await until(() => text.getAttribute("data-ime-composing"), (composing) => composing === "true"), "true");
     await text.evaluate((el) => {
       el.value = "編集中";
       el.dispatchEvent(new InputEvent("input", { bubbles: true, isComposing: true }));

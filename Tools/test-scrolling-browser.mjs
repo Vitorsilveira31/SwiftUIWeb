@@ -125,8 +125,9 @@ await runSuite(async () => {
     const afterEdge = await coordinatorTrace();
     assert.equal(afterEdge.animatedPositions ?? 0, beforeEdge.animatedPositions ?? 0, "a plain edge change animated");
     await page.getByRole("button", { name: "Scroll to offset 300", exact: true }).click();
-    await page.waitForTimeout(200);
-    const offset300 = await modern.evaluate((e) => e.scrollTop);
+    // The position is applied once Swift has answered the click, which a runner with few cores takes longer than 200 ms to do.
+    let offset300 = await modern.evaluate((e) => e.scrollTop);
+    for (const end = Date.now() + 5000; Math.abs(offset300 - 300) > 60 && Date.now() < end; offset300 = await modern.evaluate((e) => e.scrollTop)) await page.waitForTimeout(50);
     assert.ok(
       Math.abs(offset300 - 300) <= 60,
       `point target y=300 landed at ${offset300} (the view-aligned snap is one item)`,
@@ -168,15 +169,16 @@ await runSuite(async () => {
     }
     const rail = page.locator(".scroll-horizontal[data-scroll-position='true']").first();
     await page.getByRole("button", { name: "Scroll rail to trailing edge", exact: true }).click();
-    await page.waitForTimeout(200);
-    const railEnd = await rail.evaluate((e) => ({ left: e.scrollLeft, max: e.scrollWidth - e.clientWidth }));
+    const readRail = () => rail.evaluate((e) => ({ left: e.scrollLeft, max: e.scrollWidth - e.clientWidth }));
+    let railEnd = await readRail();
+    for (const end = Date.now() + 5000; !(railEnd.max > 0 && railEnd.max - railEnd.left <= 2) && Date.now() < end; railEnd = await readRail()) await page.waitForTimeout(50);
     assert.ok(
       railEnd.max > 0 && railEnd.max - railEnd.left <= 2,
       `trailing edge did not reach the end of the rail: ${JSON.stringify(railEnd)}`,
     );
     await page.getByRole("button", { name: "Scroll rail to x 120", exact: true }).click();
-    await page.waitForTimeout(200);
-    const railX = await rail.evaluate((e) => e.scrollLeft);
+    let railX = await rail.evaluate((e) => e.scrollLeft);
+    for (const end = Date.now() + 5000; Math.abs(railX - 120) > 2 && Date.now() < end; railX = await rail.evaluate((e) => e.scrollLeft)) await page.waitForTimeout(50);
     assert.ok(Math.abs(railX - 120) <= 2, `x target 120 landed at ${railX}`);
 
     // The user's scroll answers the binding (isPositionedByUser) without echoing a position back.
