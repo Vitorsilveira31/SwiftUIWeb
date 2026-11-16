@@ -250,11 +250,8 @@ export async function createWorkerInstance(module, { baseURL, secondary = null, 
 
   const prefersDark = hostWindow?.matchMedia?.('(prefers-color-scheme: dark)').matches === true;
   const prefersReduced = hostWindow?.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
-  // CSS layout worked out by Swift for the window root (see Tools/css-layout.js and `_CSSLayoutEmitter`): on, unless the
-  // page asks for the JS mapper alone (`window.__cssLayoutSwift = false` or `?css-swift=0`).
-  const cssFromSwift = !!hostWindow && hostWindow.__cssLayoutSwift !== false && !/[?&]css-swift=0\b/.test(hostWindow.location?.search || '');
   worker.postMessage({
-    t: 'init', module, baseURL, secondary, diagnostics, replies: replies?.name ?? null, migrate: hostWindow?.__renderWorkerMigration !== false, dark: prefersDark, reducedMotion: prefersReduced, cssLayout: cssFromSwift, publication: hostWindow ? publicationFlags(hostWindow) : 0,
+    t: 'init', module, baseURL, secondary, diagnostics, replies: replies?.name ?? null, migrate: hostWindow?.__renderWorkerMigration !== false, dark: prefersDark, reducedMotion: prefersReduced, publication: hostWindow ? publicationFlags(hostWindow) : 0,
     // Swift's first render lays out at the window (`embedded_browser_viewport` before the start).
     viewport: hostWindow ? { width: hostWindow.document?.documentElement?.clientWidth || hostWindow.innerWidth, height: hostWindow.visualViewport?.height || hostWindow.innerHeight } : null,
     environment: readDocumentEnvironment(hostWindow?.document, hostWindow?.navigator),

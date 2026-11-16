@@ -94,8 +94,8 @@ await runSuite(async () => {
         // The attributes that ask something of the page mark their record.
         const annotated = scanRecords(publication([
           ATTRS, 1 + 1, 1, ...attributes([["data-hover-rules", "+a"], ["data-embedded-node-id", "1:1:"]]), ATTRS, 2 + 1, 1, ...attributes([["title", "x"]]),
-          CHILDREN, 0, 0, ...element(5, 1, "div", [["data-sl-rules", ".sl1{a:b}"], ["data-animation-transaction", "t"]]), END]));
-        check("what a publication asks of the page is read wherever it sits", annotated.annotations.length === 3 && annotated.annotations[0][0] === "data-hover-rules" && annotated.annotations[1][1] === ".sl1{a:b}",
+          CHILDREN, 0, 0, ...element(5, 1, "div", [["title", "y"], ["data-animation-transaction", "t"]]), END]));
+        check("what a publication asks of the page is read wherever it sits", annotated.annotations.length === 2 && annotated.annotations[0][0] === "data-hover-rules" && annotated.annotations[1][1] === "t",
           JSON.stringify(annotated.annotations));
         const hover = new Builder(publication([ATTRS, 1 + 1, 1, ...attributes([["data-hover-rules", "+a"], ["title", "x"]])]), inert(), handles).buildAttributes(3, document.createElement("div"));
         check("the hover rules are not an attribute of any element", !hover.hasAttribute("data-hover-rules") && hover.getAttribute("title") === "x");

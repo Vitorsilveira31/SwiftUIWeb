@@ -227,6 +227,9 @@ const rules = {
   navigation: /\b(?:NavigationStack|NavigationView|NavigationLink|TabView|toolbar|sheet|fullScreenCover)\b/.test(applicationText),
   // `.draggable(_)` is `onDrag` for a Transferable value (DragDrop.swift).
   dragDrop: /(?:onDrag|onDrop|dropDestination|\.draggable\s*\(|Transferable)/.test(applicationText),
+  // `.onHover { hovered = $0 }` is lowered to `onHover(_assigning:)`, whose hovered look the renderer learns and publishes as
+  // CSS rules (FiberTree's hover rules). Without it a release leaves that machinery out (`SWIFTUIWEB_RELEASE_HAS_HOVER`).
+  hover: /\bonHover\b/.test(applicationText),
   networking: /(?:\bURLSession\b|\bURLRequest\b|\bURLComponents\b|\bWebSocket\b|NetworkRuntime|NetworkError|data\s*\(from:)/.test(applicationText),
   storage: /(?:@AppStorage|@SceneStorage|WebIndexedDB|StorageRuntime|UserDefaults|IndexedDB)/.test(applicationText)
 };
@@ -411,6 +414,7 @@ const compileFeatureFlags = {
   images: "SWIFTUIWEB_RELEASE_HAS_IMAGES",
   photos: "SWIFTUIWEB_RELEASE_HAS_PHOTOS",
   dragDrop: "SWIFTUIWEB_RELEASE_HAS_DRAGDROP",
+  hover: "SWIFTUIWEB_RELEASE_HAS_HOVER",
   canvas: "SWIFTUIWEB_RELEASE_HAS_CANVAS",
   meshGradient: "SWIFTUIWEB_RELEASE_HAS_MESH_GRADIENT",
   networking: "SWIFTUIWEB_RELEASE_HAS_NETWORKING",

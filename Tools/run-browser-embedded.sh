@@ -283,9 +283,12 @@ flags+=(-Xswiftc -Xfrontend -Xswiftc -disable-dynamic-actor-isolation -Xswiftc -
 flags+=(-Xlinker -z -Xlinker "stack-size=${SWIFTUIWEB_WASM_STACK_SIZE:-8388608}")
 # Generic specialization emits many near-identical bodies for different view
 # types. Swift's own function-merging pass folds them; a lower threshold merges
-# more aggressively (size only, measurable with Tools/analyze-wasm-size.js).
-# SWIFTUIWEB_WASM_MERGEFUNC_THRESHOLD=off keeps the toolchain default.
-[[ "${SWIFTUIWEB_WASM_MERGEFUNC_THRESHOLD:-off}" == off ]] || flags+=(-Xswiftc -Xllvm -Xswiftc "-swiftmergefunc-threshold=${SWIFTUIWEB_WASM_MERGEFUNC_THRESHOLD:-off}")
+# more aggressively (size only, measurable with Tools/analyze-wasm-size.js). A release merges at 30, which shrinks
+# app.wasm after wasm-opt (Documentation/Performance/WASM_SIZE.md); a debug build keeps the toolchain default.
+# SWIFTUIWEB_WASM_MERGEFUNC_THRESHOLD=<n> picks another threshold, =off keeps the toolchain default.
+mergefunc_default=off; [[ "$configuration" == release ]] && mergefunc_default=30
+mergefunc_threshold="${SWIFTUIWEB_WASM_MERGEFUNC_THRESHOLD:-$mergefunc_default}"
+[[ "$mergefunc_threshold" == off ]] || flags+=(-Xswiftc -Xllvm -Xswiftc "-swiftmergefunc-threshold=$mergefunc_threshold")
 # SwiftPM appends its own `-g` after user `-Xswiftc` flags, so `-Xswiftc -gnone`
 # never wins; `-debug-info-format none` stops SwiftPM from passing `-g`.
 # `--strip-debug` drops any remaining .debug_* at link time and keeps `name`,

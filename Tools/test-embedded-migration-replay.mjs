@@ -83,7 +83,7 @@ const scope = {
 };
 
 const settle = () => new Promise(resolve => setTimeout(resolve, 40));
-const init = { t: "init", module: MODULE, baseURL: URL_BASE, environment: [], local: [], session: [], cookies: "", hostname: "app.test", secure: true, migrate: true, diagnostics: false, dark: false, reducedMotion: false, cssLayout: false, publication: 0 };
+const init = { t: "init", module: MODULE, baseURL: URL_BASE, environment: [], local: [], session: [], cookies: "", hostname: "app.test", secure: true, migrate: true, diagnostics: false, dark: false, reducedMotion: false, publication: 0 };
 
 /** Runs one scenario: boots the Worker core, triggers the failing work, moves to the main thread if the Worker moved. */
 async function run(name, options) {

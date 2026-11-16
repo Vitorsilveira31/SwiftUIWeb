@@ -17,7 +17,7 @@
 const LEAVING = 'data-transition-leaving';
 // Elements the framework or another host owns the arrival of (presentations, navigation, lazy windows, tab panels), and
 // nodes that are not views. They keep their own motion; only an explicit `.transition` overrides that.
-const OWN_MOTION = '[data-lazy-cell],[data-lazy-spacer],[data-lazy-owner],.presentation-root,[data-presentation-id],.navigation-destination,[data-tab-panel],[data-tab-content],[popover],dialog,.context-menu-panel,[data-measurement-island],[data-hover-rules],[data-sl-rules],[data-geometry-host],[data-timeline-view="true"]';
+const OWN_MOTION = '[data-lazy-cell],[data-lazy-spacer],[data-lazy-owner],.presentation-root,[data-presentation-id],.navigation-destination,[data-tab-panel],[data-tab-content],[popover],dialog,.context-menu-panel,[data-measurement-island],[data-hover-rules],[data-geometry-host],[data-timeline-view="true"]';
 // Surfaces that leave as they arrived, backwards (`[data-exit-animation="true"]` in styles.css), whether or not the commit
 // that dismisses them animates: SwiftUI dismisses a sheet, a cover, a popover, an alert or a dialog, and pops a navigation
 // destination, with the same motion it presented them with.
