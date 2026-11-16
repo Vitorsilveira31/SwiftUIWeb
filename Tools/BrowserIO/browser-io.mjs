@@ -80,7 +80,7 @@ export function safeErrorMessage(error) {
 // DOM reads answer from a mirror of the mounted elements that the main thread reported
 // before the last reconciliation, and DOM writes are queued for the main thread
 // (remote-dom-host.js) to apply in order. See Documentation/EmbeddedWorker.md.
-export function createBrowserIO({ getInstance, environment = globalThis, baseURL, onError = (e) => console.error(safeErrorMessage(e)), wake = () => {}, remoteDOM = false, stackMeter = null }) {
+export function createBrowserIO({ getInstance, environment = globalThis, baseURL, onError = (e) => console.error(safeErrorMessage(e)), wake = () => {}, remoteDOM = false, stackMeter = null, onCookieWrite = () => {} }) {
   const operations = new Map(); const replies = new Map(); const databases = new Map(); let nextReply = 1; let disposed = false;
   // Side-effecting fetches started since the last snapshot (their id, operation and packet), and on a thread that took
   // the app over, the ones the Worker already sent: a replay asking for one of them again fails instead of sending it.
@@ -313,6 +313,8 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
     if (action === 1) {
       if (text.length > 4096) throw new IOError(-1, 'Cookie is too large');
       document.cookie = text;
+      // The page's cookie watcher learns of its own write, as the worker's host tells it (Tools/cookie-watch.js).
+      onCookieWrite();
       return new Writer().u32(0).bytes();
     }
     throw new IOError(-1, 'Invalid cookie action');

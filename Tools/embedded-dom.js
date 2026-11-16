@@ -3340,7 +3340,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
     }
   };
   // `worker` says where the Swift side runs; browser gates assert the runtime they meant to test.
-  const session={root, metrics, performanceMetrics, fail:error=>{if(!failed)report(error);}, get worker() { return typeof instance.htmlBytes === 'function' && instance.migrated !== true; }, flush:()=>{if(frame)window.cancelAnimationFrame(frame);commit();},
+  const session={root, metrics, performanceMetrics, fail:error=>{if(!failed)report(error);}, get failed() { return failed; }, get worker() { return typeof instance.htmlBytes === 'function' && instance.migrated !== true; }, flush:()=>{if(frame)window.cancelAnimationFrame(frame);commit();},
     // Whether Swift published since the last commit: a publication made outside a call or a task (a timer's callback).
     publicationPending:()=>Number(api.publish_seq?.()||0)!==committedSequence,
     // Resolves once the app has stopped changing: no geometry report or publication happened for a few frames. A Worker answers the host's geometry reports (a canvas learning its box) a round
