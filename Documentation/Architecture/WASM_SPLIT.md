@@ -68,8 +68,9 @@ is a same-origin fetch and compiles under the `'wasm-unsafe-eval'` the page alre
 ## 3. Measured
 
 Measured on 2026-11-16 (main at dbc7cb8f) on an Apple-silicon Mac shared with other work, Chromium, brotli sizes
-(quality 11). Sizes are deterministic; the timings are medians of interleaved runs (the split and the unsplit bundle alternate, each in a fresh
-browser), with the 99 percent bootstrap interval and signed-rank test of `Tools/perf-ab-stats.mjs`.
+(quality 11). Sizes are deterministic; the timings are medians of interleaved runs (the split and the unsplit bundle
+alternate, each in a fresh browser), with the 99 percent bootstrap interval and signed-rank test of
+`Tools/perf-ab-stats.mjs`.
 
 | Module sizes (brotli) | Unsplit `app.wasm` | `app.wasm` (first screen) | `app-rest.wasm` | Total |
 |---|---|---|---|---|
