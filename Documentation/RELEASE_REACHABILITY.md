@@ -64,6 +64,9 @@ pipeline may prune, and `proof` records the evidence behind each decision. Other
   `predicates` (the NSPredicate engine, in the page and the worker), `navigation` (the adaptive TabView shell)
   and `dragDrop` (the native drag coordinator). Their rules are deliberately wider than the API they serve: a
   false positive only keeps a host.
+  Like every feature here, the evidence is the application's own sources and its local packages: a feature used
+  only inside a remote Swift package dependency is not seen. Such an application names it in a JSON file passed as
+  `SWIFTUIWEB_RELEASE_ASSETS` (`{"features": {"motion": true}}`), which turns the feature on.
 
 Debug builds compile every feature in and skip the defines, so a feature can
 work in debug yet be absent from release. Check release with a release build of the consuming app (`make browser-release
