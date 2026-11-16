@@ -194,7 +194,14 @@ await runSuite(async () => {
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.wheel(0, 240);
     await page.waitForTimeout(500);
-    const scrolledByUser = await topState(modern);
+    // A wheel scroll is animated by some engines (WebKit) and slower on a slow runner: the scroll is sampled once it stopped.
+    let scrolledByUser = await topState(modern);
+    for (let stable = 0, end = Date.now() + 5000; stable < 3 && Date.now() < end; ) {
+      await page.waitForTimeout(100);
+      const next = await topState(modern);
+      stable = next.top === scrolledByUser.top ? stable + 1 : 0;
+      scrolledByUser = next;
+    }
     // The report follows the scroll's settling (140ms after the last scroll event), which engines spread out differently.
     await page.getByText("Positioned by user: true", { exact: true }).waitFor({ timeout: 20_000 });
     assert.equal(

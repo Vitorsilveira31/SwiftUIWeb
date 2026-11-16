@@ -74,6 +74,13 @@ async function scenario(page, base, rapid = false) {
     await page.setViewportSize({ width, height: 900 });
     await page.waitForTimeout(rapid ? 30 : 350);
   }
+  // Both runs end at the top: a click by the test's mouse scrolls the button into view and one made by the page does not, and
+  // a lazy list shows the window around where it was scrolled to, so the pages would differ by their scroll and not by what
+  // was published.
+  await page.evaluate(() => {
+    document.scrollingElement?.scrollTo(0, 0);
+    for (const element of document.querySelectorAll("*")) if (element.scrollTop) element.scrollTop = 0;
+  });
   await page.waitForTimeout(500);
 }
 
@@ -156,7 +163,12 @@ await runSuite(async () => {
     await lagging.addInitScript(() => { window.__acknowledgeLag = 2; window.__performanceDiagnostics = true; });
     await scenario(lagging, base, true);
     assert.ok(!(await lagging.evaluate(() => document.getElementById("embedded-app-root").dataset.runtimeError)), "runtime error after the lagging run");
-    const laggingDOM = await lagging.evaluate(normalizedDOM);
+    // Compared once both have settled, as the first two pages were.
+    let laggingDOM = await lagging.evaluate(normalizedDOM);
+    for (const end = Date.now() + 5000; laggingDOM !== complete && Date.now() < end; ) {
+      await lagging.waitForTimeout(100);
+      [laggingDOM, complete] = [await lagging.evaluate(normalizedDOM), await full.evaluate(normalizedDOM)];
+    }
     assert.ok(laggingDOM === complete, `a page that acknowledges late and drops publications left a different page ${firstDifference(laggingDOM, complete)}`);
     const laggingDiagnostics = await lagging.evaluate(() => window.__performanceMetrics.snapshot().diagnostics);
     console.log(`lagging: binary commits=${laggingDiagnostics.binaryCommits} records=${laggingDiagnostics.binaryRecords} full retries=${laggingDiagnostics.fullPublications}`);
