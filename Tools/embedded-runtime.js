@@ -5,6 +5,11 @@ import { createWasiHost, readDocumentEnvironment, stackDiagnosticsRequested, pub
 import { createWorkerInstance } from './embedded-worker-client.js';
 import { watchCookies } from './cookie-watch.js';
 import { writeEventValue } from './event-value.js';
+import { createSplitLoader, isSplitModule } from './wasm-split-loader.js';
+
+// The second half of a split release module (Tools/wasm-split-release.mjs): the functions the first screen did not run.
+// A bundle that is not split has no such file, and its module has no placeholder to load it for.
+const SECONDARY_MODULE = './app-rest.wasm';
 
 const encoder = new TextEncoder();
 let instance = null;
@@ -169,7 +174,14 @@ async function startOnMainThread(module, options, url) {
     const wasi = createWasiHost(() => instance, { environment: [...readDocumentEnvironment(globalThis.document, globalThis.navigator), 'SWIFT_DETERMINISTIC_HASHING=1'] });
     for (const name of Object.keys(imports.wasi_snapshot_preview1 ?? {})) imports.wasi_snapshot_preview1[name] = wasi(name);
   }
+  // This thread cannot wait for the second half of a split module in the middle of a call, so it loads both before the
+  // application runs; the download of the second starts with the instantiation of the first.
+  const split = !hot && isSplitModule(module) ? createSplitLoader(module, { url: new URL(SECONDARY_MODULE, import.meta.url).href }) : null;
+  const secondHalf = split?.load();
+  if (split) Object.assign(imports, split.imports);
   const result = await WebAssembly.instantiate(module, imports);
+  split?.attach(result);
+  await secondHalf;
   instance = result;
   if (typeof instance.exports._initialize === 'function') instance.exports._initialize();
   if (hot) {
@@ -308,7 +320,8 @@ function workerRequested(options) {
 }
 
 async function instantiateWithWorker(module, options) {
-  const facade = await createWorkerInstance(module, { baseURL: document.baseURI, diagnostics: options.performanceDiagnostics === true || window.__performanceDiagnostics === true });
+  const secondary = isSplitModule(module) ? new URL(SECONDARY_MODULE, import.meta.url).href : null;
+  const facade = await createWorkerInstance(module, { baseURL: document.baseURI, secondary, diagnostics: options.performanceDiagnostics === true || window.__performanceDiagnostics === true });
   workerInstance = facade;
   browserSession = mountEmbeddedBrowser(facade, options);
   // State kept across a reload: the worker is asked to save, and its storage write reaches this thread a moment later

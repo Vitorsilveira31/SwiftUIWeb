@@ -34,7 +34,7 @@ function severOpener(opened) {
   return true;
 }
 
-export async function createWorkerInstance(module, { baseURL, diagnostics = false, window: hostWindow = globalThis.window } = {}) {
+export async function createWorkerInstance(module, { baseURL, secondary = null, diagnostics = false, window: hostWindow = globalThis.window } = {}) {
   const workerName = './render-worker.js';
   const worker = new Worker(new URL(workerName, import.meta.url), { type: 'module' });
   let latest = { seq: 0, html: new Uint8Array(0), lazy: [], secure: {}, fiber: null };
@@ -254,7 +254,7 @@ export async function createWorkerInstance(module, { baseURL, diagnostics = fals
   // page asks for the JS mapper alone (`window.__cssLayoutSwift = false` or `?css-swift=0`).
   const cssFromSwift = !!hostWindow && hostWindow.__cssLayoutSwift !== false && !/[?&]css-swift=0\b/.test(hostWindow.location?.search || '');
   worker.postMessage({
-    t: 'init', module, baseURL, diagnostics, replies: replies?.name ?? null, migrate: hostWindow?.__renderWorkerMigration !== false, dark: prefersDark, reducedMotion: prefersReduced, cssLayout: cssFromSwift, publication: hostWindow ? publicationFlags(hostWindow) : 0,
+    t: 'init', module, baseURL, secondary, diagnostics, replies: replies?.name ?? null, migrate: hostWindow?.__renderWorkerMigration !== false, dark: prefersDark, reducedMotion: prefersReduced, cssLayout: cssFromSwift, publication: hostWindow ? publicationFlags(hostWindow) : 0,
     // Swift's first render lays out at the window (`embedded_browser_viewport` before the start).
     viewport: hostWindow ? { width: hostWindow.document?.documentElement?.clientWidth || hostWindow.innerWidth, height: hostWindow.visualViewport?.height || hostWindow.innerHeight } : null,
     environment: readDocumentEnvironment(hostWindow?.document, hostWindow?.navigator),

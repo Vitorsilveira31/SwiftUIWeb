@@ -561,6 +561,14 @@ fi
 # The resize rule names the elements whose stylesheets declare a transition, so it is written once every stylesheet of the
 # bundle (the framework's and the application's) is in place, and before a release renames the files.
 bun "$ROOT/Tools/scope-resize-transitions.mjs" "$final"
+# Split app.wasm (opt-in, release): the functions the first screen runs stay in app.wasm, the rest go to app-rest.wasm,
+# which downloads behind the first screen (Tools/wasm-split-release.mjs, Tools/wasm-split-loader.js). It runs the bundle in
+# headless Chromium, so it comes once every file is in place, and before the files get their hashed names.
+# SWIFTUIWEB_WASM_SPLIT_ROUTE (default /), SWIFTUIWEB_WASM_SPLIT_VIEWPORTS (default 1280x800,390x844).
+if [[ "${SWIFTUIWEB_WASM_SPLIT:-0}" == 1 ]]; then
+  [[ "$configuration" == release ]] || { echo "SWIFTUIWEB_WASM_SPLIT=1 needs CONFIGURATION=release" >&2; exit 2; }
+  bun "$ROOT/Tools/wasm-split-release.mjs" "$final" --route "${SWIFTUIWEB_WASM_SPLIT_ROUTE:-/}" --viewports "${SWIFTUIWEB_WASM_SPLIT_VIEWPORTS:-1280x800,390x844}" --log-dir "$build_logs"
+fi
 # A release names each framework file by its content (`app.3f9a1c2e.wasm`), so the server can cache it for a year;
 # index.html keeps its name and is revalidated. Every reference is rewritten (Tools/hash-release-bundle.mjs). It runs
 # before the CSP is sealed, because the inline bootstrap changes when its import is renamed.

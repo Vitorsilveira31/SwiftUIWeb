@@ -18,6 +18,7 @@ import { createBrowserIO, safeErrorMessage } from './BrowserIO/browser-io.mjs';
 import { createWasiHost } from './wasi-host.js';
 import { createHeadroomMeter } from './stack-probe.js';
 import { writeEventValue, readSecureBytes, readSecureIDs } from './event-value.js';
+import { createSplitLoader, isSplitModule } from './wasm-split-loader.js';
 
 const PREFIX = 'embedded_browser_';
 /** The frames a trap ran through (a trap carries no message): they name the Swift code that hit it. */
@@ -95,6 +96,8 @@ export function isStackOverflow(error) {
 export function createHostCore({ post: send, scope, canMigrate: mayMigrate = false }) {
   let canMigrate = mayMigrate;
   let instance = null, exports = null, browserIO = null;
+  // The second half of a split release module (Tools/wasm-split-loader.js); null for a module that is not split.
+  let split = null;
   let stackMeter = null, stackSamples = 0;
   let drainTimer = 0, drainScheduled = false, lastSeq = 0, diagnostics = false;
   // Diagnostics only: when the call behind the next publication reached this thread and when Swift returned from it (epoch
@@ -294,8 +297,13 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
     if (config.environment.includes('SWIFTUIWEB_STACK_DIAGNOSTICS=1')) stackMeter = createHeadroomMeter();
     browserIO = createBrowserIO({ getInstance: () => (halted || poisoned ? null : instance), environment: environmentFor(), baseURL: config.baseURL, wake: scheduleTaskDrain, onError: fail, remoteDOM: true, stackMeter });
     imports.browser_io = browserIO.imports;
+    // A Worker may wait for the second half synchronously when a call needs it before it arrived; the main thread loads
+    // it before the instance runs (`adopt`).
+    split = config.secondary && isSplitModule(module) ? createSplitLoader(module, { url: config.secondary, canBlock: typeof XMLHttpRequest === 'function' && typeof document === 'undefined' }) : null;
+    if (split) Object.assign(imports, split.imports);
     instance = await WebAssembly.instantiate(module, imports);
     exports = instance.exports;
+    split?.attach(instance);
   }
 
   function setUp(message) {
@@ -303,7 +311,7 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
     if (typeof message.replies === 'string' && typeof BroadcastChannel === 'function' && !replies) replies = new BroadcastChannel(message.replies);
     // `window.__renderWorkerMigration = false` keeps the app on the older recovery (a restart), for tests.
     if (message.migrate === false) canMigrate = false;
-    config = { diagnostics, migrate: message.migrate !== false, baseURL: message.baseURL, environment: Array.isArray(message.environment) ? message.environment : [], dark: message.dark === true, reducedMotion: message.reducedMotion === true, hostname: message.hostname || '', secure: message.secure === true };
+    config = { diagnostics, migrate: message.migrate !== false, baseURL: message.baseURL, secondary: typeof message.secondary === 'string' ? message.secondary : null, environment: Array.isArray(message.environment) ? message.environment : [], dark: message.dark === true, reducedMotion: message.reducedMotion === true, hostname: message.hostname || '', secure: message.secure === true };
     localMirror = new MirrorStorage(0, message.local || [], post);
     sessionMirror = new MirrorStorage(1, message.session || [], post);
     cookieMirror = new CookieMirror(message, post);
@@ -325,6 +333,8 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
     publishIfChanged();
     takeSnapshot();
     scheduleTaskDrain();
+    // The first screen is published: the rest of a split module downloads now, behind it.
+    split?.prefetch();
   }
 
   /** Continues an app another host gave up on (a Worker whose stack ran out): same module, the snapshot as memory. The
@@ -337,6 +347,8 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
     // shift this thread's monotonic clock so it continues from the Worker's.
     clock.monotonicOffsetMs = performance.timeOrigin - state.clock.origin;
     await instantiateModule(module);
+    // The snapshot may be anywhere in the app, so the whole module is here before the replay.
+    await split?.load();
     const memory = exports.memory;
     const missing = Math.ceil(state.length / 65536) - memory.buffer.byteLength / 65536;
     if (missing > 0) memory.grow(missing);
