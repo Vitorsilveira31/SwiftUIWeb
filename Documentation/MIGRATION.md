@@ -123,6 +123,14 @@ before/after comparison.
   `moon.fill`, `flame.fill`, `circle.fill` and `square.fill` were drawn as the same outline as their plain names; they are filled
   with the text color now. The other `.fill` names (a check in a circle, an arrow) are still outlines.
 
+### Release bundles ship two WebAssembly modules
+
+A release build splits `app.wasm` by what the first screen runs (`Architecture/WASM_SPLIT.md`): `app.<hash>.wasm` downloads
+before the first screen and `app-rest.<hash>.wasm` right after it. Deploy and cache the second file like the first (the
+same headers, content type `application/wasm`); a host that only copies `app.*.wasm` must copy `app-rest.*.wasm` too. The
+build machine needs Binaryen's `wasm-split` and a headless Chromium; without them the build ships one `app.wasm` and says
+so in a warning. `SWIFTUIWEB_WASM_SPLIT=0` keeps one module.
+
 ### API and behaviour found by the example apps
 
 The small example apps ("Small apps" in `Examples/README.md`) are fifteen apps, each in its own `Examples/` folder, of ordinary iOS 17 SwiftUI compiled for the browser. Closing what it found added API and changed

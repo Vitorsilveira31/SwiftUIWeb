@@ -23,7 +23,8 @@
 //
 // --check exits 0 when this machine can split (a wasm-split that has the options used here, and a Chromium for the
 // profile run) and otherwise prints why and exits 1. --fallback turns any failure into a warning that leaves the bundle as
-// it was, with one app.wasm: the launcher's default, the way Tools/strip-wasm-release.sh goes on without wasm-opt.
+// it was, with one app.wasm, and exits 3 (the launcher then builds the runtime scripts again without the split loader):
+// the launcher's default, the way Tools/strip-wasm-release.sh goes on without wasm-opt.
 //
 // usage: wasm-split-release.mjs <bundle-directory> [--route /] [--viewports 1280x800,390x844] [--log-dir DIR] [--no-verify]
 //                               [--cache-dir DIR] [--fallback]
@@ -68,6 +69,8 @@ const NEEDED_OPTIONS = ["--instrument", "--merge-profiles", "--profile", "--plac
 // The files of the bundle the profile run's code paths depend on, besides the module.
 const PAGE_FILES = ["index.html", "index.js", "render-worker.js", "runtime-shared.js"];
 const SPLIT_SOURCE = fileURLToPath(import.meta.url);
+/** The exit status of a --fallback run that left the bundle unsplit. */
+export const FELL_BACK = 3;
 
 /** Why this machine cannot split, or null when it can. */
 export async function unavailable() {
@@ -347,8 +350,10 @@ export async function main(argv) {
     await splitBundle(bundle, { route: values.route, viewports: parseViewports(values.viewports), logDir: values["log-dir"] ?? null, verify: !values["no-verify"], cacheDir: values["cache-dir"] ?? null });
   } catch (error) {
     if (!values.fallback) throw error;
-    // The bundle is only written once a split passed, so it still holds the one module it had.
+    // The bundle is only written once a split passed, so it still holds the one module it had. Its runtime scripts were
+    // built for a split module, though; exit 3 tells the launcher to build them again without the loader.
     console.error(`warning: this release app.wasm is NOT split (one module, downloaded whole before the first screen): ${String(error?.message ?? error).split("\n")[0]}. SWIFTUIWEB_WASM_SPLIT=0 builds without the split on purpose; SWIFTUIWEB_WASM_SPLIT=1 makes this an error.`);
+    return FELL_BACK;
   }
   return 0;
 }

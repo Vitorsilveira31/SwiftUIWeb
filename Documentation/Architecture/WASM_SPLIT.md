@@ -4,8 +4,12 @@ A SwiftUIWeb page cannot show its first screen until the whole `app.wasm` has ar
 only part of it. A split build moves every function the first screen did not run into a second module, `app-rest.wasm`, which
 downloads right after the screen is up. The page waits for fewer bytes before it shows anything; the total grows a little.
 
-It is opt-in and experimental: `SWIFTUIWEB_WASM_SPLIT=1` on a release build. No Swift API changes; an application that does not
-ask gets one `app.wasm`, as before.
+A release build splits by default. No Swift API changes. `SWIFTUIWEB_WASM_SPLIT=0` builds one `app.wasm` on purpose, and
+`SWIFTUIWEB_WASM_SPLIT=1` makes a split that cannot be made an error. Without the variable, a machine that lacks what the
+split needs (a Binaryen `wasm-split` with the options below, a headless Chromium), or a split that fails, ships one `app.wasm`
+with a warning, the way a release without `wasm-opt` does. Debug builds, the development loop and the `fast` release profile
+never split unless asked. The split of a module whose inputs did not change is reused from `.build/wasm-split-cache`
+(`SWIFTUIWEB_WASM_SPLIT_CACHE=0` turns it off), so an unchanged build runs no browser.
 
 ## 1. How the split is made
 

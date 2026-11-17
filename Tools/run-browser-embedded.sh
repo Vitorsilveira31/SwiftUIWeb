@@ -597,7 +597,10 @@ if [[ "$wasm_split" != off ]]; then
   split_args=(--route "${SWIFTUIWEB_WASM_SPLIT_ROUTE:-/}" --viewports "${SWIFTUIWEB_WASM_SPLIT_VIEWPORTS:-1280x800,390x844}" --log-dir "$build_logs")
   [[ "$wasm_split" != auto ]] || split_args+=(--fallback)
   [[ "${SWIFTUIWEB_WASM_SPLIT_CACHE:-1}" != 1 ]] || split_args+=(--cache-dir "$BUILD_ROOT/wasm-split-cache")
-  bun "$ROOT/Tools/wasm-split-release.mjs" "$final" "${split_args[@]}"
+  split_status=0; bun "$ROOT/Tools/wasm-split-release.mjs" "$final" "${split_args[@]}" || split_status=$?
+  # 3: the split fell back to one app.wasm. The runtime scripts were built with the split loader, which on the main thread
+  # requests app-rest.wasm before it knows the module is not split, so they are built again without it.
+  if [[ "$split_status" == 3 ]]; then bun "$ROOT/Tools/build-runtime-bundle.mjs" --outdir "$final" --manifest "$manifest"; elif [[ "$split_status" != 0 ]]; then exit "$split_status"; fi
 fi
 # A release names each framework file by its content (`app.3f9a1c2e.wasm`), so the server can cache it for a year;
 # index.html keeps its name and is revalidated. Every reference is rewritten (Tools/hash-release-bundle.mjs). It runs
