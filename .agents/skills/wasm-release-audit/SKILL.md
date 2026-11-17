@@ -15,7 +15,7 @@ runtime mode, and toolchain that produced the artifact.
   release build).
 - Use `make wasm-audit BUNDLE=...` for the size report; pass `LINK_MAP=...`
   when a link map and source attribution are needed.
-- Use `make wasm-budget BUNDLE=...` for the Brotli budget, and
+- Use `make wasm-budget BUNDLE=...` for the Brotli target (a report, never a failure), and
   `make wasm-size` / `make wasm-size-check` for the section report and its
   check.
 - Use `bun Tools/analyze-wasm-data.js` (it reads the linker map) when data

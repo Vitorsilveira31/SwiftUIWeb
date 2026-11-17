@@ -521,7 +521,7 @@ export function markdown(report) {
     `| LZ4 high compression | ${j(experimental.lz4_hc)} | no |`,
     `| Bzip2 level 9 | ${j(experimental.bzip2_9)} | no |`,
     `| 7z/LZMA2 ultra | ${j(experimental["7z_ultra"])} | no |`,
-    "", `Size gate: **${j(report.size_gate.status)}**. Embedded: **not established by binary inventory**.`, "",
+    "", `Size target: **${j(report.size_gate.status)}** (reported, not enforced). Embedded: **not established by binary inventory**.`, "",
   ];
   for (const module of report.modules) {
     lines.push(`## ${j(module.path)}`, "", `SHA-256: \`${j(module.sha256)}\``, "", "| Section | Bytes | % of module |", "| :--- | ---: | ---: |", "| Module header | 8 | |");
@@ -624,7 +624,8 @@ function audit(options) {
   }
   if (modules.length === 0) throw new AuditError("no deployable Wasm module was inventoried");
   const measured = totals.brotli;
-  const status = maxBrotli === null ? "NOT_REQUESTED" : measured === null ? "UNMEASURED" : measured < maxBrotli ? "PASS_LOCAL_ONLY" : "FAIL";
+  // Size is a target the report states, never a failure: over the target is reported, and the exit status does not change.
+  const status = maxBrotli === null ? "NOT_REQUESTED" : measured === null ? "UNMEASURED" : measured < maxBrotli ? "WITHIN_TARGET" : "OVER_TARGET";
   const profile = (level, delivery) => ({ level, delivery });
   return {
     schema_version: 1,

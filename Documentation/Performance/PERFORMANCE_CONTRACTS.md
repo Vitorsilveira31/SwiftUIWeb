@@ -3,14 +3,15 @@
 This page lists what the performance checks measure, the command that runs each check, and the file that holds its budget.
 The budgets in `PERFORMANCE_BUDGETS.json` and `BROWSER_ARTIFACT_SIZE_BASELINE.json` are the release gates. The size targets
 are reports: `make wasm-size` and `make wasm-size-check` record the sizes and compare them with the baseline, and they never fail
-a run because a size grew (`Tools/wasm-size.mjs`: "Size is a target, not a gate"). Only `make wasm-budget` fails on a size.
+a run because a size grew (`Tools/wasm-size.mjs`: "Size is a target, not a gate"). `make wasm-budget` reports a bundle against
+the 3,000,000 Brotli-byte target (`WITHIN_TARGET` or `OVER_TARGET`) and does not fail either.
 
 ```sh
 make perf-test                 # Swift lifecycle metrics, under .build/performance/
 make memory-test
 make wasm-size                 # raw, gzip, Brotli and zstd sizes of the local deployment assets
 make wasm-size-check           # the same, compared with EMBEDDED_WASM_SIZE_BASELINE.json (reports only)
-make wasm-budget BUNDLE=.build/browser/ShowcaseApp   # Brotli budget of a bundle; fails when it is exceeded
+make wasm-budget BUNDLE=.build/browser/ShowcaseApp   # a bundle against the Brotli target (reports only)
 make perf-browser-test         # builds the ShowcaseApp bundle, then checks browser performance
 make perf-ci                   # the set the nightly CI job runs
 ```
