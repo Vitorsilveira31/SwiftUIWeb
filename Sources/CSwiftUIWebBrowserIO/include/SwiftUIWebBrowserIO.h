@@ -19,6 +19,10 @@ void browser_io_free(void *pointer);
 void browser_io_wake_executor(void);
 /* Debug only: tells the host the render recursion depth so it can sample the call-stack headroom left. */
 void browser_io_stack_headroom(uint32_t depth);
+/* The atoms of the binary publication format, NUL-separated: written into `buffer` when `capacity` holds them; returns their
+ * length. A release app.wasm reads them from the page instead of carrying them (SwiftUIWebHTML BinaryAtomTable). 0 off the
+ * browser. */
+uint32_t browser_io_binary_atoms(uint8_t *buffer, uint32_t capacity);
 uint32_t browser_io_sync_request(uint32_t operation, const uint8_t *bytes, uint32_t length);
 uint32_t browser_io_result_length(uint32_t handle);
 int32_t browser_io_result_copy(uint32_t handle, uint8_t *destination, uint32_t capacity);

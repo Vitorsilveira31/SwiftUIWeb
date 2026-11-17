@@ -81,7 +81,8 @@ export function safeErrorMessage(error) {
 // DOM reads answer from a mirror of the mounted elements that the main thread reported
 // before the last reconciliation, and DOM writes are queued for the main thread
 // (remote-dom-host.js) to apply in order. See Documentation/EmbeddedWorker.md.
-export function createBrowserIO({ getInstance, environment = globalThis, baseURL, onError = (e) => console.error(safeErrorMessage(e)), wake = () => {}, remoteDOM = false, stackMeter = null, onCookieWrite = () => {} }) {
+export function createBrowserIO({ getInstance, environment = globalThis, baseURL, onError = (e) => console.error(safeErrorMessage(e)), wake = () => {}, remoteDOM = false, stackMeter = null, onCookieWrite = () => {}, binaryAtoms = '' }) {
+  let binaryAtomBytes = null;
   const operations = new Map(); const replies = new Map(); const databases = new Map(); let nextReply = 1; let disposed = false;
   // Side-effecting fetches started since the last snapshot (their id, operation and packet), and on a thread that took
   // the app over, the ones the Worker already sent: a replay asking for one of them again fails instead of sending it.
@@ -952,6 +953,14 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
     wake() { if (!disposed) wake(); },
     // Debug only (`?stack-depth=1`): the renderer reports its recursion depth; the meter probes the stack left.
     stack_headroom(depth) { stackMeter?.sample(depth >>> 0); },
+    // The atoms of the binary publication format, NUL-separated (`binaryAtoms`, the page's Tools/binary-atoms.generated.js): a
+    // release app.wasm reads them from here instead of carrying its own copy (BinaryAtomTable in
+    // Sources/SwiftUIWebHTML/BinaryStrings.swift). They are written when `capacity` holds them; the length is returned either way.
+    binary_atoms(pointer, capacity) {
+      binaryAtomBytes ??= encoder.encode(binaryAtoms);
+      if ((capacity >>> 0) >= binaryAtomBytes.length) new Uint8Array(memory().buffer).set(binaryAtomBytes, pointer >>> 0);
+      return binaryAtomBytes.length;
+    },
     // The standard library's Unicode character data (Sources/CSwiftUIWebBrowserIO/UnicodeData.c).
     ...createUnicodeImports(() => new Uint8Array(memory().buffer)),
   };

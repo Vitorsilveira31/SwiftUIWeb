@@ -8,6 +8,7 @@ import { readDocumentEnvironment, stackDiagnosticsRequested, publicationFlags } 
 import { createRemoteDOMHost } from './remote-dom-host.js';
 import { watchCookies } from './cookie-watch.js';
 import { createHostCore, measurementKey } from './embedded-host-core.js';
+import { BINARY_ATOMS } from './binary-atoms.generated.js';
 
 const PREFIX = 'embedded_browser_';
 const STORAGE_PREFIX = 'swui:';
@@ -251,6 +252,8 @@ export async function createWorkerInstance(module, { baseURL, secondary = null, 
   const prefersDark = hostWindow?.matchMedia?.('(prefers-color-scheme: dark)').matches === true;
   const prefersReduced = hostWindow?.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
   worker.postMessage({
+    // The binary publication atoms: a release app.wasm reads them from its host instead of carrying them (BinaryAtomTable).
+    atoms: BINARY_ATOMS.join('\0'),
     t: 'init', module, baseURL, secondary, diagnostics, replies: replies?.name ?? null, migrate: hostWindow?.__renderWorkerMigration !== false, dark: prefersDark, reducedMotion: prefersReduced, publication: hostWindow ? publicationFlags(hostWindow) : 0,
     // Swift's first render lays out at the window (`embedded_browser_viewport` before the start).
     viewport: hostWindow ? { width: hostWindow.document?.documentElement?.clientWidth || hostWindow.innerWidth, height: hostWindow.visualViewport?.height || hostWindow.innerHeight } : null,

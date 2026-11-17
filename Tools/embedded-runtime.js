@@ -6,6 +6,7 @@ import { createWorkerInstance } from './embedded-worker-client.js';
 import { watchCookies } from './cookie-watch.js';
 import { writeEventValue } from './event-value.js';
 import { createSplitLoader, isSplitModule } from './wasm-split-loader.js';
+import { BINARY_ATOMS } from './binary-atoms.generated.js';
 
 // The second half of a split release module (Tools/wasm-split-release.mjs): the functions the first screen did not run.
 // A bundle that is not split has no such file, and its module has no placeholder to load it for. The launcher defines
@@ -106,7 +107,7 @@ function importsFor(module) {
   }
   let stackMeter = null;
   if (stackDiagnosticsRequested(globalThis.document)) { stackMeter = createHeadroomMeter(); globalThis.__stackProbe = stackMeter; }
-  const browserIO = createBrowserIO({ getInstance: () => instance, wake: scheduleTaskDrain, stackMeter, onCookieWrite: () => cookieWatch?.wrote() });
+  const browserIO = createBrowserIO({ getInstance: () => instance, wake: scheduleTaskDrain, stackMeter, onCookieWrite: () => cookieWatch?.wrote(), binaryAtoms: BINARY_ATOMS.join('\0') });
   browserIOHost = browserIO;
   imports.browser_io = browserIO.imports;
   return imports;

@@ -37,7 +37,9 @@ that publication and no other. Old readers ignore unknown bits, so the version i
 (`true`, `intrinsic`, `text`, `vstack`, the layout and control class names...). Atoms are generated at build time from
 one list (`Tools/binary-atoms.json`) into Swift and JavaScript by `swiftuiweb-tools`, as BrowserIO's protocol is. The
 header carries the hash of the list, so a page and a worker from different builds refuse each other instead of
-misreading. Higher indices name this publication's own strings, which are decoded once per publication. Swift interns
+misreading. A release `app.wasm` does not carry the atoms themselves (9 KB its first screen would download): the page
+holds the same list, and the Swift table reads it once from its host (`browser_io.binary_atoms`; the worker receives it
+with its `init` message). Debug and native builds keep the generated literal. Higher indices name this publication's own strings, which are decoded once per publication. Swift interns
 values up to 64 bytes in a per-publication table (class lists and style texts repeat a lot) and appends longer ones as
 they come. The values that belong to one element (its node id, its event token) are appended without a lookup.
 

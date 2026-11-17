@@ -2,7 +2,7 @@
 /// after it is built, and so shared by every publication. Lookups work on bytes, so no `String` is made to find an
 /// index (the name of an attribute arrives as bytes of the attribute sorter's arena, a value as bytes of the scratch it
 /// was assembled in).
-final class BinaryAtomTable: @unchecked Sendable {
+package final class BinaryAtomTable: @unchecked Sendable {
   static let shared = BinaryAtomTable()
 
   let count = Int(_BinaryFormat.atomCount)
@@ -13,6 +13,13 @@ final class BinaryAtomTable: @unchecked Sendable {
   private var lengths: [Int32] = []
   private var arena: [UInt8] = []
 
+  #if SWIFTUIWEB_RELEASE
+  /// Where a release reads the atoms: the page's host holds the same table (Tools/binary-atoms.generated.js) and writes it,
+  /// NUL-separated, into the buffer it is given, returning its length (so a call with no room asks how much it needs).
+  /// The browser launch installs it before the first publication; a release app.wasm does not carry the atoms itself.
+  nonisolated(unsafe) package static var hostAtoms: ((UnsafeMutablePointer<UInt8>?, Int) -> Int)?
+  #endif
+
   private init() {
     var capacity = 1024
     while capacity < count * 3 { capacity *= 2 }
@@ -21,10 +28,21 @@ final class BinaryAtomTable: @unchecked Sendable {
     hashes.reserveCapacity(count)
     starts.reserveCapacity(count)
     lengths.reserveCapacity(count)
-    // The atoms are one NUL-separated literal.
+    // The atoms are one NUL-separated string.
+    #if SWIFTUIWEB_RELEASE
+    guard let host = Self.hostAtoms, case let length = host(nil, 0), length > 0 else { fatalError("no host binary atoms") }
+    var atoms = [UInt8](repeating: 0, count: length)
+    guard atoms.withUnsafeMutableBufferPointer({ host($0.baseAddress, $0.count) }) == atoms.count else { fatalError("host binary atoms changed") }
+    atoms.withUnsafeBufferPointer { add($0.baseAddress!, total: $0.count) }
+    #else
     let atoms = _BinaryFormat.atoms
-    let bytes = atoms.utf8Start
-    let total = atoms.utf8CodeUnitCount
+    add(atoms.utf8Start, total: atoms.utf8CodeUnitCount)
+    #endif
+    if hashes.count != count { fatalError("binary atoms differ") }
+  }
+
+  /// Indexes the NUL-separated atoms at `bytes`.
+  private func add(_ bytes: UnsafePointer<UInt8>, total: Int) {
     arena.reserveCapacity(total)
     var begin = 0
     var index = 0
