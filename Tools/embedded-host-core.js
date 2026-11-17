@@ -418,7 +418,25 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
   }
 
   /** Handles one message from the page. */
-  async function handle(data) {
+  // A call into a split module (an input, a reply) may need a function of app-rest.wasm. Until it has arrived, calls wait
+  // for the download that is already under way instead of running: a placeholder hit would load the module again with a
+  // synchronous request, downloading it twice (Tools/wasm-split-loader.js). The messages behind such a call wait with it,
+  // in order. A call that only the first screen's functions answer waits too; it would not have to, but a call cannot
+  // be undone once a placeholder stops it.
+  let queue = null;
+  let queued = 0;
+
+  function handle(data) {
+    const waits = queue !== null || (data.t === 'call' && globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER !== false && split && !split.loaded && !halted && !poisoned);
+    if (!waits) return handleNow(data);
+    queue ||= split.load().catch(() => { /* the call still loads it synchronously */ });
+    queued += 1;
+    const turn = queue.then(() => handleNow(data)).finally(() => { if (--queued === 0) queue = null; });
+    queue = turn.catch(() => {});
+    return turn;
+  }
+
+  async function handleNow(data) {
     // After the move the Worker only hands back what the page already sent it, in order; `drain-marker` ends that.
     if (halted) {
       if (data.t === 'drain-marker') post({ t: 'forward-done' });
