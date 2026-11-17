@@ -303,4 +303,30 @@ final class BrowserIOContractTests {
     let cleared = await browserIOErrorCode { try await store.removeAll() }
     #expect([loaded, saved, removed, cleared] == [-7, -7, -7, -7])
   }
+
+  @Test
+  func cookieJarReportsTheMissingHostInBothDirections() {
+    let jar = BrowserCookieJar()
+    do {
+      _ = try jar.snapshot()
+      Issue.record("expected unavailable cookie host")
+    } catch {
+      #expect(error.code == -7)
+    }
+    do {
+      try jar.write("theme=dark")
+      Issue.record("expected unavailable cookie host")
+    } catch {
+      #expect(error.code == -7)
+    }
+  }
+
+  @Test
+  func predicateHostCallsAnswerNilWithoutAHost() {
+    let first = BrowserPredicate.makeIdentifier()
+    let second = BrowserPredicate.makeIdentifier()
+    #expect(first != second)
+    #expect(BrowserPredicate.describe(id: first, format: "name == 'a'", arguments: [], bindings: []) == nil)
+    #expect(BrowserPredicate.evaluate(id: second, format: "name == 'a'", arguments: [], bindings: [], object: []) == nil)
+  }
 }

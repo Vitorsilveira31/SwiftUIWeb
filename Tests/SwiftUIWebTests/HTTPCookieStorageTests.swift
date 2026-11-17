@@ -218,4 +218,47 @@ struct HTTPCookieStorageTests {
     CookieJarRuntime.notifyChanged()
     #expect(counter.count == 2)
   }
+
+  @Test
+  func aDotDomainCookieReachesNoHostThroughTheJar() {
+    let jar = FakeCookieJar()
+    jar.cookieString = "token=1"
+    jar.host = "."
+    withJar(jar) {
+      #expect(HTTPCookieStorage.shared.cookies?.first?.domain == ".")
+      #expect(HTTPCookieStorage.shared.cookies(for: URL(string: "https://example.test/")!) == nil)
+    }
+  }
+  @Test
+  func aDotDomainCookieReachesTheDomainsSubdomains() {
+    let jar = FakeCookieJar()
+    jar.cookieString = "token=1"
+    jar.host = ".example.test"
+    withJar(jar) {
+      // A subdomain is not the domain itself, so the suffix decides.
+      #expect(HTTPCookieStorage.shared.cookies(for: URL(string: "https://www.example.test/a")!)?.first?.name == "token")
+      #expect(HTTPCookieStorage.shared.cookies(for: URL(string: "https://other.test/a")!) == nil)
+    }
+  }
+
+  @Test
+  func aURLWithNoPathAfterTheHostStillMatchesItsHost() {
+    let jar = FakeCookieJar()
+    jar.cookieString = "token=1"
+    jar.host = "example.test"
+    withJar(jar) {
+      // "https://example.test" has no "/" after the authority: the host runs to the end of the address.
+      #expect(HTTPCookieStorage.shared.cookies(for: URL(string: "https://example.test")!)?.first?.name == "token")
+    }
+  }
+  @Test
+  func aPlainHTTPPageGetsTheHostsNonSecureCookie() {
+    let jar = FakeCookieJar()
+    jar.cookieString = "token=1"
+    jar.host = "example.test"
+    withJar(jar) {
+      // http is a web scheme too (a backslash ends its authority), but not a secure one.
+      #expect(HTTPCookieStorage.shared.cookies(for: URL(string: "http://example.test/a")!)?.first?.name == "token")
+    }
+  }
 }
