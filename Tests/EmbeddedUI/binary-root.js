@@ -89,12 +89,14 @@ export function binaryRoot(markup, document = globalThis.document) {
   words[1] = emitList(template.content.childNodes, PLAIN);
 
   const table = new TextEncoder().encode(own.join('\0'));
-  const bytes = new Uint8Array(HEADER_BYTES + words.length * 4 + table.length);
+  // A first publication carries the atoms after its strings (flag 4), as Swift's does until the page acknowledges one.
+  const atoms = new TextEncoder().encode(BINARY_ATOMS.join('\0'));
+  const bytes = new Uint8Array(HEADER_BYTES + words.length * 4 + table.length + 4 + atoms.length);
   const view = new DataView(bytes.buffer);
-  // The header: 0 and "SWB", the version, flags (none), the atoms hash, the shape generation (none), then the counts.
+  // The header: 0 and "SWB", the version, flags (4: the atoms follow), the atoms hash, the shape generation (none), then the counts.
   bytes.set([0, 0x53, 0x57, 0x42], 0);
   view.setUint16(4, BINARY_VERSION, true);
-  view.setUint16(6, 0, true);
+  view.setUint16(6, 4, true);
   view.setUint32(8, BINARY_ATOMS_HASH, true);
   view.setUint32(12, 0, true);
   view.setUint32(16, words.length, true);
@@ -102,5 +104,7 @@ export function binaryRoot(markup, document = globalThis.document) {
   view.setUint32(24, table.length, true);
   words.forEach((word, index) => view.setUint32(HEADER_BYTES + index * 4, word, true));
   bytes.set(table, HEADER_BYTES + words.length * 4);
+  view.setUint32(HEADER_BYTES + words.length * 4 + table.length, atoms.length, true);
+  bytes.set(atoms, HEADER_BYTES + words.length * 4 + table.length + 4);
   return bytes;
 }

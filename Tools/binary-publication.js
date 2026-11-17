@@ -3,7 +3,7 @@
 // markup. The DOM it builds is the DOM the parser builds from the same tree's HTML, quirks included (`buildFragment`),
 // and `compareDom` is how the verification mode (`window.__binaryVerify`) proves it, against a reference publication of the same
 // tree that Swift attaches to each publication in that mode.
-import { BINARY_VERSION, BINARY_ATOMS_HASH, BINARY_OPS, BINARY_NAMESPACES, BINARY_ATOMS } from './binary-atoms.generated.js';
+import { BINARY_VERSION, BINARY_ATOMS_HASH, BINARY_OPS, BINARY_NAMESPACES } from './binary-atoms.generated.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const MATHML_NS = 'http://www.w3.org/1998/Math/MathML';
@@ -15,11 +15,25 @@ const HEADER_BYTES = 28;
 const FLAG_REFERENCE = 1;
 // Flag 2: a record names an element for a view transition, so the page may start one for this publication (see `commit`).
 const FLAG_TRANSITION = 2;
+// Flag 4: the atoms follow the strings (a u32 byte count, then the atoms separated by NUL). Swift sends them until the page
+// acknowledges a publication; the page keeps them for the rest of the session and ships no copy of its own.
+const FLAG_ATOMS = 4;
 const { ROOT, ATTRS, CHILDREN, HELD, ELEMENT, ELEMENT_NS, TEXT, SHAPE, DEFINE, END } = BINARY_OPS;
 const NODE_ID = 'data-embedded-node-id';
 // The attributes a publication puts on the first element of the tree to ask something of the page. The page reads them before it
 // patches anything, and the hover rules are never written to an element: they are applied to a style sheet.
-const ANNOTATION_TRANSACTION = BINARY_ATOMS.indexOf('data-animation-transaction'), ANNOTATION_HOVER_RULES = BINARY_ATOMS.indexOf('data-hover-rules');
+// Their indices are known once the atoms are (`installAtoms`).
+let ANNOTATION_TRANSACTION = -1, ANNOTATION_HOVER_RULES = -1;
+/** The atoms, in index order: from the first publication that carried them, or from `installAtoms`. */
+let atoms = null;
+
+/** Makes `list` the atoms of the publications read from now on. The runtime takes them from the first publication; a test
+ * that builds publications without Swift passes `BINARY_ATOMS` of Tools/binary-atoms.generated.js. */
+export function installAtoms(list) {
+  atoms = Object.freeze([...list]);
+  ANNOTATION_TRANSACTION = atoms.indexOf('data-animation-transaction');
+  ANNOTATION_HOVER_RULES = atoms.indexOf('data-hover-rules');
+}
 
 /** A publication the page cannot read: from another build (its version or atoms differ), or damaged. */
 export class BinaryFormatError extends Error {}
@@ -44,7 +58,8 @@ export function sameBinary(a, b) {
 export function isEmptyUpdate(bytes) {
   if (bytes.length < HEADER_BYTES) return false;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  return view.getUint32(16, true) === 0 && (view.getUint16(6, true) & FLAG_REFERENCE) === 0 && view.getUint16(4, true) === BINARY_VERSION && view.getUint32(8, true) === BINARY_ATOMS_HASH;
+  // Before the atoms arrived nothing is "nothing to apply": the page has not committed a publication yet.
+  return view.getUint32(16, true) === 0 && atoms !== null && (view.getUint16(6, true) & FLAG_REFERENCE) === 0 && view.getUint16(4, true) === BINARY_VERSION && view.getUint32(8, true) === BINARY_ATOMS_HASH;
 }
 
 const decoder = new TextDecoder('utf-8', {fatal: true, ignoreBOM: true});
@@ -71,8 +86,17 @@ export function readPublication(bytes) {
   if (text.includes('\r')) text = text.replace(/\r\n?/g, '\n');
   const own = stringCount ? text.split('\0') : [];
   if (own.length !== stringCount) throw new BinaryFormatError('SwiftUIWeb binary publication string table is damaged');
-  const reference = flags & FLAG_REFERENCE ? bytes.subarray(end) : null;
-  return {words, strings: BINARY_ATOMS.concat(own), reference, generation, transition: (flags & FLAG_TRANSITION) !== 0};
+  let next = end;
+  if (flags & FLAG_ATOMS) {
+    if (next + 4 > bytes.length) throw new BinaryFormatError('SwiftUIWeb binary publication is shorter than its header says');
+    const atomBytes = view.getUint32(next, true);
+    if (next + 4 + atomBytes > bytes.length) throw new BinaryFormatError('SwiftUIWeb binary publication atoms are cut short');
+    if (atoms === null) installAtoms(decoder.decode(bytes.subarray(next + 4, next + 4 + atomBytes)).split('\0'));
+    next += 4 + atomBytes;
+  }
+  if (atoms === null) throw new BinaryFormatError('SwiftUIWeb binary publication arrived before the atoms');
+  const reference = flags & FLAG_REFERENCE ? bytes.subarray(next) : null;
+  return {words, strings: atoms.concat(own), reference, generation, transition: (flags & FLAG_TRANSITION) !== 0};
 }
 
 // What the HTML parser does to names inside SVG and MathML: it lowercases every name, then restores the case of the ones

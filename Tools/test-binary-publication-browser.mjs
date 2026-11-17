@@ -26,8 +26,10 @@ await runSuite(async () => {
     const page = await browser.newPage();
     await page.goto(`${server.base}/binary-publication.js`);
     const results = await page.evaluate(async ({ base, fixtures }) => {
-      const { readPublication, Builder, Handles, Templates, scanRecords, compareDom, BinaryFormatError } = await import(`${base}/binary-publication.js`);
+      const { readPublication, Builder, Handles, Templates, scanRecords, compareDom, BinaryFormatError, installAtoms } = await import(`${base}/binary-publication.js`);
       const { BINARY_ATOMS, BINARY_OPS } = await import(`${base}/binary-atoms.generated.js`);
+      // Fixtures that are updates carry no atoms (Swift sends them until the page acknowledges a publication).
+      installAtoms(BINARY_ATOMS);
       const out = [];
       const inert = () => document.implementation.createHTMLDocument("");
       const everything = { attributeOwned: () => false, styleOwned: () => false, styleText: () => [], contentOwned: () => false };

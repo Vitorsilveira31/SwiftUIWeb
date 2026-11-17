@@ -14,6 +14,8 @@ private struct BinaryStream {
   var ownCount = 0
   var reference: [UInt8]?
   var generation: UInt32 = 0
+  /// Whether the atoms rode along (flag 4).
+  var carriesAtoms = false
 
   init(_ bytes: [UInt8]) {
     func u16(_ offset: Int) -> Int { Int(bytes[offset]) | Int(bytes[offset + 1]) << 8 }
@@ -28,7 +30,15 @@ private struct BinaryStream {
     let stringsStart = 28 + wordCount * 4
     let own = count == 0 ? [] : bytes[stringsStart..<(stringsStart + stringBytes)].split(separator: 0, omittingEmptySubsequences: false).map { String(decoding: $0, as: UTF8.self) }
     precondition(own.count == count, "strings")
-    if flags & 1 != 0 { reference = Array(bytes[(stringsStart + stringBytes)...]) }
+    var next = stringsStart + stringBytes
+    // Flag 4: the atoms follow the strings, until the host acknowledges a publication.
+    if flags & 4 != 0 {
+      let length = Int(u32(next))
+      precondition(Array(bytes[(next + 4)..<(next + 4 + length)]) == _BinaryFormat.atoms.withUTF8Buffer({ Array($0) }), "atoms")
+      next += 4 + length
+      carriesAtoms = true
+    }
+    if flags & 1 != 0 { reference = Array(bytes[next...]) }
     var atoms: [String] = []
     var current: [UInt8] = []
     for byte in _BinaryFormat.atoms.withUTF8Buffer({ Array($0) }) {
@@ -491,6 +501,19 @@ struct BinaryEncoderTests {
     _ = other.publish(page(title: "u"))
     other.acked = 1
     #expect(try #require(other.publish(page(title: "v", keeping: ["3:1:"]))).isRoot == false)
+  }
+
+  @Test
+  func everyPublicationCarriesTheAtomsUntilTheHostAcknowledgesOne() throws {
+    // The page ships no list of atoms: whichever publication it applies first has to bring them.
+    let publisher = Publisher()
+    _ = try #require(publisher.publish(page()))
+    #expect(BinaryStream(publisher.bytes).carriesAtoms)
+    _ = try #require(publisher.publish(page(title: "u")))
+    #expect(BinaryStream(publisher.bytes).carriesAtoms)
+    publisher.acked = 2
+    _ = try #require(publisher.publish(page(title: "v", keeping: ["3:1:"])))
+    #expect(!BinaryStream(publisher.bytes).carriesAtoms)
   }
 
   @Test

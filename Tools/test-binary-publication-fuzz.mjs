@@ -64,6 +64,8 @@ await runSuite(async () => {
     await page.goto(`${server.base}/binary-publication.js`);
     await page.evaluate(async (base) => {
       const module = await import(`${base}/binary-publication.js`);
+      // The cases are publications of a page that has its atoms already (Swift sends them until the first acknowledgement).
+      module.installAtoms((await import(`${base}/binary-atoms.generated.js`)).BINARY_ATOMS);
       window.__fuzz = (list) => {
         const { readPublication, Builder, Handles, Templates, scanRecords, rootHoverRules } = module;
         const inert = document.implementation.createHTMLDocument("");

@@ -199,7 +199,8 @@ function renderAtoms({ version, ops, namespaces, atoms }) {
   const javascript = `${header}export const BINARY_VERSION = ${version};\nexport const BINARY_ATOMS_HASH = ${hex};\n`
     + `export const BINARY_OPS = Object.freeze({\n${ops.map(([name, value]) => `  ${name}: ${value},\n`).join("")}});\n`
     + `export const BINARY_NAMESPACES = Object.freeze({\n${namespaces.map(([name, value]) => `  ${name}: ${value},\n`).join("")}});\n`
-    + `export const BINARY_ATOMS = Object.freeze([\n${atoms.map((atom) => `  ${JSON.stringify(atom)},\n`).join("")}]);\n`;
+    + `// Tests and tools only: the runtime takes the atoms from the publications (Documentation/Architecture/BINARY_PATCHES.md), so a\n`
+    + `// bundle drops this list.\nexport const BINARY_ATOMS = /* @__PURE__ */ Object.freeze([\n${atoms.map((atom) => `  ${JSON.stringify(atom)},\n`).join("")}]);\n`;
   return [[ATOMS_SWIFT_PATH, swift], [ATOMS_JAVASCRIPT_PATH, javascript]];
 }
 

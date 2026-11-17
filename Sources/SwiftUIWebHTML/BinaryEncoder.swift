@@ -96,6 +96,10 @@ package struct BinaryFiberEncoder {
   /// Header flag 2: a record carries an element named for a view transition (`ViewTransitionNameModifier`). The page starts a
   /// view transition only for such a publication; every other publication is applied exactly as before.
   private static let transitionFlag: UInt16 = 2
+  /// Header flag 4: the atoms follow the strings (a u32 byte count, then the atoms in index order, separated by NUL). The page
+  /// has no copy of its own; every publication carries them until the host acknowledges one, as shape definitions are carried,
+  /// so that whichever publication the host applies first it has them.
+  private static let atomsFlag: UInt16 = 4
 
   /// Whether the host holds the tree already, so that a publication lists changes.
   package var hostHoldsTree: Bool { rootRecord.firstEpoch != 0 && rootRecord.firstEpoch <= acked }
@@ -117,12 +121,15 @@ package struct BinaryFiberEncoder {
     var out: [UInt8] = []
     let words = engine.words
     let strings = engine.strings.ownBytes
-    out.reserveCapacity(Self.headerLength + words.count * 4 + strings.count + (reference?.count ?? 0))
+    let atoms = _BinaryFormat.atoms
+    let carriesAtoms = acked == 0
+    out.reserveCapacity(Self.headerLength + words.count * 4 + strings.count + (carriesAtoms ? 4 + atoms.utf8CodeUnitCount : 0) + (reference?.count ?? 0))
     out.append(0)
     out.append(contentsOf: [UInt8(ascii: "S"), UInt8(ascii: "W"), UInt8(ascii: "B")])
     Self.append(UInt16(_BinaryFormat.version), to: &out)
     var flags = reference == nil ? UInt16(0) : Self.verifyFlag
     if engine.namedRecords { flags |= Self.transitionFlag }
+    if carriesAtoms { flags |= Self.atomsFlag }
     Self.append(flags, to: &out)
     Self.append(_BinaryFormat.atomsHash, to: &out)
     Self.append(shapes?.generation ?? 0, to: &out)
@@ -132,6 +139,10 @@ package struct BinaryFiberEncoder {
     // The words are little-endian, which is how every host this runs on stores them.
     words.withUnsafeBytes { out.append(contentsOf: $0) }
     out.append(contentsOf: strings)
+    if carriesAtoms {
+      Self.append(UInt32(atoms.utf8CodeUnitCount), to: &out)
+      out.append(contentsOf: UnsafeBufferPointer(start: atoms.utf8Start, count: atoms.utf8CodeUnitCount))
+    }
     if let reference { out.append(contentsOf: reference) }
     return Output(bytes: out, updates: engine.updates, rootRecord: engine.rootRecord, isRoot: !hostHoldsTree, attrsRecords: engine.attrsRecords, childrenRecords: engine.childrenRecords, heldNodes: engine.heldNodes, shapeDefinitions: engine.shapeDefinitions, shapeInstances: engine.shapeInstances)
   }

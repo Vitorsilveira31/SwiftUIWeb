@@ -19,25 +19,31 @@ Static rendering (`SwiftUIWebHTML` for server-side rendering and previews) still
 
 The stream travels in the HTML slot (`html_pointer`, `html_length`, and the `html` field of the worker's `publish`
 message). Its first byte is 0, which HTML never contains. All words are little-endian `u32`, as in BrowserIO. The format
-version is 3 (`_BinaryFormat.version`).
+version is 4 (`_BinaryFormat.version`).
 
 ```
 header   u8 0, "SWB", u16 version, u16 flags, u32 atoms hash, u32 shape generation,
          u32 word count, u32 string count, u32 string bytes
 words    the records, in tree order
 strings  UTF-8, separated by NUL
+atoms    only with flag 4: u32 byte count, then the atoms in index order, UTF-8, separated by NUL
 ref      only with flag 1 (the verification mode): a complete publication of the same tree, to the end
 ```
 
 **Flags.** Bit 1 (`1`) is the verification reference above. Bit 2 (`2`) is set when a record writes an element with a
 `view-transition-name` style (a matched view, see `ViewTransitionNameModifier`): the page may start a view transition for
-that publication and no other. Old readers ignore unknown bits, so the version is unchanged.
+that publication and no other. Bit 3 (`4`) says the atoms follow the strings (see "Strings"). Old readers ignore unknown
+bits 1 and 2, so adding them kept the version; the atoms section moves the reference, so it came with version 4.
 
 **Strings.** Indices below `ATOM_COUNT` name **atoms**: tags, attribute names and the framework's frequent values
 (`true`, `intrinsic`, `text`, `vstack`, the layout and control class names...). Atoms are generated at build time from
 one list (`Tools/binary-atoms.json`) into Swift and JavaScript by `swiftuiweb-tools`, as BrowserIO's protocol is. The
 header carries the hash of the list, so a page and a worker from different builds refuse each other instead of
-misreading. Higher indices name this publication's own strings, which are decoded once per publication. Swift interns
+misreading. The page's runtime does not ship the list: the wasm has it already, so every publication carries it (flag 4)
+until the host acknowledges one, as shape definitions are carried, and the page keeps the first copy it reads for the rest
+of the session (`installAtoms` in `Tools/binary-publication.js`). A publication that arrives before the atoms, which a page
+that acknowledged nothing never sees, is refused. `BINARY_ATOMS` in `Tools/binary-atoms.generated.js` is for the tests and
+tools; the bundle drops it. Higher indices name this publication's own strings, which are decoded once per publication. Swift interns
 values up to 64 bytes in a per-publication table (class lists and style texts repeat a lot) and appends longer ones as
 they come. The values that belong to one element (its node id, its event token) are appended without a lookup.
 
