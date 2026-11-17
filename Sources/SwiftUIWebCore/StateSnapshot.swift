@@ -13,13 +13,13 @@ package enum _StateSnapshots {
   /// Set by the browser launcher of a debug build before the first render; a `State` made while it is off keeps nothing.
   nonisolated(unsafe) package static var enabled = false
   /// The values an earlier page saved, by state key, until a state takes each one.
-  nonisolated(unsafe) static var pending: [String: (tag: String, text: String)] = [:]
+  nonisolated(unsafe) static var pending: [String: (tag: String, text: String)] = .init()
 
   /// The states of `store` that have a text form: one line each, `key<TAB>tag<TAB>text`, with line breaks, tabs and
   /// backslashes of the key and the text written `\n`, `\t` and `\\`. Sorted by key, so the text does not depend on the
   /// order of a dictionary.
   @MainActor package static func text(of store: StateStore) -> String {
-    var byKey: [String: (tag: String, text: String)?] = [:]
+    var byKey: [String: (tag: String, text: String)?] = .init()
     for entry in store._snapshotEntries() {
       let key = stableKey(entry.key)
       // Two states that only the type's address told apart cannot be told apart by the next page: neither is kept.

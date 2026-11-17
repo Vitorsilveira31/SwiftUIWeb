@@ -64,7 +64,7 @@ package nonisolated struct ContainerRelativeFrameModifier: ViewModifier {
   }
 
   @MainActor package func _apply(to node: _RenderNode, context: inout _RenderContext) {
-    StyleModifier(styles: [:], semantic: _semanticAttributes)._apply(to: node, context: &context)
+    StyleModifier(styles: .init(), semantic: _semanticAttributes)._apply(to: node, context: &context)
   }
 
   private static func _encode(_ samples: [(Double, Double)]) -> String {

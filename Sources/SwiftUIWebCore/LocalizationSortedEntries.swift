@@ -67,7 +67,7 @@ struct LocalizationSortedEntries: Sendable {
     var end = begin
     while end < count, bytes[end] != Self.recordEnd { end += 1 }
     guard end > begin, bytes[begin] == Self.pluralMarker else { return .text(text(bytes, begin, end)) }
-    var forms: [String: String] = [:]
+    var forms: [String: String] = .init()
     var form = begin + 1
     while form <= end {
       var formEnd = form

@@ -212,7 +212,7 @@ open class AVAsset: AVAsynchronousKeyValueLoading, @unchecked Sendable {
 
   /// The tracks the media host reported (see MediaSelection.swift), and who waits for them.
   internal var _tracks: _MediaTracks?
-  internal var _trackWaiters: [UInt64: CheckedContinuation<Void, Never>] = [:]
+  internal var _trackWaiters: [UInt64: CheckedContinuation<Void, Never>] = .init()
   internal var _trackWaiterID: UInt64 = 0
 
   @_spi(Renderer) @MainActor public func _awaitLoadedValues() async { await _loadedTracks() }
@@ -232,7 +232,7 @@ public final class AVURLAsset: AVAsset, @unchecked Sendable {
   package let requiresAdaptiveStreaming: Bool
   public init(url: URL, options: [String: Any]? = nil) {
     self.url = url
-    let resolvedOptions = options ?? [:]
+    let resolvedOptions = options ?? .init()
     self.options = resolvedOptions
     let source = url.absoluteString.lowercased()
     func stringOption(_ key: String) -> String? {
@@ -356,8 +356,8 @@ internal func _swiftUIWebAVContainsLiteral(_ value: String, _ needle: String) ->
   }
   /// Options chosen with `select(_:in:)`, by characteristic; `_noneChosen` marks a group turned
   /// off (subtitles). A characteristic in neither is automatic.
-  internal nonisolated(unsafe) var _chosenOptions: [String: AVMediaSelectionOption] = [:]
-  internal nonisolated(unsafe) var _noneChosen: [String: Bool] = [:]
+  internal nonisolated(unsafe) var _chosenOptions: [String: AVMediaSelectionOption] = .init()
+  internal nonisolated(unsafe) var _noneChosen: [String: Bool] = .init()
   /// Bumped by every preference or selection; read while the media view renders.
   private let _counters: _AVRevisionCounters
   internal var _selectionRevision: UInt64 {
@@ -598,8 +598,8 @@ public let AVPlayerItemFailedToPlayToEndTimeErrorKey: String = "error"
   private nonisolated(unsafe) var itemGeneration: UInt64 = 0
   internal var _itemGeneration: UInt64 { itemGeneration }
   private nonisolated(unsafe) var observerID = 0
-  private nonisolated(unsafe) var observers: [Int: PeriodicObserver] = [:]
-  private nonisolated(unsafe) var boundaryObservers: [Int: BoundaryObserver] = [:]
+  private nonisolated(unsafe) var observers: [Int: PeriodicObserver] = .init()
+  private nonisolated(unsafe) var boundaryObservers: [Int: BoundaryObserver] = .init()
   private nonisolated(unsafe) var pendingSeeks: [PendingSeek] = []
   /// Where the boundary observers last looked: a boundary fires when playback moves past it.
   private nonisolated(unsafe) var boundaryCursor = 0.0
@@ -1052,12 +1052,12 @@ private func _jsonString(_ value: String) -> String {
 /// over to a `VideoPlayer` that shows them (`_HeadlessMedia`). They are held until their item is removed.
 /// Players by number, for the timers that must not own them.
 @MainActor internal enum _PlayerTable {
-  static var players: [Int: Unmanaged<AVPlayer>] = [:]
+  static var players: [Int: Unmanaged<AVPlayer>] = .init()
   static var next = 0
 }
 
 @MainActor internal enum _HeadlessPlayers {
-  private static var players: [String: Unmanaged<AVPlayer>] = [:]
+  private static var players: [String: Unmanaged<AVPlayer>] = .init()
   private static var installed = false
 
   /// The player was deallocated: its element goes at the next publication.

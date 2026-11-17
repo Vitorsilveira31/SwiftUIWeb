@@ -54,7 +54,7 @@ public final class WebCryptoSecretStore: WebSecretStore {
 /// Items kept in process memory only: nothing survives the page. For tests and previews; `failure`
 /// makes every operation fail, to exercise an unavailable or failing store.
 public final class InMemorySecretStore: WebSecretStore {
-  private let items = _Locked<[String: [UInt8]]>([:])
+  private let items = _Locked<[String: [UInt8]]>(.init())
   private let failure = _Locked<WebSecurityError?>(nil)
 
   public init(_ items: [String: [UInt8]] = [:], failure: WebSecurityError? = nil) {

@@ -335,7 +335,7 @@ public final class CLLocationManager: @unchecked Sendable {
   private var authorizationContinuation: CheckedContinuation<CLAuthorizationStatus, Error>?
   private var pendingStart = false
   private var lastLocation: CLLocation?
-  private var streamContinuations: [UInt64: AsyncThrowingStream<CLLocation, Error>.Continuation] = [:]
+  private var streamContinuations: [UInt64: AsyncThrowingStream<CLLocation, Error>.Continuation] = .init()
   private var nextStreamID: UInt64 = 1
   private var asyncRequest: (id: UInt64, continuation: CheckedContinuation<CLLocation, Error>)?
   private var nextRequestID: UInt64 = 1

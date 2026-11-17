@@ -16,7 +16,7 @@ package struct FileSystemError: Error, Sendable {
 package final class _VirtualFileSystem: @unchecked Sendable {
   package static let shared = _VirtualFileSystem()
   private let lock = _RuntimeLock()
-  private var files: [String: Data] = [:]
+  private var files: [String: Data] = .init()
   private var directories: Set<String> = ["/", "/tmp", "/Documents", "/Library", "/Library/Caches", "/Library/Application Support"]
 
   package static func normalized(_ path: String) -> String {

@@ -36,7 +36,7 @@ public enum _LiveLiterals {
     case bool(Bool)
   }
 
-  nonisolated(unsafe) static var table: [UInt64: Value] = [:]
+  nonisolated(unsafe) static var table: [UInt64: Value] = .init()
   /// The literals the page ran whose type has no live form (the fallback `_live`): a replacement for one changes nothing.
   nonisolated(unsafe) static var unsupported: Set<UInt64> = []
   /// Set when a replacement arrived that the page could not use: for a literal of a type without a live form, or a number
@@ -52,7 +52,7 @@ public enum _LiveLiterals {
   /// ran before, and a hot swap keeps this framework module while it loads an application compiled with the values as
   /// they are now (an identifier is the literal's place in its file, which another build gives to another literal).
   package static func _startApplication() {
-    table = [:]
+    table = .init()
     unsupported = []
     startupOnly = []
     unapplied = false

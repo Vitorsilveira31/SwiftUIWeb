@@ -199,7 +199,7 @@ public struct URLRequest: Hashable, Sendable {
   package var effectiveHTTPMethod: String { (httpMethod ?? HTTPMethod.get.rawValue).uppercased() }
 
   public mutating func setValue(_ value: String?, forHTTPHeaderField field: String) {
-    if allHTTPHeaderFields == nil { allHTTPHeaderFields = [:] }
+    if allHTTPHeaderFields == nil { allHTTPHeaderFields = .init() }
     let existingKey = allHTTPHeaderFields?.keys.first {
       _networkHeaderEquals($0, field)
     }
@@ -331,7 +331,7 @@ public final class HTTPURLResponse: URLResponse, @unchecked Sendable {
   package init(
     url: URL,
     statusCode: Int,
-    headerFields: [String: String] = [:],
+    headerFields: [String: String] = .init(),
     expectedContentLength: Int64 = -1,
     mimeType: String? = nil,
     textEncodingName: String? = nil,
@@ -354,7 +354,7 @@ public final class HTTPURLResponse: URLResponse, @unchecked Sendable {
     httpVersion: String? = nil,
     headerFields: [String: String]? = nil
   ) {
-    self.init(url: url, statusCode: statusCode, headerFields: headerFields ?? [:], httpVersion: httpVersion)
+    self.init(url: url, statusCode: statusCode, headerFields: headerFields ?? .init(), httpVersion: httpVersion)
   }
 
   public func value(forHTTPHeaderField field: String) -> String? {
@@ -557,7 +557,7 @@ package final class NetworkConnectivityMonitor: @unchecked Sendable {
   private var started = false
   private var subscriptionCancellation: (@Sendable () -> Void)?
   private var subscriptionLiveness: _NetworkMonitorLiveness?
-  private var streamContinuations: [UInt64: AsyncStream<NetworkConnectivityState>.Continuation] = [:]
+  private var streamContinuations: [UInt64: AsyncStream<NetworkConnectivityState>.Continuation] = .init()
   private var nextStreamID: UInt64 = 0
 
   package init() {

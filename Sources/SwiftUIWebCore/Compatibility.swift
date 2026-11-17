@@ -504,8 +504,8 @@ public nonisolated struct _SemanticCompatibilityModifier: ViewModifier {
   /// through the environment instead of only marking the modified node.
   let environment: ((inout EnvironmentValues) -> Void)?
   package init(
-    attributes: _NodeValues = [:],
-    styles: _NodeValues = [:],
+    attributes: _NodeValues = .init(),
+    styles: _NodeValues = .init(),
     swipeContent: (() -> AnyView)? = nil,
     environment: ((inout EnvironmentValues) -> Void)? = nil
   ) {
@@ -559,7 +559,7 @@ public nonisolated struct _SemanticCompatibilityModifier: ViewModifier {
       node.styles = styles
       node.classes = ["swipe-row"]
       node.children = edge == "leading" ? [actions, content] : [content, actions]
-      node.events = [:]
+      node.events = .init()
       return
     }
     // Plain attributes and styles on a Group belong to each child, as in SwiftUI.
@@ -926,7 +926,7 @@ package nonisolated struct MaskCompatibilityModifier<Mask: View>: ViewModifier {
       node.attributes["data-mask-backend"] = "svg"
     }
     node.children = [original, maskNode]
-    node.events = [:]
+    node.events = .init()
   }
 }
 

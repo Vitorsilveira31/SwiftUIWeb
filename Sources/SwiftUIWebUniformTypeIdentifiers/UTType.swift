@@ -164,7 +164,7 @@ public struct UTType: Hashable, Sendable, CustomStringConvertible {
   /// All registered tags for this type.
   public var tags: [UTTagClass: [String]] {
     let definition = UTTypeRegistry.definition(for: identifier)
-    var result: [UTTagClass: [String]] = [:]
+    var result: [UTTagClass: [String]] = .init()
 
     if let mimeType = preferredMIMEType {
       result[.MIMEType] = [mimeType] + (definition?.mimeAliases ?? [])

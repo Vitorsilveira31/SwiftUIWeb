@@ -30,7 +30,7 @@ await runCases({
   },
   "modifier boundary does not duplicate events"() {
     const source = read("Sources/SwiftUIWebCore/SemanticLayout.swift");
-    for (const reset of ["node.events = [:]", "node.taskRegistrations = []", "node.lazyCollection = nil", "node._canvasCommands = []"]) includes(source, reset);
+    for (const reset of ["node.events = .init()", "node.taskRegistrations = []", "node.lazyCollection = nil", "node._canvasCommands = []"]) includes(source, reset);
     includes(read("Sources/SwiftUIWebFeatures/MissingFeatures.swift"), '_semanticWrap(node, kind: "inset")');
   },
   "builtin erased layout uses semantic contract"() {

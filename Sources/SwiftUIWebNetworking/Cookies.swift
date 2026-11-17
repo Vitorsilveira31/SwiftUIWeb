@@ -200,7 +200,7 @@ package enum CookieJarRuntime {
   }
 
   private final class Observers: @unchecked Sendable {
-    var handlers: [UInt64: @MainActor () -> Void] = [:]
+    var handlers: [UInt64: @MainActor () -> Void] = .init()
     var nextID: UInt64 = 0
     let lock = _RuntimeLock()
   }

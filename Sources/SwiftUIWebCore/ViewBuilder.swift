@@ -416,12 +416,20 @@ extension ForEach where Data.Element: Hashable, ID == Data.Element, Content: Tab
 /// The fiber keys of a collection's elements: a later element with the same identity gets its own occurrence, so two
 /// rows or tabs with one id never share a fiber path (and their state).
 func _occurrenceKeys(_ semanticKeys: [_FiberKey]) -> [_FiberKey] {
-  var occurrences: [_FiberKey: Int] = [:]
+  var occurrences: [_FiberKey: Int] = .init()
   return semanticKeys.map { key in
     let occurrence = occurrences[key, default: 0]
     occurrences[key] = occurrence + 1
     return _fiberKeyWithOccurrence(key, occurrence)
   }
+}
+
+/// A lazy collection's keys by offset, for its `containsKey`. A table rather than a `Set`: Embedded Swift emits the
+/// hashed-collection code once per element type, and `_occurrenceKeys` already has the one for `[_FiberKey: Int]`.
+func _lazyKeyOffsets(_ keys: [_FiberKey]) -> [_FiberKey: Int] {
+  var offsets: [_FiberKey: Int] = .init()
+  for (offset, key) in keys.enumerated() { offsets[key] = offset }
+  return offsets
 }
 
 /// The type-independent part of a `ForEach` render: occurrence-suffixed keys,
@@ -445,7 +453,7 @@ func _occurrenceKeys(_ semanticKeys: [_FiberKey]) -> [_FiberKey] {
   let count = keys.count
   if context.lazyCollectionsEnabled, let axis = context.lazyAxis,
      context.lazyCollectionsForceDeferred || count > _lazyCollectionThreshold {
-    let keySet = Set(keys)
+    let keyOffsets = _lazyKeyOffsets(keys)
     let environment = context.environment
     // Rows materialized later by the host start from a fresh context, so the enclosing
     // NavigationStack's runtime context must be carried over too: without it a
@@ -458,7 +466,7 @@ func _occurrenceKeys(_ semanticKeys: [_FiberKey]) -> [_FiberKey] {
       laneCount: context.lazyLaneCount ?? 1,
       itemType: itemType,
       keyAt: { offset in keys[offset] },
-      containsKey: { keySet.contains($0) },
+      containsKey: { keyOffsets[$0] != nil },
       renderItem: { offset, itemContext in
         let key = keys[offset]
         // Rows materialized later by the host must see the environment in

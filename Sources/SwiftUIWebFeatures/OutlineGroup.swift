@@ -211,7 +211,7 @@ private final class _OutlineLookup<Roots: RandomAccessCollection, Children: Rand
   /// The pre-order walk, kept between reads: each node is its offset and its parent's node, so a path costs its depth
   /// and the index stays linear in the tree's size. The walk goes only as far as the identifiers asked for so far.
   private var nodes: [(parent: Int, offset: Int)] = []
-  private var firstNode: [ID: Int] = [:]
+  private var firstNode: [ID: Int] = .init()
   private var pending: [(node: Int, element: E)] = []
   private var started = false
 

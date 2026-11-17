@@ -55,7 +55,7 @@ func _objectStampID<Value>(_ type: Value.Type) -> ObjectIdentifier {
 }
 
 struct _TypedValueStorage<Key: Hashable> {
-  private var entries: [Key: _StoredValue] = [:]
+  private var entries: [Key: _StoredValue] = .init()
 
   var count: Int { entries.count }
   var keys: [Key] { Array(entries.keys) }

@@ -260,7 +260,7 @@ package struct StaticHTMLFiberRenderer: FiberRenderer {
 
   private static func assembleAttributes<Sink: HTMLAttributeSink>(
     of node: _RenderNode, isElement: Bool, attributes: UnsafeBufferPointer<(key: String, value: String)>, styles: UnsafeBufferPointer<(key: String, value: String)>,
-    classes: [String], events: [String: _EventHandler], into state: inout HTMLWriteState, info: inout AttributeInfo, sink: inout Sink
+    classes: [String], events: _NodeEvents, into state: inout HTMLWriteState, info: inout AttributeInfo, sink: inout Sink
   ) {
 
     var classItem = -1, styleItem = -1

@@ -97,7 +97,7 @@ public extension FileDocument {
 /// DOM, while BrowserApp can perform the actual download at commit time.
 @_spi(Browser) public enum FileExporterRuntime {
   public typealias Provider = () async throws -> SwiftUIWebTransferPayload
-  @MainActor private static var providers: [String: Provider] = [:]
+  @MainActor private static var providers: [String: Provider] = .init()
   private static let lock = _RuntimeLock()
 
   @MainActor public static func register(key: String, provider: @escaping Provider) {

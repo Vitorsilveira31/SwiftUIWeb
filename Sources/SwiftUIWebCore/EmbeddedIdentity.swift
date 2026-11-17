@@ -25,7 +25,9 @@ final class _EmbeddedOpaqueIdentity {
 private enum _EmbeddedIdentityRegistry {
   private struct Entry { let serial: UInt64; let reference: Unmanaged<_EmbeddedOpaqueIdentity> }
   private struct State {
-    var entries: [Int: [Entry]] = [:]
+    /// By the fingerprint's bits: a `UInt64`-keyed table of arrays shares its code with the renderer's (Embedded Swift
+    /// emits the hashed-collection code once per key type and value layout).
+    var entries: [UInt64: [Entry]] = .init()
     var next: UInt64 = 1
   }
   private static let state = _Locked(State())
@@ -37,7 +39,7 @@ private enum _EmbeddedIdentityRegistry {
     let fingerprint = hasher.finalize()
     let payload = _RuntimeValue(value)
     return state.withLock { state in
-      for entry in state.entries[fingerprint] ?? [] {
+      for entry in state.entries[UInt64(UInt(bitPattern: fingerprint))] ?? [] {
         // All access is serialized by the same UI runtime. An entry exists only
         // while at least one _FiberKey owns its payload; deinit removes it before
         // its storage is reclaimed. No raw reference is returned to a caller.
@@ -50,15 +52,16 @@ private enum _EmbeddedIdentityRegistry {
         return value == candidate
       }
       state.next += 1
-      state.entries[fingerprint, default: []].append(Entry(serial: result.serial, reference: .passUnretained(result)))
+      state.entries[UInt64(UInt(bitPattern: fingerprint)), default: []].append(Entry(serial: result.serial, reference: .passUnretained(result)))
       return result
     }
   }
 
   static func remove(serial: UInt64, fingerprint: Int) {
     state.withLock { state in
-      state.entries[fingerprint]?.removeAll { $0.serial == serial }
-      if state.entries[fingerprint]?.isEmpty == true { state.entries.removeValue(forKey: fingerprint) }
+      let slot = UInt64(UInt(bitPattern: fingerprint))
+      state.entries[slot]?.removeAll { $0.serial == serial }
+      if state.entries[slot]?.isEmpty == true { state.entries.removeValue(forKey: slot) }
     }
   }
 }

@@ -357,7 +357,7 @@ final class NavigationContext {
   /// The element that carries each view-transition name, as last rendered: the source a zoom destination takes the name from
   /// (see `NavigationTransitionModifier`). One node per name: a destination that re-renders on its own registers its source
   /// again, and the latest registration replaces the one before it, so nothing accumulates between stack renders.
-  var transitionSources: [String: _RenderNode] = [:]
+  var transitionSources: [String: _RenderNode] = .init()
   fileprivate var title: String?
   /// Toolbars declared by `.toolbar { }` while the stack renders a screen. A screen's own state can re-render it
   /// without the stack; keeping toolbars out of the screen's tree makes that render the same shape as a full one.
@@ -858,7 +858,7 @@ final class _TabMountTracker {
   private var firstSeen: String?
   private var mountedThisPass: Set<String> = []
   /// The key of each tab's content as it was last built.
-  private var builtKeys: [String: _FiberKey?] = [:]
+  private var builtKeys: [String: _FiberKey?] = .init()
   /// The size of the box the panels share (`tab-body`), as the host last measured it. A tab built for the first time
   /// starts its geometry readers at this size: the enclosing reader's size, which they would take otherwise, is the
   /// window when the sidebar narrows the panels, and a layout that depends on the width (a grid's column count) was
@@ -957,7 +957,7 @@ final class _TabMountTracker {
 final class _TabSelectionSink {
   let select: (_RuntimeValue) -> Void
   private let selectRawValue: ((String) -> Bool)?
-  private var values: [String: _RuntimeValue] = [:]
+  private var values: [String: _RuntimeValue] = .init()
 
   init(select: @escaping (_RuntimeValue) -> Void, selectRawValue: ((String) -> Bool)? = nil) {
     self.select = select
@@ -2095,7 +2095,7 @@ public nonisolated struct NavigationSplitView<Sidebar: View, Content: View, Deta
     var tracks: [String] = []
     var sized = false
     for (index, column) in node.children.enumerated() {
-      let hints = column.children.first?.attributes ?? [:]
+      let hints = column.children.first?.attributes ?? .init()
       if let ideal = hints["data-column-width-ideal"] {
         let low = hints["data-column-width-min"] ?? ideal
         let high = hints["data-column-width-max"] ?? ideal

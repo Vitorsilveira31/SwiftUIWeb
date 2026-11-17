@@ -23,7 +23,7 @@ package struct _TransitionState: Hashable, Sendable {
   package var blur: Double = 0
   /// Declarations of a custom transition that have no structured form (`transform`, `filter`, colors), last wins
   /// except `transform` and `filter`, which chain.
-  package var declarations: [String: String] = [:]
+  package var declarations: [String: String] = .init()
   /// What the identity phase of a custom transition does to the view (`opacity:0.5`): how the view rests, which the view takes
   /// on for good. The other terms describe the active phase.
   package var restingCSS: String = ""

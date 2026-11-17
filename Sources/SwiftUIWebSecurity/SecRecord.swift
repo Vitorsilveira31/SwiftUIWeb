@@ -51,7 +51,7 @@ struct _SecRecord: Sendable, Equatable {
   static func decode(id: String, from bytes: [UInt8]) -> _SecRecord? {
     var reader = _SecRecordReader(bytes: bytes)
     guard reader.u32() == 1, let count = reader.u32(), count <= 64 else { return nil }
-    var attributes: [String: SecValue] = [:]
+    var attributes: [String: SecValue] = .init()
     for _ in 0..<count {
       guard let key = reader.text(), let tag = reader.byte() else { return nil }
       switch tag {

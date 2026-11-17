@@ -10,9 +10,9 @@ import SwiftUIWeb
 
 #if !hasFeature(Embedded)
 @MainActor private enum _WebIndexedDBFallbackStorage {
-  static var values: [String: String] = [:]
+  static var values: [String: String] = .init()
   /// Bytes held per store (keyed by the store's name prefix). Computed on the first quota check, then kept by `write`.
-  static var byteTotals: [String: Int] = [:]
+  static var byteTotals: [String: Int] = .init()
 
   /// Stores `value` (nil removes it) and keeps the store's running total.
   static func write(_ key: String, _ value: String?, prefix: String) {
@@ -219,7 +219,7 @@ private struct _EmbeddedIndexedEnvelope<Value: EmbeddedCodable>: EmbeddedCodable
         writes.append(.remove(key: mutation.key))
       }
     }
-    var replacements: [String: [UInt8]?] = [:]
+    var replacements: [String: [UInt8]?] = .init()
     for (mutation, write) in zip(mutations, writes) {
       switch write {
       case .put(_, let bytes): replacements[mutation.key] = bytes
@@ -415,7 +415,7 @@ private struct _IndexedDBEnvelope<Value: Codable>: Codable {
         writes.append((fallbackKey(mutation.key), nil))
       }
     }
-    var replacements: [String: String?] = [:]
+    var replacements: [String: String?] = .init()
     for (key, value) in writes { replacements[key] = value }
     try ensureQuota(replacing: replacements)
     for (key, value) in writes { _WebIndexedDBFallbackStorage.write(key, value, prefix: storePrefix) }

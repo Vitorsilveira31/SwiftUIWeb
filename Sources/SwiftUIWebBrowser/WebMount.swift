@@ -131,9 +131,9 @@ public extension WebMountController {
     let controller: WebMountController
   }
 
-  private var factories: [String: Factory] = [:]
+  private var factories: [String: Factory] = .init()
   #if arch(wasm32)
-  private var active: [String: ActiveMount] = [:]
+  private var active: [String: ActiveMount] = .init()
   /// Mount tokens already reported as unimplemented, so each is reported once.
   private var reportedTokens: Set<String> = []
   #endif
@@ -176,8 +176,8 @@ public extension WebMountController {
       BrowserDOMBridge.report("WebMount reconciliation could not read the mounted elements: \(error.message)")
       return
     }
-    var current: [String: WebElementHandle] = [:]
-    var keys: [String: String] = [:]
+    var current: [String: WebElementHandle] = .init()
+    var keys: [String: String] = .init()
     for mount in mounts where !mount.token.isEmpty {
       current[mount.token] = WebElementHandle(embeddedElement: mount.element)
       keys[mount.token] = mount.key

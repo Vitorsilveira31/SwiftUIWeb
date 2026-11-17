@@ -81,7 +81,8 @@ import SwiftUIWebCore
   /// the target/argument StructuralNodeID through `ownerRoot`.
   public private(set) var nodes: [_RenderNode] = []
 
-  private var structuralIndices: [StructuralNodeID: UInt32] = [:]
+  /// By `StructuralNodeID.packed`.
+  private var structuralIndices: [UInt64: UInt32] = .init()
   private var lastStructuralID: StructuralNodeID?
   private var lastStructuralReference: UInt32 = .max
   private var ownerRoot: Fiber?
@@ -124,14 +125,14 @@ import SwiftUIWebCore
   private func structuralReference(_ id: StructuralNodeID?) -> UInt32 {
     guard let id else { return Self.noReference }
     if lastStructuralID == id { return lastStructuralReference }
-    if let existing = structuralIndices[id] {
+    if let existing = structuralIndices[id.packed] {
       lastStructuralID = id
       lastStructuralReference = existing
       return existing
     }
     let index = UInt32(structuralIDs.count)
     structuralIDs.append(id)
-    structuralIndices[id] = index
+    structuralIndices[id.packed] = index
     lastStructuralID = id
     lastStructuralReference = index
     return index
@@ -266,9 +267,9 @@ import SwiftUIWebCore
   package func materialize() -> [Mutation] {
     var result: [Mutation] = []
     result.reserveCapacity(recordCount)
-    var indexedFibers: [StructuralNodeID: Fiber]? = nil
+    var indexedFibers: [UInt64: Fiber]? = nil
     if recordCount > 16, let ownerRoot {
-      var index: [StructuralNodeID: Fiber] = [:]
+      var index: [UInt64: Fiber] = .init()
       index.reserveCapacity(recordCount)
       indexFibers(ownerRoot, into: &index)
       indexedFibers = index
@@ -301,13 +302,13 @@ import SwiftUIWebCore
     return result
   }
 
-  private func lookup(_ id: StructuralNodeID, root: Fiber, index: [StructuralNodeID: Fiber]?) -> Fiber? {
-    if let index { return index[id] }
+  private func lookup(_ id: StructuralNodeID, root: Fiber, index: [UInt64: Fiber]?) -> Fiber? {
+    if let index { return index[id.packed] }
     return resolve(id, in: root)
   }
 
-  private func indexFibers(_ fiber: Fiber, into index: inout [StructuralNodeID: Fiber]) {
-    index[fiber.structuralID] = fiber
+  private func indexFibers(_ fiber: Fiber, into index: inout [UInt64: Fiber]) {
+    index[fiber.structuralID.packed] = fiber
     for child in fiber.children { indexFibers(child, into: &index) }
   }
 

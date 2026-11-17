@@ -71,7 +71,7 @@ private let _hoverPaintAttributes: Set<String> = [
     if aChildren.count != b.children.count { return false }
     if a.lazyCollection != nil || b.lazyCollection != nil { return false }
     if _hoverComparableClasses(a.classes) != _hoverComparableClasses(b.classes) { return false }
-    var declarations: _NodeValues = [:]
+    var declarations: _NodeValues = .init()
     // SVG paint attributes have a CSS property of the same name, so a change in
     // one of them is a style change; metadata that only mirrors a style is
     // ignored; any other attribute change is not expressible in CSS.

@@ -275,7 +275,7 @@ fileprivate struct _LayoutPass {
     })
     wrapper.events["layoutsizes"] = _EventHandler(name: "layoutsizes", action: { rawValue in
       // "proposal:size;proposal:size..." in subview order, each pair as "width,height".
-      var next: [Int: (proposal: ProposedViewSize, size: CGSize)] = [:]
+      var next: [Int: (proposal: ProposedViewSize, size: CGSize)] = .init()
       var index = 0
       for entry in rawValue.split(separator: ";", omittingEmptySubsequences: false) {
         let parts = entry.split(separator: ":", omittingEmptySubsequences: false)
