@@ -2,6 +2,7 @@ import { BrowserIOOperation, BrowserIOEvent } from './protocol.generated.mjs';
 import { DOMViewError, createDOMViewHost } from './dom-view-host.mjs';
 import { foldText, formatNumber } from './text-format.mjs';
 import { createPredicates } from './predicate-engine.mjs';
+import { createUnicodeImports } from './unicode-data.mjs';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true });
@@ -951,6 +952,8 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
     wake() { if (!disposed) wake(); },
     // Debug only (`?stack-depth=1`): the renderer reports its recursion depth; the meter probes the stack left.
     stack_headroom(depth) { stackMeter?.sample(depth >>> 0); },
+    // The standard library's Unicode character data (Sources/CSwiftUIWebBrowserIO/UnicodeData.c).
+    ...createUnicodeImports(() => new Uint8Array(memory().buffer)),
   };
   return { imports,
     /** Worker mode: the elements the main thread mounted, as of table `seq`. */

@@ -37,7 +37,7 @@ package enum _StateSnapshots {
     var result = ""
     var afterType = false
     for character in key {
-      if afterType, character.isNumber { continue }
+      if afterType, character._asciiDigitValue != nil { continue }
       afterType = false
       result.append(character)
       if result.hasSuffix("type-") { afterType = true }

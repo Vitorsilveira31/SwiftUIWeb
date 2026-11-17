@@ -91,6 +91,32 @@ Brotli -9. The release sizes of each build are reported by `make wasm-size`.
 When Binaryen is not installed, `Tools/strip-wasm-release.sh` says so on stderr for each release build and does not fail. Install it with
 `brew install binaryen`, or disable it on purpose with `WASM_OPT=0`. `make setup` and `make doctor` report it as optional.
 
+## The C and standard-library runtime
+
+Some of the module is not Swift code the application wrote but archives the Embedded toolchain links. To see which object pulled
+each archive member, pass `SWIFTUIWEB_EXTRA_BUILD_FLAGS="-Xlinker --why-extract=.build/size/why-extract.txt"` to a build.
+
+- **Unicode data.** `String`'s comparison, hashing, `Character` iteration and case mapping read per-scalar data from
+  `libswiftUnicodeDataTables` (normalization, grapheme break properties, Extended_Pictographic, case mappings). The browser has the
+  same data, so `Sources/CSwiftUIWebBrowserIO/UnicodeData.c` defines those functions as calls to `Tools/BrowserIO/unicode-data.mjs`
+  (`String.prototype.normalize`, `Intl.Segmenter`, the Unicode property escapes, `toUpperCase`/`toLowerCase`). The definitions are
+  weak and the archive stays linked: an application that reads a property the browser does not expose (general category, numeric
+  value, name, age, script, the binary properties behind `isWhitespace`) links the archive member that holds it, whose definitions
+  then replace these. The Unicode version is therefore the browser's, as it is the operating system's for an Apple app. The
+  framework's own parsers read ASCII digits with `_asciiDigitValue` instead of `wholeNumberValue`, which would link the numeric tables.
+- **printf.** Only the Concurrency runtime's error messages format with `vsnprintf`/`vprintf`.
+  `Sources/CSwiftUIWebBrowserIO/RuntimeFormatting.c` replaces wasi-libc's printf engine (`printf_core`, float printing, wide
+  characters) with integer, string and pointer conversions.
+
+On the Board benchmark (release) these took `app.wasm` from 440,657 to 407,057 bytes with Brotli (data section 101,902 to 45,212 bytes
+raw), and the page from 606.0 to 574.7 KB; `unicode-data.mjs` adds about 1.2 KB to `index.js` and to `render-worker.js`. On the
+Showcase, which links the archive's scalar properties, `app.wasm` went from 969,496 to 938,859 bytes with Brotli.
+
+Measured and kept: the standard library's float parser (`parse_float64`, `fastParse64`, `slowDecimalToBinary`, with libm's `fma`),
+about 10 KB of code before `wasm-opt` and 2 KB with Brotli, which `Double(String)` in the style, layout and measurement decoders
+links; `dlmalloc`, 12 KB before `wasm-opt` (wasi-libc ships no smaller allocator); and `_Float64ToASCII`, which prints every CSS
+number. Of libm only `round`, `fmod` and `remainder` remain besides `fma`; the trigonometry is Swift.
+
 ## Loading
 
 `Tools/browser-index.html` announces `index.js` with `modulepreload`, and starts the `app.wasm` download from an inline script in the head

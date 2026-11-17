@@ -47,6 +47,19 @@ const MEASUREMENT_LINES = [
   "archive rejects NSObject: true",
 ];
 
+// Printed by Apple's Swift (macOS) for EmbeddedUnicodeFixtureView.lines: canonical equivalence, grapheme clusters and
+// case mapping, which the browser build answers from the browser's Unicode data.
+const UNICODE_LINES = [
+  "unicode equality: 1111101",
+  "unicode hashing: 2 1",
+  "unicode order: 0111",
+  "unicode counts: 1 1 2 1 1 1 1 1 1 1 2 1 1",
+  "unicode characters: 6e,65 301,1f44d 1f3fb,78",
+  "unicode case: 53 54 52 41 53 53 45,69 307,1f08 399,3c3 3bf 3c3,46 49,1c90,2bc 4e",
+  "unicode titlecase: 53 73,1c5,1fbc,2bc 4e,10d0,46 69,391 342 345,41",
+  "unicode combining classes: 0 230 240 0",
+];
+
 // Produced by Apple's Foundation (macOS): the stream-based JSONSerialization fixture must print the same text.
 const JSON_STREAM_LINES = [
   "json stream write: 55 no error 0 2 true 6 false",
@@ -106,6 +119,20 @@ async function checkJsonStreamFixture(page, url, report) {
     }
   }
   report.checks.push({ name: "json-serialization-streams", status: "PASS" });
+}
+
+async function checkUnicodeFixture(page, url, report) {
+  // String equality, hashing, ordering, Character and case mapping follow Unicode as in Apple's Swift.
+  await page.goto(url, { waitUntil: "networkidle" });
+  for (const line of UNICODE_LINES) {
+    try {
+      await page.getByText(line, { exact: true }).first().waitFor({ timeout: PATIENCE });
+    } catch {
+      const actual = (await bodyText(page)).split(/\r?\n/).filter((text) => text.startsWith("unicode "));
+      throw new assert.AssertionError({ message: `missing ${repr(line)}; page shows ${repr(actual)}` });
+    }
+  }
+  report.checks.push({ name: "unicode-string-semantics", status: "PASS" });
 }
 
 async function checkMeasurementFixture(page, url, report) {
@@ -423,6 +450,7 @@ await runSuite(async () => {
     await page.getByText("Previous version loaded", { exact: true }).waitFor({ state: "detached", timeout: PATIENCE });
     report.checks.push({ name: "deep-scrollview-tabs-foreach-anyview-observable-state", status: "PASS" });
     await checkMeasurementFixture(page, `${server.base}/`, report);
+    await checkUnicodeFixture(page, `${server.base}/`, report);
     await checkJsonStreamFixture(page, `${server.base}/`, report);
     await checkSwiftUIParityFixture(page, `${server.base}/`, report);
     if (errors.length > 0) throw new assert.AssertionError({ message: "browser runtime errors: " + errors.join("; ") });

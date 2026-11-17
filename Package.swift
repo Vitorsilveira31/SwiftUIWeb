@@ -21,6 +21,12 @@ let embeddedUnicodeLinkerSettings: [LinkerSetting] =
     ? [.unsafeFlags(["-Xlinker", "-lswiftUnicodeDataTables"])]
     : []
 
+// The Embedded browser build answers the standard library's Unicode character data from the browser and gives the
+// Concurrency runtime a small printf (Sources/CSwiftUIWebBrowserIO/UnicodeData.c, RuntimeFormatting.c). Native builds
+// and the full-Swift development profile keep the C library's and the standard library's own.
+let embeddedRuntimeCSettings: [CSetting] =
+  embeddedRuntimeRequested && !fullSwiftRequested ? [.define("SWIFTUIWEB_EMBEDDED_RUNTIME")] : []
+
 // Keep Embedded Swift restrictions visible while the neutral renderer is
 // compiled with the standard toolchain. This is a diagnostic guardrail: APIs
 // that are genuinely unavailable to Embedded Swift still fail when an
@@ -99,7 +105,7 @@ let package = Package(
     .package(url: "https://github.com/apple/swift-crypto.git", exact: "5.1.1")
   ]),
   targets: [
-    .target(name: "CSwiftUIWebBrowserIO", path: "Sources/CSwiftUIWebBrowserIO", publicHeadersPath: "include"),
+    .target(name: "CSwiftUIWebBrowserIO", path: "Sources/CSwiftUIWebBrowserIO", publicHeadersPath: "include", cSettings: embeddedRuntimeCSettings),
     // Optional, backend-neutral cryptography. JavaScript/browser APIs are not
     // exposed here; browser applications use the same Swift implementation
     // with secure randomness supplied by the platform RNG.
