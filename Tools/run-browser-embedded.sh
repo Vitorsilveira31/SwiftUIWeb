@@ -488,7 +488,9 @@ else
 fi
 # index.js, render-worker.js and the chunk both import (runtime-shared.js), built together. A release leaves out the browser
 # hosts the manifest proves unused; debug keeps every host (Tools/build-runtime-bundle.mjs).
-if [[ "$configuration" == release ]]; then bun Tools/build-runtime-bundle.mjs --outdir "$tmp" --manifest "$manifest"; else bun Tools/build-runtime-bundle.mjs --outdir "$tmp"; fi
+# The loader of a split module (Tools/wasm-split-loader.js) is in the scripts only when the module will be split.
+runtime_flags=(); [[ "${SWIFTUIWEB_WASM_SPLIT:-0}" != 1 ]] || runtime_flags=(--wasm-split)
+if [[ "$configuration" == release ]]; then bun Tools/build-runtime-bundle.mjs --outdir "$tmp" --manifest "$manifest" ${runtime_flags[@]+"${runtime_flags[@]}"}; else bun Tools/build-runtime-bundle.mjs --outdir "$tmp" ${runtime_flags[@]+"${runtime_flags[@]}"}; fi
 # Copy only the browser helpers the reachability manifest lists (initial and
 # lazy); an unreachable helper is neither shipped nor referenced by index.html.
 while IFS= read -r helper; do [[ -z "$helper" || "$helper" == icon-adapter.js ]] && continue; if [[ "$helper" == *.js ]]; then bun build "Tools/$helper" --minify --outfile="$tmp/$helper" >/dev/null; else cp "Tools/$helper" "$tmp/"; fi; done < <(bun -e 'const m=await Bun.file(process.argv[1]).json(); for(const f of [...(m.runtime?.initial||[]),...(m.runtime?.lazy||[])]) console.log(f)' "$manifest")
@@ -567,6 +569,14 @@ fi
 # The resize rule names the elements whose stylesheets declare a transition, so it is written once every stylesheet of the
 # bundle (the framework's and the application's) is in place, and before a release renames the files.
 bun "$ROOT/Tools/scope-resize-transitions.mjs" "$final"
+# Split app.wasm (opt-in, release): the functions the first screen runs stay in app.wasm, the rest go to app-rest.wasm,
+# which downloads behind the first screen (Tools/wasm-split-release.mjs, Tools/wasm-split-loader.js). It runs the bundle in
+# headless Chromium, so it comes once every file is in place, and before the files get their hashed names.
+# SWIFTUIWEB_WASM_SPLIT_ROUTE (default /), SWIFTUIWEB_WASM_SPLIT_VIEWPORTS (default 1280x800,390x844).
+if [[ "${SWIFTUIWEB_WASM_SPLIT:-0}" == 1 ]]; then
+  [[ "$configuration" == release ]] || { echo "SWIFTUIWEB_WASM_SPLIT=1 needs CONFIGURATION=release" >&2; exit 2; }
+  bun "$ROOT/Tools/wasm-split-release.mjs" "$final" --route "${SWIFTUIWEB_WASM_SPLIT_ROUTE:-/}" --viewports "${SWIFTUIWEB_WASM_SPLIT_VIEWPORTS:-1280x800,390x844}" --log-dir "$build_logs"
+fi
 # A release names each framework file by its content (`app.3f9a1c2e.wasm`), so the server can cache it for a year;
 # index.html keeps its name and is revalidated. Every reference is rewritten (Tools/hash-release-bundle.mjs). It runs
 # before the CSP is sealed, because the inline bootstrap changes when its import is renamed.

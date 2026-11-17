@@ -135,7 +135,7 @@ BROWSER_GROUPS = \
 # csp-bundles-test builds every release bundle the Makefile knows, so it runs before the groups, which then reuse them.
 EXAMPLE_GROUPS = \
 	"showcase: embedded-showcase-test integration-release-test" \
-	"board-site: lazy-rows-browser-test lazy-cell-state-browser-test showcase-site-test first-paint-browser-test" \
+	"board-site: lazy-rows-browser-test lazy-cell-state-browser-test showcase-site-test first-paint-browser-test wasm-split-browser-test" \
 	"apps: lumio-test quill-test seekr-test neighborly-test stayly-test mailo-test" \
 	"media: media-worker-test" "universal: universal-app-browser-test first-route-browser-test" \
 	"consumers: cross-package-test consumer-regression plugin-test web-command-test" \
@@ -276,6 +276,7 @@ help:
 	@echo "  make view-transition-browser-test  A matched swap runs one view transition with the final DOM of the page without transitions (Chromium and WebKit)"
 	@echo "  make redacted-skeleton-browser-test  Redacted placeholder paints a skeleton; unredacted subtrees keep their look, privacy blurs (Chromium and WebKit)"
 	@echo "  make first-paint-browser-test  First screen prerendered into index.html: painted before the wasm, no shift, verify mode (SWIFTUIWEB_FIRST_PAINT=1 turns it on for a release build)"
+	@echo "  make wasm-split-browser-test   app.wasm split by the first screen (SWIFTUIWEB_WASM_SPLIT=1): the rest loads behind it, a call that needs it waits (Chromium and WebKit)"
 	@echo "  make first-paint-measure BUNDLE=<dir> [NETWORK=fast|slow] [CPU=1|4]  FCP, LCP, mount time and layout shift of a release bundle"
 	@echo "  make cloudflare-site-check     Build the project site and validate its Cloudflare Worker without uploading"
 	@echo "  make cloudflare-site-deploy    Build the project site and deploy it to Cloudflare (cf auth login, or CLOUDFLARE_API_TOKEN)"
@@ -745,7 +746,7 @@ embedded-codable-test:
 	bun Tools/test-embedded-codable.mjs
 
 
-.PHONY: csp-bundles-test stack-depth-browser-test first-route-browser-test first-paint-browser-test first-paint-measure security-browser-test webkit-browser-test integrated-check browser-contract-test browser-test-setup identity-test identity-fuzz-test identity-browser-test publication-browser-test scrolling-test scrolling-browser-test presentation-test presentation-browser-test focus-browser-test controls-test controls-browser-test controls-accessibility-test accessibility-test accessibility-browser-test accessibility-audit perf-test memory-test perf-browser-test render-commit-benchmark perf-report perf-ci perf-frames perf-frames-check
+.PHONY: csp-bundles-test stack-depth-browser-test first-route-browser-test first-paint-browser-test wasm-split-browser-test first-paint-measure security-browser-test webkit-browser-test integrated-check browser-contract-test browser-test-setup identity-test identity-fuzz-test identity-browser-test publication-browser-test scrolling-test scrolling-browser-test presentation-test presentation-browser-test focus-browser-test controls-test controls-browser-test controls-accessibility-test accessibility-test accessibility-browser-test accessibility-audit perf-test memory-test perf-browser-test render-commit-benchmark perf-report perf-ci perf-frames perf-frames-check
 integrated-check:
 	bun Tools/run-scripts.mjs "Tools/test-runtime-contracts.mjs" "Tools/test-embedded-worker-client.mjs" "Tools/test-embedded-migration-replay.mjs" "Tools/test-feature-loader-origin.mjs" "Tools/test-adaptive-media.mjs" "Tools/test-adaptive-media-browser.mjs" "Tools/test-media-host.mjs" "Tools/test-event-value.mjs" "Tools/test-check-wasm-exports.mjs" "Tools/test-rewrite-release-index.js" "Tools/test-build-runtime-bundle.mjs" "Tools/test-layout-resize-settle.mjs" "Tools/test-layout-skip-pass.mjs" "Tools/test-css-layout-incremental.mjs" "Tools/test-css-layout-layers.mjs" "Tools/test-css-layout-relative.mjs" "Tools/test-css-layout-roots.mjs" "Tools/test-text-fit.mjs" "Tools/test-tap-target-css.mjs" "Tools/test-icon-host.mjs" "Tools/test-live-reload.mjs" "Tools/test-browser-support.mjs" "Tools/test-csp-bundles.mjs --self-test" "Tools/test-toolchain-report.mjs" "Tools/test-format-compat.mjs" "Tools/test-coverage.mjs" "Tools/test-performance-contracts.mjs" "Tools/test-frame-budgets.mjs" "Tools/test-size-tools.mjs" "Tools/test-nspredicate-probe.mjs" "Tools/test-predicate-engine.mjs" "Tools/test-layout-conformance.mjs" "Tools/test-wasi-host.mjs" "Tools/test-semantic-integration.mjs" "Tools/test-lint-styles.mjs" "Tools/test-style-invalidation.mjs" "Tools/test-selection-highlight.mjs" "Tools/test-css-layout-grid-cells.mjs" "Tools/test-color-scheme-subtree.mjs" "Tools/test-page-scheme.mjs" "Tools/test-textarea-line-limits.mjs"
 
@@ -826,6 +827,14 @@ first-paint-browser-test:
 	SWIFTUIWEB_FIRST_PAINT=1 BUILD_ONLY=1 CONFIGURATION=release Tools/run-browser.sh site
 	bun Tools/test-first-paint-browser.mjs --site .build/browser/ShowcaseSite
 	$(ON_WEBKIT) bun Tools/test-first-paint-browser.mjs --site .build/browser/ShowcaseSite
+
+# Split module (Documentation/Architecture/WASM_SPLIT.md): a module split by wasm-split loads its second half in a Worker
+# (waiting for it, or in the background) and on the page; the Board built with SWIFTUIWEB_WASM_SPLIT=1 (in its own bundle
+# folder, so the plain Board bundle stays) reaches its first screen in the Worker, on the main thread and after a move to it.
+wasm-split-browser-test:
+	SWIFTUIWEB_WASM_SPLIT=1 SWIFTUIWEB_BUNDLE_ROOT=$(CURDIR)/.build/browser-split BUILD_ONLY=1 CONFIGURATION=release Tools/run-browser.sh board
+	WASM_SPLIT_BUNDLE=.build/browser-split/BoardBenchmarkApp bun Tools/test-wasm-split-browser.mjs
+	$(ON_WEBKIT) WASM_SPLIT_BUNDLE=.build/browser-split/BoardBenchmarkApp bun Tools/test-wasm-split-browser.mjs
 
 # Paint and mount timings of a release bundle, fresh context per run: make first-paint-measure BUNDLE=.build/browser/BoardBenchmarkApp NETWORK=slow CPU=4
 first-paint-measure:

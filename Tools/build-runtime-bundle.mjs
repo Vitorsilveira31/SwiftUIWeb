@@ -14,7 +14,11 @@
 // elimination drops the host's module. Nothing is loaded later, so a host that is left out costs no round trip. A feature
 // the manifest does not name (one written before the feature existed) stays on.
 //
-// usage: build-runtime-bundle.mjs --outdir <bundle-directory> [--manifest <release-manifest.json>]
+// The loader of a split module (Tools/wasm-split-loader.js) has its own constant, `globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER`:
+// every build the launcher makes defines it, true only with `--wasm-split` (SWIFTUIWEB_WASM_SPLIT=1), so a bundle that is not
+// split carries none of it. Unbundled (the tests) it is undefined and the loader stays.
+//
+// usage: build-runtime-bundle.mjs --outdir <bundle-directory> [--manifest <release-manifest.json>] [--wasm-split]
 // Run the tests with: bun Tools/test-build-runtime-bundle.mjs
 
 import { mkdtempSync, readFileSync, readdirSync, renameSync, rmSync } from "node:fs";
@@ -51,7 +55,7 @@ export function hostDefines(manifest) {
 }
 
 /** Writes `index.js`, `render-worker.js` and `runtime-shared.js` into `outdir`. Returns the names written. */
-export async function buildRuntime({ outdir, manifest = null }) {
+export async function buildRuntime({ outdir, manifest = null, wasmSplit = false }) {
   const scratch = mkdtempSync(join(resolve(outdir), ".runtime-build-"));
   try {
     const result = await Bun.build({
@@ -62,7 +66,7 @@ export async function buildRuntime({ outdir, manifest = null }) {
       minify: true,
       splitting: true,
       naming: { entry: "[name].[ext]", chunk: SHARED_CHUNK },
-      define: manifest ? hostDefines(manifest) : {},
+      define: { ...(manifest ? hostDefines(manifest) : {}), "globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER": String(wasmSplit) },
     });
     if (!result.success) throw new AggregateError(result.logs, "the runtime build failed");
     const written = readdirSync(scratch).sort();
@@ -88,11 +92,11 @@ export async function main(argv = process.argv.slice(2)) {
   const outdir = argument(argv, "--outdir");
   const manifestPath = argument(argv, "--manifest");
   if (!outdir) {
-    console.error("usage: build-runtime-bundle.mjs --outdir <bundle-directory> [--manifest <release-manifest.json>]");
+    console.error("usage: build-runtime-bundle.mjs --outdir <bundle-directory> [--manifest <release-manifest.json>] [--wasm-split]");
     return 2;
   }
   const manifest = manifestPath ? JSON.parse(readFileSync(manifestPath, "utf8")) : null;
-  await buildRuntime({ outdir, manifest });
+  await buildRuntime({ outdir, manifest, wasmSplit: argv.includes("--wasm-split") });
   return 0;
 }
 

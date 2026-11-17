@@ -48,8 +48,9 @@ async function scenario(base, browser, { query }) {
   // Hold every request for the wasm until the test lets it go: whatever is on screen meanwhile came from index.html alone.
   let release;
   const held = new Promise((done) => { release = done; });
-  let wasmRequests = 0;
-  await page.route(/\.wasm(\?|$)/, async (route) => { wasmRequests++; await held; await route.continue(); });
+  // Each module of the bundle (app.wasm, and app-rest.wasm in a split build) by name, with the times it was asked for.
+  const wasmRequests = new Map();
+  await page.route(/\.wasm(\?|$)/, async (route) => { const name = new URL(route.request().url()).pathname; wasmRequests.set(name, (wasmRequests.get(name) ?? 0) + 1); await held; await route.continue(); });
   await page.goto(`${base}/${query}`, { waitUntil: "domcontentloaded" });
 
   // 1. The markup is there, and painted, before the wasm.
@@ -71,7 +72,7 @@ async function scenario(base, browser, { query }) {
   assert.equal(await page.locator("#first-paint-style").count(), 0, "the prerendered rules are gone after the takeover");
   assert.equal(await page.locator("#embedded-app-root").count(), 1, "one app root");
   assert.deepEqual(errors, [], `page errors: ${errors.join("; ")}`);
-  assert.equal(wasmRequests, 1, "the wasm was requested exactly once");
+  assert.ok(wasmRequests.size >= 1 && [...wasmRequests.values()].every((count) => count === 1), `each wasm module was requested exactly once: ${JSON.stringify([...wasmRequests])}`);
 
   // 4. Nothing shifted at the handover (the boxes themselves are compared in `takeover`, before anything is typed or clicked).
   const recorded = await page.evaluate(() => window.__fp);
