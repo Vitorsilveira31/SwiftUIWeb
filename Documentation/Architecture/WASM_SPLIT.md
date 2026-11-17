@@ -95,7 +95,8 @@ Board, cold load (Worker, the default):
 
 With the runtime in one shared chunk (main at 27716de3) the Board transfers 508.3 KB unsplit and 357.5 KB split to show
 its board (−29.7%), and 492.0 against 527.7 KB over the whole visit (+7.3%); the split build's scripts carry the loader,
-0.9 KB brotli more.
+0.9 KB brotli more. There (10 interleaved rounds each) the cold load on Slow 4G goes from 2,906 to 2,137 ms (−26.6%), on a
+local network 52.9 against 50.7 ms (not significant), and on the main thread under Slow 4G from 2,932 to 3,110 ms (+6.2%).
 
 On the main thread (`?render-in-worker=0`, Slow 4G, 10 rounds) the split costs what its extra bytes cost: 3,153 ms against
 3,346 ms (+6.2%), both modules downloading side by side. On a local network the split costs a few milliseconds at the start: the interleaved runs above put the
