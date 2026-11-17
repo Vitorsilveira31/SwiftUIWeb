@@ -85,6 +85,37 @@ async function scenario(page, base, rapid = false) {
 }
 
 /**
+ * The window each lazy list last asked Swift for, and whether the page shows every row of it. The window of a lazy list depends
+ * on how the page got where it is, not only on what Swift published: it is planned with the extents measured so far (first
+ * the framework's estimate, then the rows' own), the overscan follows the last scroll direction, and rows already mounted stay
+ * while they are near the viewport. Two pages with different histories can settle with windows a row apart and every
+ * publication right. A page that asked for a row it does not show, on the other hand, lost a publication.
+ */
+const lazyWindows = (page) => page.evaluate(() => {
+  const asked = {};
+  for (const entry of window.__dispatchLog ?? []) {
+    const [kind, list, start, count] = entry.split(":");
+    if (kind === "lazy_window") asked[list] = { start: Number(start), count: Number(count) };
+  }
+  const missing = [];
+  for (const [list, { start, count }] of Object.entries(asked)) {
+    const container = document.querySelector(`[data-keep-lazy-index="${list}"]`);
+    if (!container) continue;
+    const shown = new Set([...container.querySelectorAll("[data-lazy-index]")].map((cell) => Number(cell.getAttribute("data-lazy-index"))));
+    for (let index = start; index < start + count; index += 1) if (!shown.has(index)) missing.push(`${list}:${index}`);
+  }
+  return { asked: Object.entries(asked).map(([list, w]) => `${list}:${w.start}+${w.count}`).join(" "), missing };
+});
+
+/** Has the page plan every lazy window again from its geometry alone: a resize forgets the measured extents and the rows kept. */
+async function replanLazyWindows(page) {
+  await page.setViewportSize({ width: 1440, height: 901 });
+  await page.waitForTimeout(300);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(600);
+}
+
+/**
  * A tab the page shows before Swift publishes its selection. The click's bubble listeners are stopped once the page has applied
  * it, so Swift never hears it and the commit after it still carries Swift's old selection: the page leads Swift. The verification
  * mode must leave the tab's selection out while it leads, and must still report an attribute nobody owns on a tab button.
@@ -142,7 +173,7 @@ await runSuite(async () => {
     assert.ok(!(await incremental.evaluate(() => document.getElementById("embedded-app-root").dataset.runtimeError)), "runtime error after the incremental run");
 
     const full = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-    await full.addInitScript(() => { window.__fullPublish = true; });
+    await full.addInitScript(() => { window.__fullPublish = true; window.__performanceDiagnostics = true; });
     await scenario(full, base);
     // The two pages are compared once both have settled: a transition that ends a frame later on one of them (a slow runner)
     // is not a difference between publications. A difference that stays is reported where it starts, not as two pages.
@@ -169,7 +200,18 @@ await runSuite(async () => {
       await lagging.waitForTimeout(100);
       [laggingDOM, complete] = [await lagging.evaluate(normalizedDOM), await full.evaluate(normalizedDOM)];
     }
-    assert.ok(laggingDOM === complete, `a page that acknowledges late and drops publications left a different page ${firstDifference(laggingDOM, complete)}`);
+    if (laggingDOM !== complete) {
+      // Different pages: either the lagging page lost a publication (it asked for a row it does not show), or the two pages
+      // planned their lazy windows from different histories. The second is told apart by planning both again.
+      const [laggingWindows, fullWindows] = [await lazyWindows(lagging), await lazyWindows(full)];
+      const detail = `${firstDifference(laggingDOM, complete)}\n  windows asked: lagging ${laggingWindows.asked}, full ${fullWindows.asked}`;
+      assert.deepEqual(laggingWindows.missing, [], `the lagging page asked for lazy rows it does not show: a publication was lost ${detail}`);
+      await replanLazyWindows(lagging);
+      await replanLazyWindows(full);
+      [laggingDOM, complete] = [await lagging.evaluate(normalizedDOM), await full.evaluate(normalizedDOM)];
+      console.log(`the lagging page settled with other lazy windows (lagging ${laggingWindows.asked}, full ${fullWindows.asked}); planned again from the same geometry`);
+      assert.ok(laggingDOM === complete, `a page that acknowledges late and drops publications left a different page, also with its lazy windows planned again ${detail}`);
+    }
     const laggingDiagnostics = await lagging.evaluate(() => window.__performanceMetrics.snapshot().diagnostics);
     console.log(`lagging: binary commits=${laggingDiagnostics.binaryCommits} records=${laggingDiagnostics.binaryRecords} full retries=${laggingDiagnostics.fullPublications}`);
     assert.equal(laggingDiagnostics.fullPublications, 0, "the lagging page could not apply a record and asked for a publication in full");
