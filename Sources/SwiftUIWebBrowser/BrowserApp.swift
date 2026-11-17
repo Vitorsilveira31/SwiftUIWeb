@@ -186,7 +186,7 @@ private let _embeddedStateSnapshotKey = "state"
 /// The viewport the page reported before the tree existed (with the start message). The window encloses the
 /// application's outermost geometry readers: they start at its size instead of zero (`_geometryHint`).
 @MainActor private var _embeddedInitialViewport: CGSize?
-@MainActor private var _embeddedBrowserLazyIDs: [FiberIdentity: (Int, Int, UInt64, _LazyAxis)] = [:]
+@MainActor private var _embeddedBrowserLazyIDs: [FiberIdentity: (Int, Int, UInt64, _LazyAxis)] = .init()
 /// Height of the viewport the host reported, which sizes the first rows of a lazy collection (see below).
 @MainActor private var _embeddedViewportHeight: Double = 0
 /// Lazy collections whose first rows a publication has materialized (kept while the collection is in the tree).
@@ -225,8 +225,9 @@ private let _embeddedStateSnapshotKey = "state"
   _embeddedBrowserMaterializedLazy.formIntersection(present)
   return added
 }
-@MainActor private var _embeddedBrowserEventNodes: [UInt32: _RenderNode] = [:]
-@MainActor private var _embeddedBrowserSecureNodes: [String: _RenderNode] = [:]
+/// By event token (a `UInt32`, widened: `UInt64` keys share the hashed-collection code the framework's other tables use).
+@MainActor private var _embeddedBrowserEventNodes: [UInt64: _RenderNode] = .init()
+@MainActor private var _embeddedBrowserSecureNodes: [String: _RenderNode] = .init()
 // Incremental publication (Documentation/Architecture/BINARY_PATCHES.md). The host acknowledges the publication sequence it
 // committed; a publication lists what changed since that acknowledged epoch, as binary records.
 @MainActor private var _embeddedPublishAckedEpoch: UInt64 = 0
@@ -413,7 +414,8 @@ private func _embeddedIsDeepLink(_ location: String) -> Bool {
 
 // Tokens are never recycled during a session. Fiber generations prevent a
 // callback from an unmounted control from targeting its replacement.
-@MainActor private var _embeddedBrowserEventTokens: [StructuralNodeID: _EmbeddedEventToken] = [:]
+/// By `StructuralNodeID.packed`.
+@MainActor private var _embeddedBrowserEventTokens: [UInt64: _EmbeddedEventToken] = .init()
 private struct _EmbeddedEventToken { let value: UInt32; let descriptor: String? }
 @MainActor private var _embeddedBrowserNextEventToken: UInt32 = 1
 
@@ -589,17 +591,17 @@ private enum _EmbeddedSnapshotStep {
   }
   if !publishedEvents.isEmpty {
     let token: UInt32
-    if let existing = _embeddedBrowserEventTokens[fiber.structuralID], existing.descriptor == node.descriptor { token = existing.value }
+    if let existing = _embeddedBrowserEventTokens[fiber.structuralID.packed], existing.descriptor == node.descriptor { token = existing.value }
     else {
       precondition(_embeddedBrowserNextEventToken < UInt32.max, "Embedded event token space exhausted")
       token = _embeddedBrowserNextEventToken
       _embeddedBrowserNextEventToken += 1
-      _embeddedBrowserEventTokens[fiber.structuralID] = _EmbeddedEventToken(value: token, descriptor: node.descriptor)
+      _embeddedBrowserEventTokens[fiber.structuralID.packed] = _EmbeddedEventToken(value: token, descriptor: node.descriptor)
     }
     copy.attributes["data-embedded-event-id"] = String(token)
     copy.attributes["data-embedded-events"] = publishedEvents.keys.sorted().joined(separator: ",")
     copy.attributes["data-embedded-prevent-events"] = publishedEvents.filter { $0.value.preventsDefault }.map { $0.key }.sorted().joined(separator: ",")
-    _embeddedBrowserEventNodes[token] = node
+    _embeddedBrowserEventNodes[UInt64(token)] = node
   }
   let nextParent: String
   if case .element(let tag) = kind { nextParent = tag } else { nextParent = parentTag }
@@ -771,9 +773,9 @@ private let _embeddedHoverLearningDelay = 0.25
     let wishes = _HeadlessMedia.wishes()
     if wishes != "[]" {
       annotations.values.append(["data-headless-media-wishes": wishes, "data-headless-event-id": String(_HeadlessMedia.eventToken)])
-      _embeddedBrowserEventNodes[_HeadlessMedia.eventToken] = _HeadlessMedia.node
+      _embeddedBrowserEventNodes[UInt64(_HeadlessMedia.eventToken)] = _HeadlessMedia.node
     } else {
-      _embeddedBrowserEventNodes.removeValue(forKey: _HeadlessMedia.eventToken)
+      _embeddedBrowserEventNodes.removeValue(forKey: UInt64(_HeadlessMedia.eventToken))
     }
   }
   if let operations = BrowserHistoryAdapter.embeddedOperations() {
@@ -824,7 +826,7 @@ private typealias _EmbeddedWrittenFibers = [(fiber: Fiber, copy: _RenderNode, in
 /// (`_embeddedBinaryVerify`) the publication also carries a reference: the whole tree encoded again by a fresh encoder, which
 /// the page builds and compares its DOM with. Returns the bytes published.
 @MainActor private func _embeddedBrowserPublishBinary(_ tree: FiberTree, root: _RenderNode, context: _EmbeddedSnapshotContext, annotations: _EmbeddedAnnotations, covered: UInt64) -> Int {
-  var byCopy: [ObjectIdentifier: Fiber] = [:]
+  var byCopy: [ObjectIdentifier: Fiber] = .init()
   byCopy.reserveCapacity(context.written.count + context.kept.count)
   for entry in context.written { byCopy[ObjectIdentifier(entry.copy)] = entry.fiber }
   for entry in context.kept { byCopy[ObjectIdentifier(entry.node)] = entry.fiber }
@@ -866,7 +868,7 @@ private typealias _EmbeddedWrittenFibers = [(fiber: Fiber, copy: _RenderNode, in
     // The whole tree, which holds no placeholder: the page reconciles it with the DOM it has, and what it held before is no
     // longer what the records describe.
     let everything = fullSnapshot()
-    var fullByCopy: [ObjectIdentifier: Fiber] = [:]
+    var fullByCopy: [ObjectIdentifier: Fiber] = .init()
     fullByCopy.reserveCapacity(everything.written.count)
     for entry in everything.written { fullByCopy[ObjectIdentifier(entry.copy)] = entry.fiber }
     let whole = BinaryFiberEncoder(maxElementDepth: _embeddedMaxNestedElements, acked: context.acked, covered: covered, rootRecord: BinaryNodeRecord(), shapes: _embeddedBinaryShapes, lookup: { node in
@@ -894,13 +896,13 @@ private typealias _EmbeddedWrittenFibers = [(fiber: Fiber, copy: _RenderNode, in
 /// Drops event routes of fibers that no longer exist. Routes of kept subtrees
 /// stay valid because their fibers (and nodes) are unchanged.
 @MainActor private func _embeddedBrowserPruneEventRoutes(_ tree: FiberTree) {
-  var liveTokens = Set<UInt32>()
-  var dead: [StructuralNodeID] = []
+  var liveTokens = Set<UInt64>()
+  var dead: [UInt64] = []
   for (id, token) in _embeddedBrowserEventTokens {
-    if tree._isStructuralNodeLive(id) { liveTokens.insert(token.value) } else { dead.append(id) }
+    if tree._isStructuralNodeLive(StructuralNodeID(packed: id)) { liveTokens.insert(UInt64(token.value)) } else { dead.append(id) }
   }
   for id in dead { _embeddedBrowserEventTokens.removeValue(forKey: id) }
-  liveTokens.insert(_HeadlessMedia.eventToken)
+  liveTokens.insert(UInt64(_HeadlessMedia.eventToken))
   _embeddedBrowserEventNodes = _embeddedBrowserEventNodes.filter { liveTokens.contains($0.key) }
 }
 
@@ -963,8 +965,8 @@ public extension BrowserAppLauncher {
     _ request: URLRequest,
     configuration: URLSessionConfiguration
   ) -> BrowserHTTPRequest {
-    var headers = configuration.httpAdditionalHeaders ?? [:]
-    for (key, value) in request.allHTTPHeaderFields ?? [:] { headers[key] = value }
+    var headers = configuration.httpAdditionalHeaders ?? .init()
+    for (key, value) in request.allHTTPHeaderFields ?? .init() { headers[key] = value }
     let requestTimeout = request.explicitTimeout ?? configuration.timeoutIntervalForRequest
     let resourceTimeout = configuration.timeoutIntervalForResource > 0 ? configuration.timeoutIntervalForResource : requestTimeout
     let timeoutSeconds = min(requestTimeout, resourceTimeout)
@@ -1040,7 +1042,7 @@ public extension BrowserAppLauncher {
     _ report: @escaping @Sendable (Int64, Int64) -> Void
   ) -> @Sendable (BrowserHTTPDownloadProgress) -> Void {
     { event in
-      var headers: [String: String] = [:]
+      var headers: [String: String] = .init()
       if let length = event.contentLength { headers["content-length"] = length }
       if let encoding = event.contentEncoding { headers["content-encoding"] = encoding }
       report(Int64(clamping: event.received), _expectedContentLength(headers: headers))
@@ -1251,7 +1253,7 @@ public extension BrowserAppLauncher {
 
   static func embeddedBrowserDispatch(_ id: UInt32, eventCode: UInt32) {
     defer { _embeddedEventValueClear() }
-    guard let tree = _embeddedBrowserTree, let node = _embeddedBrowserEventNodes[id] else { return }
+    guard let tree = _embeddedBrowserTree, let node = _embeddedBrowserEventNodes[UInt64(id)] else { return }
     let event: String
     switch eventCode {
     case 1: event = "click"
@@ -1278,7 +1280,7 @@ public extension BrowserAppLauncher {
   @discardableResult
   static func embeddedBrowserDispatchNamed(_ id: UInt32, nameLength: UInt32) -> UInt32 {
     defer { _embeddedEventValueClear() }
-    guard let tree = _embeddedBrowserTree, let node = _embeddedBrowserEventNodes[id] else { return 0 }
+    guard let tree = _embeddedBrowserTree, let node = _embeddedBrowserEventNodes[UInt64(id)] else { return 0 }
     let count = min(Int(nameLength), _embeddedEventValueCount())
     let event = _embeddedEventValueString(limit: count)
     let value = _embeddedEventValueString(dropFirst: count)
@@ -1286,7 +1288,7 @@ public extension BrowserAppLauncher {
     let handled: Bool
     if event == "keyPress" {
       let (press, enclosing) = _KeyPressDispatch._splitEnclosingHandlers(value)
-      handled = tree.dispatchKeyPress(press, on: node, enclosing: enclosing.compactMap { _embeddedBrowserEventNodes[$0] })
+      handled = tree.dispatchKeyPress(press, on: node, enclosing: enclosing.compactMap { _embeddedBrowserEventNodes[UInt64($0)] })
     } else {
       _ = _KeyPressDispatch._consumeHandled()
       if node.events[event]?.valueAction != nil { tree.dispatch(event: event, value: value, on: node) }

@@ -9,7 +9,7 @@ struct ChildPlan: Equatable {
   var removals: [UInt32]
 
   init<Key: Hashable>(old: [Key], new: [Key]) {
-    var firstByKey: [Key: UInt32] = [:]
+    var firstByKey: [Key: UInt32] = .init()
     firstByKey.reserveCapacity(old.count)
     // Walking backwards leaves the first occurrence of a duplicate in the table.
     for index in old.indices.reversed() { firstByKey[old[index]] = UInt32(index) }

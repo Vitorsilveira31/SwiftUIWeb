@@ -90,7 +90,7 @@ public struct Chart<Content: ChartContent>: View {
     modifying { $0.foregroundScale = scale }
   }
   public func chartForegroundStyleScale(domain: [String], range: [Color]) -> Chart {
-    var mapping: [String: Color] = [:]
+    var mapping: [String: Color] = .init()
     for (index, value) in domain.enumerated() where index < range.count { mapping[value] = range[index] }
     return modifying { $0.foregroundScale = mapping }
   }
@@ -133,7 +133,7 @@ struct _ChartConfiguration {
   var xAutomaticDomain: AutomaticScaleDomain?
   var yAutomaticDomain: AutomaticScaleDomain?
   var legendPosition = ChartLegendPosition.automatic
-  var foregroundScale: [String: Color] = [:]
+  var foregroundScale: [String: Color] = .init()
   var selectionAxis: ChartSelectionAxis?
   var selection: ((ChartValue) -> Void)?
 }
@@ -330,7 +330,7 @@ struct _SVGChartRenderer: _ChartRenderer {
     var nodes: [_RenderNode] = []
     var consumedSeries = Set<Int>()
     // Series are grouped once, in first-seen order, rather than filtering every mark for each line or area.
-    var seriesGroups: [String: [Int]] = [:]
+    var seriesGroups: [String: [Int]] = .init()
     for index in marks.indices where marks[index].kind == .line || marks[index].kind == .area {
       seriesGroups[(marks[index].kind == .line ? "line|" : "area|") + seriesKey(marks[index]), default: []].append(index)
     }
@@ -364,7 +364,7 @@ struct _SVGChartRenderer: _ChartRenderer {
   @MainActor private func applyMask(_ maskMarks: [ChartMark], to node: _RenderNode, env: _ChartRenderEnvironment) {
     var palette = 0
     var legend: [(String, Color)] = []
-    let content = renderMarks(maskMarks, env: env, styleValues: [:], forced: .white, nextPalette: &palette, legendValues: &legend)
+    let content = renderMarks(maskMarks, env: env, styleValues: .init(), forced: .white, nextPalette: &palette, legendValues: &legend)
     // The chart's identity path makes the id unique per chart: two charts with the same marks must not share a mask.
     var signature = "\(env.context._compactPathID)|\(_chartNumber(env.layout.width))x\(_chartNumber(env.layout.height))"
     for mark in maskMarks {

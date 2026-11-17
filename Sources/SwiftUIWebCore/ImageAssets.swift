@@ -7,16 +7,16 @@
 /// URL); a remote URL is not, as SwiftUI's `Image("name")` never loads one, so
 /// a name built from server data cannot make the page fetch from any host.
 @_spi(Renderer) public enum _ImageAssets {
-  @MainActor private static var table: [String: String] = [:]
+  @MainActor private static var table: [String: String] = .init()
 
   /// Replaces the table; nil clears it (tests, session disposal).
   @MainActor public static func install(_ images: [String: String]?) {
-    table = images ?? [:]
+    table = images ?? .init()
   }
 
   /// Parses the generated `Name=path;Name=path` manifest text.
   @MainActor public static func install(manifest: String) {
-    var images: [String: String] = [:]
+    var images: [String: String] = .init()
     for entry in manifest.split(separator: ";") {
       guard let separator = entry.firstIndex(of: "=") else { continue }
       let name = String(entry[..<separator])

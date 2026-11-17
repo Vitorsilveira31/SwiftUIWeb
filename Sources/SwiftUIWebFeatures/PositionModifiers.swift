@@ -5,7 +5,7 @@ public extension View {
   /// SwiftUI the positioned view takes the whole proposed size (the layout's
   /// `position` node) and the content keeps its own size.
   nonisolated func position(x: CGFloat = 0, y: CGFloat = 0) -> some View {
-    modifier(StyleModifier(styles: [:], semantic: [
+    modifier(StyleModifier(styles: .init(), semantic: [
       "data-layout-kind": "position",
       "data-position-x": _semanticNumber(Double(x)),
       "data-position-y": _semanticNumber(Double(y))

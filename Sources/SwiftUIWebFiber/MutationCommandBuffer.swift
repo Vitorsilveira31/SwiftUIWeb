@@ -158,7 +158,7 @@ import SwiftUIWebCore
   public private(set) var words: [UInt32] = []
   public private(set) var strings: [String] = []
 
-  private var stringIDs: [String: UInt32] = [:]
+  private var stringIDs: [String: UInt32] = .init()
   public private(set) var dynamicInternHits: Int = 0
   public private(set) var staticInternHits: Int = 0
 

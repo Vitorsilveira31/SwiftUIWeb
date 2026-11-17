@@ -353,7 +353,7 @@ public extension VisualEffect {
 /// keeps compiling.
 public struct EmptyVisualEffect: VisualEffect, Hashable, Sendable {
   public var _swiftUIWebProperties: [String: String]
-  public init() { _swiftUIWebProperties = [:] }
+  public init() { _swiftUIWebProperties = .init() }
   public init(_swiftUIWebProperties: [String: String]) { self._swiftUIWebProperties = _swiftUIWebProperties }
   public var _swiftUIWebEncoded: String { _encoded }
   @_spi(Renderer) public var _encoded: String {

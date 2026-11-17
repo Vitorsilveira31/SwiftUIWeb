@@ -16,7 +16,7 @@ open class NSError: NSObject, Error, @unchecked Sendable {
   public init(domain: String, code: Int, userInfo dict: [String: Any]? = nil) {
     storedDomain = domain
     storedCode = code
-    storedUserInfo = dict ?? [:]
+    storedUserInfo = dict ?? .init()
   }
 
   open var domain: String { storedDomain }

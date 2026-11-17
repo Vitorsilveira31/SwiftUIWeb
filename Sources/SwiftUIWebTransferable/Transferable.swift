@@ -908,8 +908,8 @@ private final class SwiftUIWebTransferRuntimeLock: @unchecked Sendable {
   }
   private static let stateLock = SwiftUIWebTransferRuntimeLock()
   private final class State: @unchecked Sendable {
-    var records: [String: Record] = [:]
-    var inFlight: [String: InFlight] = [:]
+    var records: [String: Record] = .init()
+    var inFlight: [String: InFlight] = .init()
     var counter: UInt64 = 0
     /// Identifiers registered by `SwiftUIWebFileRuntime.url(for:)`, oldest first.
     var transient: [String] = []

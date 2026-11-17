@@ -149,30 +149,30 @@ func _describedRenderer(_ render: @escaping @MainActor (_RenderContext) -> _Rend
   }
 
   private var nextToken: UInt64 = 1
-  private var entries: [UInt64: Entry] = [:]
+  private var entries: [UInt64: Entry] = .init()
   /// How many owners are registered: owners a mounted view no longer has must not stay (a test hook).
   @_spi(Renderer) public var _registeredOwnerCount: Int { entries.count + outerOwners.count + innerOwners.count + aliasableOwners.count }
   private let retiredPathLimit = 4096
-  private var retiredPaths: [UInt64: _FiberPath] = [:]
+  private var retiredPaths: [UInt64: _FiberPath] = .init()
   private var retiredPathTokens: [UInt64] = []
   private var retiredPathCursor = 0
   /// Owners whose node was returned unchanged by an enclosing owner. The
   /// retained node carries the enclosing token, so a reader recorded under the
   /// inner token routes to the enclosing owner's Fiber.
-  private var outerOwners: [UInt64: UInt64] = [:]
+  private var outerOwners: [UInt64: UInt64] = .init()
   /// The other way round: the inner owner whose node an owner returned last (a node carries one owner, so an owner has
   /// one inner owner at a time). An inner owner carries no Fiber of its own, so nothing else retires it: when an owner
   /// renders again its previous inner owner is retired as the new one is recorded, and it goes when the owner goes.
   /// Without this, every render left the previous render's inner owners registered for good.
-  private var innerOwners: [UInt64: UInt64] = [:]
+  private var innerOwners: [UInt64: UInt64] = .init()
   private var aliasableOwners: Set<UInt64> = []
   /// Owners being rendered again keep their tokens: a token waiting here is handed back to the owner registered
   /// at the same structural path (the k-th registration of a path takes its k-th token). A re-render then leaves
   /// every owner still mounted at its path with the token its Fiber already holds; a fresh token per pass made the
   /// Fiber re-index each of a list's rows on every pass. Both branches of a conditional register at one path: they
   /// are one owner, so the token stays with whichever branch is shown.
-  private var reusableByPath: [_FiberPath: [UInt64]] = [:]
-  private var reusedCount: [_FiberPath: Int] = [:]
+  private var reusableByPath: [_FiberPath: [UInt64]] = .init()
+  private var reusedCount: [_FiberPath: Int] = .init()
   /// Tokens the current render handed back to an owner (by path or by `_claim`). The Fibers that held them
   /// before the render are released during reconciliation, after the new owner registered; their release must
   /// not remove the entry the new owner now holds.
@@ -187,23 +187,27 @@ func _describedRenderer(_ render: @escaping @MainActor (_RenderContext) -> _Rend
   private var reusesOwners = false
   /// The entries of pooled tokens, so an `EquatableView` that reuses its content can hand its nested owners
   /// their entries back unchanged (`_claim`).
-  private var pooledEntries: [UInt64: (entry: Entry, outer: UInt64?, aliasable: Bool)] = [:]
+  private var pooledEntries: [UInt64: Entry] = .init()
+  /// The enclosing owner and the aliasable mark a pooled entry had, kept beside it in tables of the same types as
+  /// `outerOwners` and `aliasableOwners` (Embedded Swift emits the hashed-collection code once per key and value type).
+  private var pooledOuterOwners: [UInt64: UInt64] = .init()
+  private var pooledAliasableOwners: Set<UInt64> = []
   /// `EquatableView` results by structural path: the content value, the environment entries the content read
   /// (with their stamps), the node it rendered and the owners inside it.
   private var memoValues = _TypedValueStorage<_FiberPath>()
-  private var memos: [_FiberPath: (reads: [(key: ObjectIdentifier, stamp: _EnvironmentStamp)], node: _RenderNode, owners: [UInt64])] = [:]
+  private var memos: [_FiberPath: (reads: [(key: ObjectIdentifier, stamp: _EnvironmentStamp)], node: _RenderNode, owners: [UInt64])] = .init()
   private let memoLimit = 8192
   /// The last render of each view that compares its inputs (`View._comparesInputs`), by path: its value, the environment
   /// entries its render read, and the node. A pass that renders the view's parent again reuses the node when nothing the
   /// view depends on changed (`_reusedView`). The value is held by a renderer (`_ViewRenderer`), which keeps the type
   /// checks and the comparison in the one class that is generic over the view.
-  private var viewMemoValues: [_FiberPath: _AnyViewRenderer] = [:]
-  private var viewMemos: [_FiberPath: (reads: [(key: ObjectIdentifier, stamp: _EnvironmentStamp)], node: _RenderNode, since: UInt64)] = [:]
+  private var viewMemoValues: [_FiberPath: _AnyViewRenderer] = .init()
+  private var viewMemos: [_FiberPath: (reads: [(key: ObjectIdentifier, stamp: _EnvironmentStamp)], node: _RenderNode, since: UInt64)] = .init()
   /// Counts the renders of an owner on its own (`_render`), while views are remembered: `ownRenders` holds each
   /// owner's last. A remembered node is a copy of what the view returned, which such a render does not update, so a
   /// memo with an owner rendered after it is not used.
   private(set) var _ownRenderSequence: UInt64 = 0
-  private var ownRenders: [UInt64: UInt64] = [:]
+  private var ownRenders: [UInt64: UInt64] = .init()
   private let viewMemoLimit = 4096
 
   public init() {}
@@ -262,9 +266,9 @@ func _describedRenderer(_ render: @escaping @MainActor (_RenderContext) -> _Rend
     var pooled: [(token: UInt64, path: _FiberPath)] = []
     for token in tokens {
       guard let entry = entries.removeValue(forKey: token) else { continue }
-      let outer = outerOwners.removeValue(forKey: token)
-      let aliasable = aliasableOwners.remove(token) != nil
-      pooledEntries[token] = (entry, outer, aliasable)
+      pooledEntries[token] = entry
+      pooledOuterOwners[token] = outerOwners.removeValue(forKey: token)
+      if aliasableOwners.remove(token) != nil { pooledAliasableOwners.insert(token) } else { pooledAliasableOwners.remove(token) }
       pooled.append((token, entry.context._fiberPath))
     }
     // Tokens grow in registration order, so sorting restores each path's registration sequence.
@@ -304,6 +308,8 @@ func _describedRenderer(_ render: @escaping @MainActor (_RenderContext) -> _Rend
     reusableByPath.removeAll(keepingCapacity: true)
     reusedCount.removeAll(keepingCapacity: true)
     pooledEntries.removeAll(keepingCapacity: true)
+    pooledOuterOwners.removeAll(keepingCapacity: true)
+    pooledAliasableOwners.removeAll(keepingCapacity: true)
   }
 
   /// Gives pooled `tokens` their entries back, as their owners are mounted again without rendering. Fails
@@ -313,9 +319,9 @@ func _describedRenderer(_ render: @escaping @MainActor (_RenderContext) -> _Rend
     for token in tokens {
       guard let pooled = pooledEntries.removeValue(forKey: token) else { continue }
       reclaimed.insert(token)
-      entries[token] = pooled.entry
-      if let outer = pooled.outer { outerOwners[token] = outer }
-      if pooled.aliasable { aliasableOwners.insert(token) }
+      entries[token] = pooled
+      if let outer = pooledOuterOwners.removeValue(forKey: token) { outerOwners[token] = outer }
+      if pooledAliasableOwners.remove(token) != nil { aliasableOwners.insert(token) }
     }
     return true
   }
@@ -398,7 +404,7 @@ func _describedRenderer(_ render: @escaping @MainActor (_RenderContext) -> _Rend
     // retires them all, and then nothing is reused.
     if viewMemos.count >= viewMemoLimit && viewMemos[path] == nil {
       viewMemos.removeAll(keepingCapacity: true)
-      viewMemoValues = [:]
+      viewMemoValues = .init()
     }
     viewMemoValues[path] = holder
     viewMemos[path] = (reads, node, since)
@@ -518,10 +524,12 @@ func _describedRenderer(_ render: @escaping @MainActor (_RenderContext) -> _Rend
   @_spi(Renderer) public func _removeAll(keepingCapacity: Bool = true) {
     reclaimed.removeAll(keepingCapacity: keepingCapacity)
     pooledEntries.removeAll(keepingCapacity: keepingCapacity)
+    pooledOuterOwners.removeAll(keepingCapacity: keepingCapacity)
+    pooledAliasableOwners.removeAll(keepingCapacity: keepingCapacity)
     memos.removeAll(keepingCapacity: keepingCapacity)
     memoValues = _TypedValueStorage<_FiberPath>()
     viewMemos.removeAll(keepingCapacity: keepingCapacity)
-    viewMemoValues = [:]
+    viewMemoValues = .init()
     ownRenders.removeAll(keepingCapacity: keepingCapacity)
     outerOwners.removeAll(keepingCapacity: keepingCapacity)
     innerOwners.removeAll(keepingCapacity: keepingCapacity)
@@ -1132,13 +1140,13 @@ package nonisolated struct HTMLElement: View {
   package let attributes: [String: String]
   package let children: [AnyView]
 
-  package init(tag: String, attributes: [String: String] = [:], @ViewBuilder content: () -> some View = { EmptyView() }) {
+  package init(tag: String, attributes: [String: String] = .init(), @ViewBuilder content: () -> some View = { EmptyView() }) {
     self.tag = tag
     self.attributes = attributes
     self.children = [AnyView(content())]
   }
 
-  package init(tag: String, attributes: [String: String] = [:], children: [AnyView]) {
+  package init(tag: String, attributes: [String: String] = .init(), children: [AnyView]) {
     self.tag = tag
     self.attributes = attributes
     self.children = children
@@ -1235,7 +1243,7 @@ public struct EnvironmentValues {
   private var storage = _TypedValueStorage<ObjectIdentifier>()
   private var objectStorage = _TypedValueStorage<ObjectIdentifier>()
   /// Environment-object stamps, under `_objectStampID`; key entries keep theirs in `storage`.
-  private var objectStamps: [ObjectIdentifier: _EnvironmentStamp] = [:]
+  private var objectStamps: [ObjectIdentifier: _EnvironmentStamp] = .init()
   /// Set while an `EquatableView` renders its content.
   nonisolated(unsafe) static var _readRecorder: _EnvironmentReadRecorder?
   /// Numbers come from the one counter the distinct-value table uses (`_newDistinctNumber`), so no two stamps share one.

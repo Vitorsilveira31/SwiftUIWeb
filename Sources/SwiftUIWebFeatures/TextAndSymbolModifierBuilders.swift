@@ -15,7 +15,7 @@ func _textSelectionModifier(allowsSelection: Bool) -> _SemanticCompatibilityModi
 
 @inline(never)
 func _fontWidthModifier(_ width: Font.Width?) -> _SemanticCompatibilityModifier {
-  return _SemanticCompatibilityModifier(styles: width.map { ["font-stretch": $0.rawValue] } ?? [:])
+  return _SemanticCompatibilityModifier(styles: width.map { ["font-stretch": $0.rawValue] } ?? .init())
 }
 
 @inline(never)

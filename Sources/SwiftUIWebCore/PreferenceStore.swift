@@ -9,15 +9,15 @@ public final class _PreferenceStore: @unchecked Sendable {
   /// render was staged (see `_RenderStaging`): a deferred subtree writes later than plain recursion would have,
   /// and its writes are placed by tag where its container stood. An untagged value was written before the first
   /// deferral, so it sorts first.
-  private var tags: [ObjectIdentifier: [_OrderTag]] = [:]
-  private var previousTags: [ObjectIdentifier: [_OrderTag]] = [:]
+  private var tags: [ObjectIdentifier: [_OrderTag]] = .init()
+  private var previousTags: [ObjectIdentifier: [_OrderTag]] = .init()
 
   public init() {}
 
   /// The order the writes of a key reduce in (indices into its sequence, by tag), computed once per pass and key: a
   /// reader at every level of a deep tree would otherwise sort the whole sequence again each time it reads.
-  private var orders: [ObjectIdentifier: [Int]] = [:]
-  private var previousOrders: [ObjectIdentifier: [Int]] = [:]
+  private var orders: [ObjectIdentifier: [Int]] = .init()
+  private var previousOrders: [ObjectIdentifier: [Int]] = .init()
 
   public func beginPass() {
     previousValues = values

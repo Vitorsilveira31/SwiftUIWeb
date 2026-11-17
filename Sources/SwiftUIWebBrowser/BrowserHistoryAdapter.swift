@@ -21,19 +21,19 @@ import SwiftUIWeb
   private var currentPath = NavigationPath()
   private var pendingPath: NavigationPath?
   private var observer: ((NavigationPath) -> Void)?
-  private var tabObservers: [String: (String) -> Void] = [:]
-  private var tabTags: [String: String] = [:]
-  private var tabDefaults: [String: String] = [:]
+  private var tabObservers: [String: (String) -> Void] = .init()
+  private var tabTags: [String: String] = .init()
+  private var tabDefaults: [String: String] = .init()
   /// The tab each namespace shows, as its history URL names it (namespace token to tag token): the last one Swift
   /// pushed or a location applied. The page reports the location after every tab URL Swift pushed.
-  private var shownTabs: [String: String] = [:]
+  private var shownTabs: [String: String] = .init()
   private var pendingURLTab: (namespace: String, tag: String)?
 
 
   #if hasFeature(Embedded)
   private let embeddedID: UInt32
-  private var entries: [String: NavigationPath] = [:]
-  private static var adapters: [UInt32: BrowserHistoryAdapter] = [:]
+  private var entries = _ReferenceTable<NavigationPath>()
+  private static var adapters: [UInt64: BrowserHistoryAdapter] = .init()
   private static var nextAdapter: UInt32 = 0
   private static var sequence: UInt32 = 0
   /// Operations queued for the host, in order. Mutations made during one
@@ -53,11 +53,11 @@ import SwiftUIWeb
     Self.nextAdapter += 1
     embeddedID = Self.nextAdapter
     entries["\(embeddedID):root"] = NavigationPath()
-    Self.adapters[embeddedID] = self
+    Self.adapters[UInt64(embeddedID)] = self
     #endif
   }
 
-  private var scopes: [String: BrowserHistoryAdapter] = [:]
+  private var scopes: [String: BrowserHistoryAdapter] = .init()
   package func _scope(_ identity: String) -> NavigationHistoryAdapter {
     #if hasFeature(Embedded)
     if let adapter = scopes[identity] { return adapter }
@@ -303,7 +303,7 @@ import SwiftUIWeb
     return output
   }
   static func embeddedRestore(_ key: String) {
-    guard let id = UInt32(key.split(separator: ":").first ?? ""), let adapter = adapters[id], let path = adapter.entries[key] else { return }
+    guard let id = UInt32(key.split(separator: ":").first ?? ""), let adapter = adapters[UInt64(id)], let path = adapter.entries[key] else { return }
     adapter.currentPath = path; adapter.pendingPath = nil
     if let components = _tabHistoryComponents(path) {
       let tag = adapter.tabTags["\(components.namespace)|\(components.tag)"] ?? components.tag
@@ -324,7 +324,7 @@ import SwiftUIWeb
 
   private func notifyEmbeddedPopstate() {
     onPopstate?()
-    if let parentID = embeddedParentID, let parent = Self.adapters[parentID] {
+    if let parentID = embeddedParentID, let parent = Self.adapters[UInt64(parentID)] {
       parent.notifyEmbeddedPopstate()
     }
   }

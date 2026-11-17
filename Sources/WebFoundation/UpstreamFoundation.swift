@@ -280,7 +280,7 @@ final class _NotificationLease: @unchecked Sendable {
 public final class NSMutableDictionary: ExpressibleByDictionaryLiteral {
   /// Keys are kept whole: keyed by hash alone, two keys whose hashes collide (32 bits in the browser build) shared a slot.
   private enum StoredKey: Hashable { case string(String), int(Int), bool(Bool), object(ObjectIdentifier) }
-  private var storage: [StoredKey: Any] = [:]
+  private var storage: [StoredKey: Any] = .init()
   public init() {}
   public init(dictionaryLiteral elements: (Int, AnyObject)...) {}
   public subscript(key: Any) -> Any? {
@@ -493,12 +493,12 @@ extension String {
       var zero = false
       if chars[index] == "0" { zero = true; index += 1 }
       var width = 0
-      while index < chars.count, chars[index].isASCII, let digit = chars[index].wholeNumberValue { width = Swift.min(width * 10 + digit, _printfFieldLimit); index += 1 }
+      while index < chars.count, let digit = chars[index]._asciiDigitValue { width = Swift.min(width * 10 + digit, _printfFieldLimit); index += 1 }
       var precision: Int?
       if index < chars.count, chars[index] == "." {
         index += 1
         var value = 0
-        while index < chars.count, chars[index].isASCII, let digit = chars[index].wholeNumberValue { value = Swift.min(value * 10 + digit, _printfFieldLimit); index += 1 }
+        while index < chars.count, let digit = chars[index]._asciiDigitValue { value = Swift.min(value * 10 + digit, _printfFieldLimit); index += 1 }
         precision = value
       }
       while index < chars.count, chars[index] == "h" || chars[index] == "l" { index += 1 }

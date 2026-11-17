@@ -98,7 +98,7 @@ public func _swiftUIWebReceiveIO(_ id: UInt32, _ status: Int32, _ pointer: Unsaf
 }
 enum IORuntime {
   struct State {
-    var pending: [UInt32: (Int32, [UInt8]) -> Void] = [:]
+    var pending: [UInt32: (Int32, [UInt8]) -> Void] = .init()
     var nextID: UInt32 = 1
   }
   static let state = _Locked(State())
@@ -267,7 +267,7 @@ public struct BrowserHTTPResponse: Sendable {
     var input = IOReader(bytes: bytes)
     let status = Int(exactly: input.u32()) ?? 0; let url = input.text(); let count = Int(exactly: input.u32()) ?? Int.max
     guard input.error == nil, count <= 1024 else { return .failure(input.error ?? BrowserIOError(code: -8, message: "Too many response headers")) }
-    var headers: [String: String] = [:]
+    var headers: [String: String] = .init()
     for _ in 0..<count { let key = input.text(); headers[key] = input.text() }
     let body = hasBody ? input.data() : []
     if let error = input.finish() { return .failure(error) }

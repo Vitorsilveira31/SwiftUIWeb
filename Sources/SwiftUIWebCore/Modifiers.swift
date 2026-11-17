@@ -529,7 +529,7 @@ package nonisolated struct IDModifier: ViewModifier {
 package nonisolated struct StyleModifier: ViewModifier {
   package let styles: _NodeValues
   let semantic: _NodeValues
-  package init(styles: _NodeValues) { self.styles = styles; self.semantic = [:] }
+  package init(styles: _NodeValues) { self.styles = styles; self.semantic = .init() }
   package init(styles: _NodeValues, semantic: _NodeValues) { self.styles = styles; self.semantic = semantic }
   @MainActor package func _modifyContext(_ context: inout _RenderContext) {
     guard semantic["data-layout-kind"] == "frame" else { return }
@@ -567,7 +567,7 @@ package nonisolated struct StyleModifier: ViewModifier {
       let originalClasses = node.classes
       // Only a split view's frame needs them, and reading the attributes of a node whose children have not
       // rendered would render them.
-      let originalAttributes = originalClasses.contains("split-pane") ? node.attributes : [:]
+      let originalAttributes = originalClasses.contains("split-pane") ? node.attributes : .init()
       // Canvas is already a replaced/native element.  Keep its element
       // identity when a frame is applied so the browser adapter can retain
       // the drawing surface and its command stream.  Ordinary views still
@@ -2250,7 +2250,7 @@ private func _linearGradientCSS(_ gradient: Gradient, startPoint: UnitPoint, end
 private func _backgroundContent(_ node: _RenderNode) -> (content: _RenderNode, styles: _NodeValues, attributes: _NodeValues) {
   let original = node.cloneSharingChildren()
   original.key = nil
-  return (original, [:], [:])
+  return (original, .init(), .init())
 }
 
 /// Group/ForEach are transparent: a modifier that restructures its content applies to each element. Returns whether
@@ -2295,7 +2295,7 @@ package nonisolated struct ShapeBackgroundModifier<Style: ShapeStyle, Clip: Shap
     node.styles = content.styles
     node.classes = ["backdrop-layer"]
     node.children = [background, original]
-    node.events = [:]
+    node.events = .init()
   }
 }
 
@@ -2317,7 +2317,7 @@ package nonisolated struct ShapeStyleBackgroundModifier<Style: ShapeStyle>: View
       node.styles = content.styles
       node.classes = ["backdrop-layer"]
       node.children = [background, original]
-      node.events = [:]
+      node.events = .init()
       return
     }
     // A solid paint (`Color`, hierarchical levels, `.tint`) is a background color, as `background(_:)` always was;
@@ -2393,7 +2393,7 @@ private func _contentShapeDescriptor<ShapeValue>(_ shape: ShapeValue) -> _Conten
     return _ContentShapeDescriptor(name: "capsule", styles: ["clip-path": "inset(0 round 9999px)"])
   }
   if shape is Rectangle {
-    return _ContentShapeDescriptor(name: "rectangle", styles: [:])
+    return _ContentShapeDescriptor(name: "rectangle", styles: .init())
   }
   if let rounded = shape as? RoundedRectangle {
     return _ContentShapeDescriptor(
@@ -2410,9 +2410,9 @@ private func _contentShapeDescriptor<ShapeValue>(_ shape: ShapeValue) -> _Conten
     return _ContentShapeDescriptor(name: "uneven-rounded-rectangle", styles: styles)
   }
   #if hasFeature(Embedded)
-  return _ContentShapeDescriptor(name: "custom", styles: [:])
+  return _ContentShapeDescriptor(name: "custom", styles: .init())
   #else
-  return _ContentShapeDescriptor(name: _swiftUIWebTypeName(ShapeValue.self), styles: [:])
+  return _ContentShapeDescriptor(name: _swiftUIWebTypeName(ShapeValue.self), styles: .init())
   #endif
 }
 
@@ -2499,10 +2499,10 @@ package nonisolated struct SearchableModifier: ViewModifier {
     node.kind = .element("div")
     node.text = nil
     node.attributes = ["role": "search", "data-searchable": "true"]
-    node.styles = [:]
+    node.styles = .init()
     node.classes = ["searchable"]
     node.children = [field, original]
-    node.events = [:]
+    node.events = .init()
   }
 }
 
@@ -4293,7 +4293,7 @@ func _paddingModifier(_ value: Double) -> StyleModifier {
 @inline(never)
 func _paddingModifier(_ edges: Edge.Set, _ length: Double?) -> StyleModifier {
   let amount = length ?? 8
-  var styles: _NodeValues = [:]
+  var styles: _NodeValues = .init()
   var semantic: _NodeValues = ["data-layout-kind": "padding"]
   if edges.contains(.top) { styles["padding-top"] = "\(amount.clean)px"; semantic["data-padding-top"] = String(amount) }
   if edges.contains(.leading) { styles["padding-inline-start"] = "\(amount.clean)px"; semantic["data-padding-leading"] = String(amount) }
@@ -4378,7 +4378,7 @@ func _frameModifier(minWidth: Double?, idealWidth: Double?, maxWidth: Double?, m
 
 @inline(never)
 func _fixedSizeModifier(horizontal: Bool, vertical: Bool) -> StyleModifier {
-  var styles: _NodeValues = [:]
+  var styles: _NodeValues = .init()
   if horizontal { styles["width"] = "max-content" }
   if vertical { styles["height"] = "max-content" }
   return StyleModifier(styles: styles, semantic: ["data-layout-kind": "fixed", "data-fixed-x": String(horizontal), "data-fixed-y": String(vertical)])

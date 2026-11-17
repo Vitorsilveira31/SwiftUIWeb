@@ -222,8 +222,8 @@ public struct Image: @unchecked Sendable {
   /// A rendered view standing in for a bitmap (see `ImageRenderer`).
   package var snapshot: AnyView?
   /// What SwiftUI's `Image -> Image` modifiers (`resizable`, `interpolation`) set on the image element itself.
-  var imageAttributes: _NodeValues = [:]
-  var imageStyles: _NodeValues = [:]
+  var imageAttributes: _NodeValues = .init()
+  var imageStyles: _NodeValues = .init()
   package init(_ source: String, alt: String?) { self.source = source; self.alt = alt; systemName = nil; allowsRemoteSource = true }
   public init(_ source: String, bundle: Bundle? = nil) { self.source = source; self.alt = source; systemName = nil }
   public init(systemName: String) { source = "symbol:\(systemName)"; alt = systemName; self.systemName = systemName }
@@ -1825,7 +1825,7 @@ public nonisolated struct Picker<SelectionValue: Hashable, Content: View>: View 
     return _RenderStaging.stagedNode { stage in
       stage.whenSettled { stage in
         let candidates = _pickerOptionCandidates(in: renderedContent)
-        var valuesByToken: [String: _RuntimeValue] = [:]
+        var valuesByToken: [String: _RuntimeValue] = .init()
         // One token per candidate (nil when it does not read as the selection type). Two options whose tokens would
         // coincide (different tags with one description) get a numbered suffix, so each option keeps its own value.
         var tokens: [String?] = []
@@ -2134,7 +2134,7 @@ where RowValue: Identifiable, Content: View, Label: View {
   /// Sorting and sizing metadata installed by the initializers in
   /// `TableSorting.swift` and the `width` modifiers.
   package var _sort: _TableColumnSort<Sort>?
-  var _widthStyles: _NodeValues = [:]
+  var _widthStyles: _NodeValues = .init()
 
   package init(title: String, cell: @escaping (RowValue) -> Content) {
     self.title = title
@@ -2240,7 +2240,7 @@ where Value == Rows.TableRowValue, Rows: TableRowContent, Columns: TableColumnCo
       #else
       let itemType = _swiftUIWebTypeName(Value.self)
       #endif
-      let rowKeySet = Set(rowKeys)
+      let rowKeyOffsets = _lazyKeyOffsets(rowKeys)
       let descriptor = _LazyCollectionDescriptor(
         count: values.count,
         axis: .vertical,
@@ -2252,7 +2252,7 @@ where Value == Rows.TableRowValue, Rows: TableRowContent, Columns: TableColumnCo
         keyAt: { offset in
           return rowKeys[offset]
         },
-        containsKey: { rowKeySet.contains($0) },
+        containsKey: { rowKeyOffsets[$0] != nil },
         renderItem: { offset, rowContext in
           // Include the application row identity in every cell's state path;
           // physical recycling must never make two rows share SwiftUI state.
@@ -2798,7 +2798,7 @@ private func _colorInputValue(_ color: Color) -> String {
       var number = 0
       var seenDigit = false
       for character in part {
-        guard let digit = character.wholeNumberValue, character.isASCII else { break }
+        guard let digit = character._asciiDigitValue else { break }
         // Capped: the channel is clamped to 255 anyway, and a long run of digits would overflow a 32-bit Int.
         number = min(number * 10 + digit, 1_000)
         seenDigit = true

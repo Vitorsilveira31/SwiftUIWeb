@@ -20,7 +20,7 @@ extension JSONValue: EmbeddedCodable {
     case .number(let value): return .number(value)
     case .bool(let value): return .bool(value)
     case .object(let value):
-      var object: [String: _EmbeddedJSONValue] = [:]
+      var object: [String: _EmbeddedJSONValue] = .init()
       for (key, value) in value { object[key] = try value._embeddedJSONValue() }
       return .object(object)
     case .array(let value): return .array(try value.map { try $0._embeddedJSONValue() })
@@ -34,7 +34,7 @@ extension JSONValue: EmbeddedCodable {
     case .number(let value): return .number(value)
     case .bool(let value): return .bool(value)
     case .object(let value):
-      var object: [String: JSONValue] = [:]
+      var object: [String: JSONValue] = .init()
       for (key, value) in value { object[key] = try JSONValue._embeddedDecodeJSONValue(value) }
       return .object(object)
     case .array(let value): return .array(try value.map { try JSONValue._embeddedDecodeJSONValue($0) })

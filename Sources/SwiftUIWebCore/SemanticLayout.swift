@@ -42,10 +42,10 @@ package func _semanticWrap(_ node: _RenderNode, kind: String) -> _RenderNode {
   node.kind = .element("div")
   node.text = nil
   node.attributes = ["data-layout-kind": kind, "data-layout-schema": "1"]
-  node.styles = [:]
+  node.styles = .init()
   node.classes = [_semanticClass(kind)]
   node.children = [child]
-  node.events = [:]
+  node.events = .init()
   node.taskRegistrations = []
   node.leafBindings = []
   node.lazyCollection = nil
@@ -170,7 +170,7 @@ enum _SemanticLayers {
 
   /// The layer the element's own layout attributes describe: the outermost.
   static func standardLayer(of node: _RenderNode, kind: String) -> Layer {
-    var own: _NodeValues = [:]
+    var own: _NodeValues = .init()
     for (name, value) in node.attributes where isLayerField(name) { own[name] = value }
     return Layer(kind: kind, semantic: own)
   }
@@ -334,7 +334,7 @@ enum _SemanticLayers {
   @MainActor private static func writePadding(_ padding: Layer, to node: _RenderNode) {
     for edge in ["top", "leading", "bottom", "trailing"] { node.attributes.removeValue(forKey: "data-padding-" + edge) }
     for key in ["padding", "padding-top", "padding-bottom", "padding-inline-start", "padding-inline-end"] { node.styles.removeValue(forKey: key) }
-    var css: _NodeValues = [:]
+    var css: _NodeValues = .init()
     for field in padding.fields {
       node.attributes["data-" + field.name] = field.value
       guard let amount = Double(field.value) else { continue }
@@ -403,7 +403,7 @@ extension _SemanticLayers {
   /// the measurement of a node reads. The padding of a layer is in its attributes. `SemanticLayerTests` compares them
   /// with what the modifiers make.
   static func styles(of layer: Layer) -> _NodeValues {
-    var styles: _NodeValues = [:]
+    var styles: _NodeValues = .init()
     switch layer.kind {
     case "fixed":
       if layer.value("fixed-x") == "true" { styles["width"] = "max-content" }

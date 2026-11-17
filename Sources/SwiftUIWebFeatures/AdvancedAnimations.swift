@@ -989,7 +989,7 @@ private func _animationEscaped(_ value: String) -> String {
   return result
 }
 
-private func _animationStyleSnapshot(_ node: _RenderNode, inherited: _NodeValues = [:]) -> String {
+private func _animationStyleSnapshot(_ node: _RenderNode, inherited: _NodeValues = .init()) -> String {
   var styles = inherited
   for (key, value) in node.styles { styles[key] = value }
   return styles.keys.sorted().filter { key in

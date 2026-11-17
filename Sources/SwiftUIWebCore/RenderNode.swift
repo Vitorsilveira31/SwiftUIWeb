@@ -287,12 +287,12 @@ public final class _RenderNode {
     @inline(__always) set { if _selfPending != nil { _resolveSelf() }; _sDescriptor = newValue }
   }
   var _sDescriptor: String?
-  public var events: [String: _EventHandler] {
+  public var events: _NodeEvents {
     @inline(__always) get { if _selfPending != nil { _resolveSelf() }; return _sEvents }
     @inline(__always) _modify { if _selfPending != nil { _resolveSelf() }; _noteWrite(); yield &_sEvents }
     @inline(__always) set { if _selfPending != nil { _resolveSelf() }; _noteWrite(); _sEvents = newValue }
   }
-  var _sEvents: [String: _EventHandler]
+  var _sEvents: _NodeEvents
   public var taskRegistrations: [TaskRegistration] {
     @inline(__always) get { if _selfPending != nil { _resolveSelf() }; return _sTaskRegistrations }
     @inline(__always) _modify { if _selfPending != nil { _resolveSelf() }; yield &_sTaskRegistrations }
@@ -502,8 +502,8 @@ public final class _RenderNode {
   var _sDomView: _DOMViewDescriptor?
 
   public init(kind: Kind, text: String? = nil) {
-    self._sKind = kind; self._sText = text; _sAttributes = [:]; _sStyles = [:]; _sClasses = []
-    _children = []; _deferredChildren = nil; _selfPending = nil; _sDescriptor = nil; _sEvents = [:]; _sTaskRegistrations = []; _sLeafBindings = []; _sSecureValue = nil; _sPickerSelectionValue = nil; _sLazyCollection = nil; _sRenderOwnerToken = nil; _sHoverProbe = nil; _sStateScopePaths = []; _sStaticTemplateKey = nil; _sLayoutValues = [:]; _sLayoutRender = nil; _sLayoutAlignmentGuides = [:]; _sLayoutExplicitHorizontalAlignment = nil; _sLayoutExplicitVerticalAlignment = nil; _sTableCellRender = nil; _sTableColumnSort = nil; _sTableRowValue = nil; _sCanvasCommands = []; _sCanvasFingerprint = nil; _sDragSource = nil; _sDropTarget = nil; _sTimeline = nil; _sDomView = nil
+    self._sKind = kind; self._sText = text; _sAttributes = .init(); _sStyles = .init(); _sClasses = []
+    _children = []; _deferredChildren = nil; _selfPending = nil; _sDescriptor = nil; _sEvents = .init(); _sTaskRegistrations = []; _sLeafBindings = []; _sSecureValue = nil; _sPickerSelectionValue = nil; _sLazyCollection = nil; _sRenderOwnerToken = nil; _sHoverProbe = nil; _sStateScopePaths = []; _sStaticTemplateKey = nil; _sLayoutValues = .init(); _sLayoutRender = nil; _sLayoutAlignmentGuides = .init(); _sLayoutExplicitHorizontalAlignment = nil; _sLayoutExplicitVerticalAlignment = nil; _sTableCellRender = nil; _sTableColumnSort = nil; _sTableRowValue = nil; _sCanvasCommands = []; _sCanvasFingerprint = nil; _sDragSource = nil; _sDropTarget = nil; _sTimeline = nil; _sDomView = nil
     _RuntimeMemoryMetrics.recordRenderNodeInit()
     if let text { _RuntimeMemoryMetrics.observeString(text) }
   }
@@ -609,7 +609,7 @@ public final class _RenderNode {
   public func shallowEquals(_ other: _RenderNode) -> Bool {
     guard kind == other.kind, text == other.text, attributes == other.attributes,
           styles == other.styles, classes == other.classes, key == other.key,
-          descriptor == other.descriptor, events.keys == other.events.keys,
+          descriptor == other.descriptor, events.hasSameNames(as: other.events),
           taskRegistrations.map({ $0.key + "|" + ($0.id ?? "<nil>") }) ==
           other.taskRegistrations.map({ $0.key + "|" + ($0.id ?? "<nil>") }) else { return false }
     return true

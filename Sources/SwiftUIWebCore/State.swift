@@ -18,14 +18,51 @@ public protocol DynamicProperty {}
 /// targets and is not part of the SwiftUI-facing API. A source ID is stable
 /// for the lifetime of the state box and can be stored as a compact integer in
 /// the renderer's arena instead of retaining a closure per dependency edge.
-@_spi(Renderer) public struct _StateSourceID: Hashable, Sendable {
-  public let rawValue: UInt64
-  public init(rawValue: UInt64) { self.rawValue = rawValue }
+///
+/// It is a `UInt64`, not a wrapper of one: Embedded Swift emits its own copy of the `Dictionary`/`Set` code for every
+/// key type, and the graph's tables keyed by a source then share the copy its owner-token tables already use.
+@_spi(Renderer) public typealias _StateSourceID = UInt64
+
+extension UInt64 {
+  @_spi(Renderer) public init(rawValue: UInt64) { self = rawValue }
+  @_spi(Renderer) public var rawValue: UInt64 { self }
 
   /// Reserved source for inherited environment reads. State boxes receive
   /// small monotonically increasing identifiers, so this value cannot alias a
   /// normal state source during a renderer lifetime.
-  @_spi(Renderer) public static let environment = _StateSourceID(rawValue: UInt64.max)
+  @_spi(Renderer) public static var environment: UInt64 { .max }
+}
+
+/// A table of values by name, each kept in an object of its own. Embedded Swift emits the hashed-collection code once per
+/// key type and value layout: every `_ReferenceTable` is a table of references and shares one copy, where a table of
+/// the value itself would carry its own. For values written now and then (measurements, caches, running tasks): a
+/// write allocates the object, a read does not.
+package struct _ReferenceTable<Value> {
+  private final class Box {
+    let value: Value
+    init(_ value: Value) { self.value = value }
+  }
+  private var boxes: [String: Box] = .init()
+
+  package init() {}
+
+  package subscript(key: String) -> Value? {
+    get { boxes[key]?.value }
+    set { boxes[key] = newValue.map { Box($0) } }
+  }
+
+  package var count: Int { boxes.count }
+  package var keys: [String] { Array(boxes.keys) }
+
+  package func forEachValue(_ body: (Value) -> Void) {
+    for box in boxes.values { body(box.value) }
+  }
+
+  package mutating func removeAll(keepingCapacity: Bool = false) { boxes.removeAll(keepingCapacity: keepingCapacity) }
+
+  package mutating func removeValues(where shouldRemove: (String) -> Bool) {
+    for key in boxes.keys where shouldRemove(key) { boxes.removeValue(forKey: key) }
+  }
 }
 
 /// Cancellation token for an internal state-source subscription. StateStore
@@ -126,7 +163,7 @@ fileprivate protocol _PublishedObservationRegistration: AnyObject {
 #if !hasFeature(Embedded)
 private enum ObservableObjectRuntime {
   private final class Registry: @unchecked Sendable {
-    var publishers: [ObjectIdentifier: ObservableObjectPublisher] = [:]
+    var publishers: [ObjectIdentifier: ObservableObjectPublisher] = .init()
   }
   // Guarded by `lock`.
   private static let registry = Registry()
@@ -390,13 +427,13 @@ enum EnvironmentObjectKey<ObjectType: AnyObject>: EnvironmentKey {
 
   /// The compact DOM ids of this document's identity paths (`_FiberPath._compactID`).
   @_spi(Renderer) public let _compactPathIDs = _CompactPathIDRegistry()
-  private var storage: [String: _StateStoreEntry] = [:]
+  private var storage: [String: _StateStoreEntry] = .init()
   // A value view can first read a lazily-adopted @State property from a
   // conditional branch.  The old path-only lookup could then reuse another
   // same-typed property whose slot happened to be allocated earlier in that
   // render pass.  Keep the box's assigned slot alongside the path table so a
   // box that has already been adopted can never alias an unrelated property.
-  private var keysByStateBox: [ObjectIdentifier: String] = [:]
+  private var keysByStateBox: [ObjectIdentifier: String] = .init()
   private var observedValues = _TypedChangeHistory<String>()
   private var observedKeys: Set<String> = []
   private var observedObjects: Set<ObjectIdentifier> = []
@@ -405,7 +442,7 @@ enum EnvironmentObjectKey<ObjectType: AnyObject>: EnvironmentKey {
   // once, but it may be read by several disjoint AnyView owners; retaining the
   // source mapping prevents the first reader from accidentally owning all
   // later invalidations.
-  private var observedObjectSources: [ObjectIdentifier: _StateSourceID] = [:]
+  private var observedObjectSources: [ObjectIdentifier: _StateSourceID] = .init()
   private var publisherSubscriptions: [ObservableObjectPublisher] = []
 #if hasFeature(Embedded)
   private var publishedObservationRegistrations: [_PublishedObservationRegistration] = []
@@ -432,9 +469,9 @@ enum EnvironmentObjectKey<ObjectType: AnyObject>: EnvironmentKey {
   /// What Swift animates itself keeps between renders, by fiber path (`Animator.swift`).
   var _animatorValues = _TypedValueStorage<String>()
   /// The layouts the page measured for the texts a `TextRenderer` draws, by fiber path (`TextRenderer.swift`).
-  var _textLayouts: [String: _MeasuredTextLayout] = [:]
+  var _textLayouts = _ReferenceTable<_MeasuredTextLayout>()
   /// The frames in the window the page measured for anchors and text layouts, by path (`_measureWindowFrame`).
-  var _windowFrames: [String: CGRect] = [:]
+  var _windowFrames = _ReferenceTable<CGRect>()
   private var disposed = false
   private var observationAccessCount = 0
   private var observationInvalidationCount = 0
@@ -458,8 +495,8 @@ enum EnvironmentObjectKey<ObjectType: AnyObject>: EnvironmentKey {
   // removal is cheaper and more Embedded-friendly than nested hash tables.
   private var subscribers: [Subscriber] = []
   private var nextSubscriberID: UInt64 = 1
-  private var runningTasks: [String: Task<Void, Never>] = [:]
-  private var runningTaskIDs: [String: String?] = [:]
+  /// The task a `.task` modifier started, by key, with the `id` it was started for.
+  private var runningTasks = _ReferenceTable<(task: Task<Void, Never>, id: String?)>()
 
   isolated deinit {
     _dispose()
@@ -502,9 +539,8 @@ enum EnvironmentObjectKey<ObjectType: AnyObject>: EnvironmentKey {
     observedObjectSources.removeAll(keepingCapacity: false)
     publisherSubscriptions.removeAll(keepingCapacity: false)
     subscribers.removeAll(keepingCapacity: false)
-    runningTasks.values.forEach { $0.cancel() }
+    runningTasks.forEachValue { $0.task.cancel() }
     runningTasks.removeAll(keepingCapacity: false)
-    runningTaskIDs.removeAll(keepingCapacity: false)
     recordRuntimeMemoryShape()
   }
   package func box<Value>(_ key: String, default value: @autoclosure () -> Value) -> StateBox<Value> {
@@ -532,11 +568,21 @@ enum EnvironmentObjectKey<ObjectType: AnyObject>: EnvironmentKey {
   /// over the keys instead of one per Fiber, each comparing every key with that Fiber's path.
   @_spi(Renderer) public func _releaseStateScopes(atPathPrefixes pathPrefixes: [String]) {
     guard !disposed, !pathPrefixes.isEmpty else { return }
-    let scopes = Set(pathPrefixes.map { Substring($0) })
+    // Sorted, and searched by halving: a prefix of a key is looked up without making a `String` of it, and without the
+    // `Set<Substring>` whose hashed-collection code Embedded Swift would emit for this one use.
+    let scopes = pathPrefixes.sorted()
+    func isScope(_ prefix: Substring) -> Bool {
+      var low = 0, high = scopes.count
+      while low < high {
+        let middle = (low + high) / 2
+        if scopes[middle] < prefix { low = middle + 1 } else { high = middle }
+      }
+      return low < scopes.count && scopes[low] == prefix
+    }
     func belongsToScope(_ key: String) -> Bool {
       var start = key.startIndex
       while let separator = key[start...].firstIndex(of: "#") {
-        if scopes.contains(key[..<separator]) { return true }
+        if isScope(key[..<separator]) { return true }
         start = key.index(after: separator)
       }
       return false
@@ -556,18 +602,15 @@ enum EnvironmentObjectKey<ObjectType: AnyObject>: EnvironmentKey {
 
     // What the motion engine keeps by compact path (animated values, measured text, window frames) leaves with its view.
     for key in _animatorValues.keys where belongsToScope(key) { _animatorValues.removeValue(for: key) }
-    for key in _textLayouts.keys where belongsToScope(key) { _textLayouts.removeValue(forKey: key) }
-    for key in _windowFrames.keys where belongsToScope(key) { _windowFrames.removeValue(forKey: key) }
+    _textLayouts.removeValues(where: belongsToScope)
+    _windowFrames.removeValues(where: belongsToScope)
 
     let rememberedKeys = observedKeys.filter(belongsToScope)
     for key in rememberedKeys {
       observedKeys.remove(key)
       observedValues.removeValue(for: key)
     }
-    let taskKeys = Set(
-      runningTasks.keys.filter(belongsToScope) + runningTaskIDs.keys.filter(belongsToScope)
-    )
-    for key in taskKeys { cancelTask(key: key) }
+    for key in runningTasks.keys where belongsToScope(key) { cancelTask(key: key) }
     recordRuntimeMemoryShape()
   }
 
@@ -893,8 +936,8 @@ enum EnvironmentObjectKey<ObjectType: AnyObject>: EnvironmentKey {
   /// member independently. Keeping the source boundary lets Fiber validate
   /// every property route before combining work from one event.
   @_spi(Renderer) public func _dirtyPublishedObservationOwnerGroups() -> [UInt64: Set<UInt64>]? {
-    guard !disposed else { return [:] }
-    var groups: [UInt64: Set<UInt64>] = [:]
+    guard !disposed else { return .init() }
+    var groups: [UInt64: Set<UInt64>] = .init()
     for source in pendingPublishedObservationSources {
       guard let sourceOwners = _dependencies.dirtyOwners(of: source) else {
         return nil
@@ -1027,19 +1070,19 @@ enum EnvironmentObjectKey<ObjectType: AnyObject>: EnvironmentKey {
 
   func startTask(key: String, id: String?, action: @escaping () async -> Void) {
     guard !disposed else { return }
-    if runningTaskIDs[key] == id, runningTasks[key] != nil { return }
-    runningTasks[key]?.cancel()
-    runningTaskIDs[key] = id
-    // The task runs on the main actor, like the store that owns it, so it may use the closure directly.
-    runningTasks[key] = Task {
-      await action()
+    if let running = runningTasks[key] {
+      if running.id == id { return }
+      running.task.cancel()
     }
+    // The task runs on the main actor, like the store that owns it, so it may use the closure directly.
+    runningTasks[key] = (Task {
+      await action()
+    }, id)
   }
 
   func cancelTask(key: String) {
-    runningTasks[key]?.cancel()
-    runningTasks.removeValue(forKey: key)
-    runningTaskIDs.removeValue(forKey: key)
+    runningTasks[key]?.task.cancel()
+    runningTasks[key] = nil
   }
   public func setInvalidationHandler(_ handler: @escaping () -> Void) {
     guard !disposed else { return }
@@ -1119,7 +1162,7 @@ enum EnvironmentObjectKey<ObjectType: AnyObject>: EnvironmentKey {
   /// the same `#stateN` slot to different properties.
   let viewTag: String
   var counter = 0
-  private var keysByBox: [ObjectIdentifier: String] = [:]
+  private var keysByBox: [ObjectIdentifier: String] = .init()
   package init(context: _RenderContext, viewTag: String) { store = context.stateStore; path = context._fiberPath; ownerToken = context._renderOwnerToken; self.viewTag = viewTag }
   func key() -> String { defer { counter += 1 }; return path.description + "#state\(counter)@" + viewTag }
   func key<Object: AnyObject>(for box: Object) -> String {

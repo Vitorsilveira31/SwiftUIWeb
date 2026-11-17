@@ -470,7 +470,7 @@ public struct UUID: Hashable, Comparable, Sendable, CustomStringConvertible {
 extension Bundle {
   /// What the application declares about itself (name, version). A web page has no Info.plist, so it is empty unless
   /// the application fills it in at launch.
-  @_spi(BrowserHost) nonisolated(unsafe) public static var webInfoDictionary: [String: String] = [:]
+  @_spi(BrowserHost) nonisolated(unsafe) public static var webInfoDictionary: [String: String] = .init()
 
   /// The bundle's Info.plist, as the application declared it in `webInfoDictionary`.
   public var infoDictionary: [String: String]? { Bundle.webInfoDictionary }

@@ -172,13 +172,13 @@ public enum _EmbeddedJSONCodec {
           ws()
           guard peek == 125 else {
             openIsArray.append(false)
-            objects.append([:])
+            objects.append(.init())
             keys.append(try objectKey())
             continue reading
           }
           i += 1
           depth -= 1
-          finished = .object([:])
+          finished = .object(.init())
         default: throw _EmbeddedCodableError.invalidJSON
         }
         // Hand the value to the innermost open container; a container that ends here becomes the value for the next one.
@@ -360,7 +360,7 @@ public extension _EmbeddedJSONValue {
     switch self {
     case .array(let values): return .array(values.map { $0._mappingKeys(transform) })
     case .object(let object):
-      var result: [String: _EmbeddedJSONValue] = [:]
+      var result: [String: _EmbeddedJSONValue] = .init()
       for (key, value) in object { result[transform(key)] = value._mappingKeys(transform) }
       return .object(result)
     default: return self
@@ -509,8 +509,8 @@ extension Array: EmbeddedEncodable where Element: EmbeddedEncodable {
 extension Array: EmbeddedDecodable where Element: EmbeddedDecodable {
   public static func _embeddedDecodeJSONValue(_ v:_EmbeddedJSONValue)throws->Self { guard case .array(let a)=v else{throw _EmbeddedCodableError.typeMismatch}; var r:Self=[]; for x in a { r.append(try Element._embeddedDecodeJSONValue(x)) }; return r }
 }
-extension Dictionary: EmbeddedEncodable where Key == String, Value: EmbeddedEncodable { public func _embeddedJSONValue() throws -> _EmbeddedJSONValue{var o:[String:_EmbeddedJSONValue]=[:];for(k,v)in self{o[k]=try v._embeddedJSONValue()};return .object(o)} }
-extension Dictionary: EmbeddedDecodable where Key == String, Value: EmbeddedDecodable { public static func _embeddedDecodeJSONValue(_ v:_EmbeddedJSONValue)throws->Self{guard case .object(let o)=v else{throw _EmbeddedCodableError.typeMismatch};var r:Self=[:];for(k,x)in o{r[k]=try Value._embeddedDecodeJSONValue(x)};return r} }
+extension Dictionary: EmbeddedEncodable where Key == String, Value: EmbeddedEncodable { public func _embeddedJSONValue() throws -> _EmbeddedJSONValue{var o:[String:_EmbeddedJSONValue] = .init();for(k,v)in self{o[k]=try v._embeddedJSONValue()};return .object(o)} }
+extension Dictionary: EmbeddedDecodable where Key == String, Value: EmbeddedDecodable { public static func _embeddedDecodeJSONValue(_ v:_EmbeddedJSONValue)throws->Self{guard case .object(let o)=v else{throw _EmbeddedCodableError.typeMismatch};var r:Self = .init();for(k,x)in o{r[k]=try Value._embeddedDecodeJSONValue(x)};return r} }
 
 // Foundation-free Codable parity primitives used by generated Embedded lowering.
 public enum EmbeddedDateStrategy: Sendable { case deferredToDate, secondsSince1970, millisecondsSince1970 }

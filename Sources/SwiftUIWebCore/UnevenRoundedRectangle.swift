@@ -79,7 +79,7 @@ public struct UnevenRoundedRectangle: InsettableShape, Hashable, Sendable {
   /// Logical CSS corner radii for CSS-realized clips and backgrounds.
   var _cssCornerStyles: _NodeValues {
     let radii = _insetRadii
-    var styles: _NodeValues = [:]
+    var styles: _NodeValues = .init()
     styles["border-start-start-radius"] = _cssPixels(radii.topLeading)
     styles["border-start-end-radius"] = _cssPixels(radii.topTrailing)
     styles["border-end-end-radius"] = _cssPixels(radii.bottomTrailing)

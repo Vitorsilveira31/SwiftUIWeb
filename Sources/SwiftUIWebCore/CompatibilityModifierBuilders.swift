@@ -91,7 +91,7 @@ package func _italicModifier(_ active: Bool) -> _SemanticCompatibilityModifier {
 /// SwiftUI: each placement keeps its own last declaration, and a placement never overwrites another.
 @inline(never)
 package func _toolbarModifier(_ visibility: Visibility, for bars: [ToolbarPlacement]) -> _SemanticCompatibilityModifier {
-  var attributes: _NodeValues = [:]
+  var attributes: _NodeValues = .init()
   for bar in bars {
     attributes[_toolbarVisibilityAttribute(bar)] = visibility.rawValue
     if case .tabBar = bar, visibility == .hidden { _TabBarHiding.requested = true }
@@ -127,7 +127,7 @@ package func _buttonBorderShapeModifier(_ shape: ButtonBorderShape) -> _Semantic
   switch shape { case .automatic: value = "automatic"; case .capsule: value = "capsule"; case .circle: value = "circle"; case .roundedRectangle(let radius): value = "rounded-\(radius.clean)" }
   // The bordered chrome and its highlight take this shape; `automatic` keeps the style's own corners.
   var attributes: _NodeValues = ["data-button-border-shape": value]
-  var styles: _NodeValues = [:]
+  var styles: _NodeValues = .init()
   switch shape {
   case .automatic: break
   case .capsule, .circle:

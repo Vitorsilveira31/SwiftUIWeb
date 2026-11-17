@@ -20,7 +20,7 @@ package final class BinaryShapeTable {
   private(set) var tick: UInt64 = 0
   /// The epoch of the newest definition: a publication before the host acknowledges it carries definitions.
   private(set) var newestDefinition: UInt64 = 0
-  private(set) var entries: [UInt64: Entry] = [:]
+  private(set) var entries: [UInt64: Entry] = .init()
   private var owners: [Entry] = []
 
   /// What the table keeps of a skeleton.
@@ -181,7 +181,7 @@ struct BinaryShapeAssembler {
     // The shapes this publication uses are not for another skeleton to take over.
     for candidate in chosen { if let entry = table.entries[candidate.key], entry.id >= 0 { entry.lastTick = table.tick } }
     // A shape that is new is defined by the first of its subtrees.
-    var defining: [UInt64: Int] = [:]
+    var defining: [UInt64: Int] = .init()
     for candidate in chosen {
       guard let entry = table.entries[candidate.key], entry.id < 0 else { continue }
       guard table.allocate(entry), let blueprint = makeBlueprint(words, candidate) else { table.forget(candidate.key); continue }
@@ -217,14 +217,14 @@ struct BinaryShapeAssembler {
   private func makeBlueprint(_ words: [UInt32], _ candidate: BinaryShapeCandidate) -> BinaryShapeTable.Blueprint? {
     var copy: [UInt32] = []
     copy.reserveCapacity(candidate.end - candidate.start)
-    var local: [UInt32: UInt32] = [:]
+    var local: [UInt64: UInt32] = .init()
     var carried: [[UInt8]] = []
     func reference(_ index: UInt32) -> UInt32 {
       if index < atomCount { return index }
-      if let known = local[index] { return known }
+      if let known = local[UInt64(index)] { return known }
       let mapped = atomCount + UInt32(carried.count)
       carried.append(strings.ownBytes(at: index))
-      local[index] = mapped
+      local[UInt64(index)] = mapped
       return mapped
     }
     var position = candidate.start
