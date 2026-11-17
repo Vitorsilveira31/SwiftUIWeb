@@ -196,18 +196,19 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   markHighlightInheritance(document);
   const motion = new MotionHost(root, window);
   let layout, focusCoordinator, scrolls, presentations, historyHost, shortcuts;
-  // The hosts the first screen does not run arrive in their own file (deferred-hosts.js), requested by the commit that puts
-  // the first publication on screen. `installDeferredHosts` sets them in place of their stand-ins. The module is named by
-  // URL, as the worker is (embedded-worker-client.js): a bundle builds it as an entry of its own, which index.js does not
-  // import (Tools/build-runtime-bundle.mjs).
-  let deferredHosts = null, deferredLoad = null, installDeferredHosts = null;
+  // The hosts the first screen does not run arrive in their own file (deferred-hosts.js), requested once the frame that
+  // shows the first publication has been drawn (the end of `runCommit`), so neither their download nor their evaluation
+  // comes before it. `installDeferredHosts` sets them in place of their stand-ins. The module is named by URL, as the worker
+  // is (embedded-worker-client.js): a bundle builds it as an entry of its own, which index.js does not import
+  // (Tools/build-runtime-bundle.mjs).
+  let deferredHosts = null, deferredLoad = null, deferredScheduled = false, installDeferredHosts = null;
   function loadDeferredHosts() {
     deferredLoad ??= import(new URL('./deferred-hosts.js', import.meta.url).href).then(hosts => {
       if (!disposed) { deferredHosts = hosts; installDeferredHosts(hosts); }
       return hosts;
     }, error => {
       // Asked again by the next commit.
-      deferredLoad = null;
+      deferredLoad = null; deferredScheduled = false;
       console.error('[SwiftUIWeb] the deferred browser hosts did not load', error);
       throw error;
     });
@@ -2884,8 +2885,12 @@ export function mountEmbeddedBrowser(instance, options = {}) {
       metrics.commitDurationMs+=elapsed;
       metrics.maxCommitDurationMs=Math.max(metrics.maxCommitDurationMs,elapsed);
       committing=false; transaction=null;
-      // The first publication is on screen once a commit has patched the page: the rest of the runtime comes now.
-      if (metrics.commits && !deferredLoad && !disposed) loadDeferredHosts().catch(() => {});
+      // The first publication is on the page once a commit has patched it: the rest of the runtime comes after the frame that
+      // draws it (a task after the next animation frame). A share or a file mover that needs it sooner loads it at once.
+      if (metrics.commits && !deferredScheduled && !deferredLoad && !disposed) {
+        deferredScheduled = true;
+        window.requestAnimationFrame(() => window.setTimeout(() => { if (!disposed) loadDeferredHosts().catch(() => {}); }, 0));
+      }
       if (focusChain && !focusChain[0].isConnected) keepFocusInPlace(focusChain);
       if (sample) {
         if (observing) {
