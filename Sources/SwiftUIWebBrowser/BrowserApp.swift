@@ -1137,6 +1137,10 @@ public extension BrowserAppLauncher {
     _embeddedBrowserDisposeSession()
     _HeadlessMedia.isAvailable = true
     SwiftUIWebDateRuntime.install(now: { browser_io_wall_time_seconds() })
+    #if SWIFTUIWEB_RELEASE
+    // A release app.wasm does not carry the atoms of the binary publication format: the page holds the same table.
+    BinaryAtomTable.hostAtoms = { buffer, capacity in Int(browser_io_binary_atoms(buffer, UInt32(truncatingIfNeeded: capacity))) }
+    #endif
     // `<meta name="runtime-environment" content="KEY=VALUE">` entries reach
     // the wasm as its WASI environment (main thread and worker alike), which
     // makes `WebEnvironment` real in the browser and carries the generated

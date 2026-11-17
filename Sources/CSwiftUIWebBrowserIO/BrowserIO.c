@@ -31,6 +31,7 @@ IMPORT("copy") extern int32_t host_copy(uint32_t, uint8_t *, uint32_t);
 IMPORT("release") extern void host_release(uint32_t);
 IMPORT("wake") extern void host_wake(void);
 IMPORT("stack_headroom") extern void host_stack_headroom(uint32_t);
+IMPORT("binary_atoms") extern uint32_t host_binary_atoms(uint8_t *, uint32_t);
 #else
 #define EXPORT(name)
 static int32_t host_request(uint32_t id,uint32_t op,const uint8_t *p,uint32_t n) {(void)id;(void)op;(void)p;(void)n;return -7;}
@@ -41,6 +42,7 @@ static int32_t host_copy(uint32_t h,uint8_t *p,uint32_t n) {(void)h;(void)p;(voi
 static void host_release(uint32_t h) {(void)h;}
 static void host_wake(void) {}
 static void host_stack_headroom(uint32_t depth) {(void)depth;}
+static uint32_t host_binary_atoms(uint8_t *p,uint32_t n) {(void)p;(void)n;return 0;}
 #endif
 static browser_io_callback callback = NULL;
 void browser_io_install_concurrency_hooks(void *global, void *global_with_delay, void *main_executor) {
@@ -73,6 +75,7 @@ int32_t browser_io_result_copy(uint32_t h,uint8_t *p,uint32_t n) {return host_co
 void browser_io_result_release(uint32_t h) {host_release(h);}
 void browser_io_wake_executor(void) {host_wake();}
 void browser_io_stack_headroom(uint32_t depth) {host_stack_headroom(depth);}
+uint32_t browser_io_binary_atoms(uint8_t *p,uint32_t n) {return host_binary_atoms(p,n);}
 /* WASI environment entries the host supplied at instantiation (the browser
  * runtime reads `<meta name="runtime-environment">` and passes them). */
 const char *browser_io_environment_value(const char *key) {

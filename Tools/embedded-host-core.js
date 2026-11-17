@@ -295,7 +295,7 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
     }
     // `?stack-depth=1`: the render recursion reports its depth and the stack left (stack-probe.js).
     if (config.environment.includes('SWIFTUIWEB_STACK_DIAGNOSTICS=1')) stackMeter = createHeadroomMeter();
-    browserIO = createBrowserIO({ getInstance: () => (halted || poisoned ? null : instance), environment: environmentFor(), baseURL: config.baseURL, wake: scheduleTaskDrain, onError: fail, remoteDOM: true, stackMeter });
+    browserIO = createBrowserIO({ getInstance: () => (halted || poisoned ? null : instance), environment: environmentFor(), baseURL: config.baseURL, wake: scheduleTaskDrain, onError: fail, remoteDOM: true, stackMeter, binaryAtoms: config.atoms });
     imports.browser_io = browserIO.imports;
     // A Worker may wait for the second half synchronously when a call needs it before it arrived; the main thread loads
     // it before the instance runs (`adopt`). The launcher leaves the loader out of a bundle that is not split (Tools/wasm-split-loader.js).
@@ -314,6 +314,9 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
     // `window.__renderWorkerMigration = false` keeps the app on the older recovery (a restart), for tests.
     if (message.migrate === false) canMigrate = false;
     config = { diagnostics, migrate: message.migrate !== false, baseURL: message.baseURL, environment: Array.isArray(message.environment) ? message.environment : [], dark: message.dark === true, reducedMotion: message.reducedMotion === true, hostname: message.hostname || '', secure: message.secure === true };
+    // The binary publication atoms a release app.wasm reads from its host (BinaryAtomTable). Kept in the config, so a host
+    // that adopts this app (`adopt`) has them too.
+    config.atoms = typeof message.atoms === 'string' ? message.atoms : '';
     if (globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER !== false && typeof message.secondary === 'string') config.secondary = message.secondary;
     localMirror = new MirrorStorage(0, message.local || [], post);
     sessionMirror = new MirrorStorage(1, message.session || [], post);

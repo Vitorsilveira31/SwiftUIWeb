@@ -195,7 +195,10 @@ function renderAtoms({ version, ops, namespaces, atoms }) {
     + `enum _BinaryFormat {\n  static let version: UInt16 = ${version}\n  static let atomsHash: UInt32 = ${hex}\n  static let atomCount: UInt32 = ${atoms.length}\n`
     + ops.map(([name, value]) => `  static let op${camelCase(name)[0].toUpperCase()}${camelCase(name).slice(1)}: UInt32 = ${value}\n`).join("")
     + namespaces.map(([name, value]) => `  static let namespace${camelCase(name)[0].toUpperCase()}${camelCase(name).slice(1)}: UInt32 = ${value}\n`).join("")
-    + `  /// The atoms in index order, separated by NUL.\n  static let atoms: StaticString = ${swiftLiteral(atoms.join("\0"))}\n}\n`;
+    + `  #if !SWIFTUIWEB_RELEASE\n`
+    + `  /// The atoms in index order, separated by NUL. A release app.wasm does not carry them: the page's host holds the same\n`
+    + `  /// table and hands it over (\`browser_io.binary_atoms\`, Tools/BrowserIO/browser-io.mjs; \`BinaryAtomTable\`).\n`
+    + `  static let atoms: StaticString = ${swiftLiteral(atoms.join("\0"))}\n  #endif\n}\n`;
   const javascript = `${header}export const BINARY_VERSION = ${version};\nexport const BINARY_ATOMS_HASH = ${hex};\n`
     + `export const BINARY_OPS = Object.freeze({\n${ops.map(([name, value]) => `  ${name}: ${value},\n`).join("")}});\n`
     + `export const BINARY_NAMESPACES = Object.freeze({\n${namespaces.map(([name, value]) => `  ${name}: ${value},\n`).join("")}});\n`

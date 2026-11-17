@@ -5,6 +5,7 @@ import { moveFiles, reopenMovedFile } from '../transfer-host.js';
 import { createBrowserIO, Writer, Reader, safeErrorMessage } from './browser-io.mjs';
 import { createDOMViewHost, installDOMComponentRegistry } from './dom-view-host.mjs';
 import { BrowserIOOperation } from './protocol.generated.mjs';
+import { BINARY_ATOMS } from '../binary-atoms.generated.js';
 class MemoryStorage {
   data = new Map(); get length() { return this.data.size; }
   key(i) { return [...this.data.keys()][i] ?? null; }
@@ -688,6 +689,14 @@ try {
   // The stack meter receives each depth the WASM stack reports, read as an unsigned number.
   { const samples=[];const metered=createBrowserIO({getInstance:()=>instance,environment,baseURL,stackMeter:{sample:(depth)=>samples.push(depth)}});
     metered.imports.stack_headroom(7);metered.imports.stack_headroom(-1);assert.deepEqual(samples,[7,4294967295]);metered.dispose();tests++; }
+  // The binary publication atoms a release app.wasm reads instead of carrying them: the length when they do not fit, then the
+  // NUL-separated bytes at the pointer.
+  { const atomsMemory=new WebAssembly.Memory({initial:1});const atomsHost=createBrowserIO({getInstance:()=>({exports:{memory:atomsMemory}}),environment,baseURL,binaryAtoms:BINARY_ATOMS.join('\0')});
+    const expected=new TextEncoder().encode(BINARY_ATOMS.join('\0'));const view=new Uint8Array(atomsMemory.buffer);
+    assert.equal(atomsHost.imports.binary_atoms(64,0),expected.length);assert.equal(view[64],0);
+    assert.equal(atomsHost.imports.binary_atoms(64,expected.length),expected.length);assert.deepEqual(view.slice(64,64+expected.length),expected);
+    atomsHost.dispose();tests++; }
+  { const bare=createBrowserIO({getInstance:()=>instance,environment,baseURL});assert.equal(bare.imports.binary_atoms(0,0),0);bare.dispose();tests++; }
   // `fileMover`: a File System Access picker writes the bytes and persists a reopenable handle; a browser
   // without one downloads copies and reports it so the sources are kept.
   { const written=new Map();
