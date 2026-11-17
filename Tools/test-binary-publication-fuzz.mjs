@@ -65,7 +65,7 @@ await runSuite(async () => {
     await page.evaluate(async (base) => {
       const module = await import(`${base}/binary-publication.js`);
       window.__fuzz = (list) => {
-        const { readPublication, Builder, Handles, Templates, scanRecords, rootHoverRules } = module;
+        const { readPublication, Builder, Handles, scanRecords, rootHoverRules } = module;
         const inert = document.implementation.createHTMLDocument("");
         const kind = (error) => error instanceof Error ? error.constructor.name : `non-error ${String(error).slice(0, 80)}`;
         let publication;
@@ -74,7 +74,7 @@ await runSuite(async () => {
         let records = null;
         try { scanRecords(publication); rootHoverRules(publication); } catch (error) { records = kind(error); }
         try {
-          const built = new Builder(publication, inert, new Handles(), new Templates()).buildRoot();
+          const built = new Builder(publication, inert, new Handles()).buildRoot();
           return { built: true, script: !!(built && built.querySelector && built.querySelector("script")), records };
         } catch (error) {
           return { built: false, error: kind(error), records };

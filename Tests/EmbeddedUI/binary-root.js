@@ -5,7 +5,7 @@
 import { BINARY_VERSION, BINARY_ATOMS_HASH, BINARY_OPS, BINARY_NAMESPACES, BINARY_ATOMS } from '../../Tools/binary-atoms.generated.js';
 
 const { ROOT, ELEMENT, ELEMENT_NS, TEXT, END } = BINARY_OPS;
-const HEADER_BYTES = 28;
+const HEADER_BYTES = 24;
 const HTML_NS = 'http://www.w3.org/1999/xhtml';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const MATHML_NS = 'http://www.w3.org/1998/Math/MathML';
@@ -91,15 +91,14 @@ export function binaryRoot(markup, document = globalThis.document) {
   const table = new TextEncoder().encode(own.join('\0'));
   const bytes = new Uint8Array(HEADER_BYTES + words.length * 4 + table.length);
   const view = new DataView(bytes.buffer);
-  // The header: 0 and "SWB", the version, flags (none), the atoms hash, the shape generation (none), then the counts.
+  // The header: 0 and "SWB", the version, flags (none), the atoms hash, then the counts.
   bytes.set([0, 0x53, 0x57, 0x42], 0);
   view.setUint16(4, BINARY_VERSION, true);
   view.setUint16(6, 0, true);
   view.setUint32(8, BINARY_ATOMS_HASH, true);
-  view.setUint32(12, 0, true);
-  view.setUint32(16, words.length, true);
-  view.setUint32(20, own.length, true);
-  view.setUint32(24, table.length, true);
+  view.setUint32(12, words.length, true);
+  view.setUint32(16, own.length, true);
+  view.setUint32(20, table.length, true);
   words.forEach((word, index) => view.setUint32(HEADER_BYTES + index * 4, word, true));
   bytes.set(table, HEADER_BYTES + words.length * 4);
   return bytes;

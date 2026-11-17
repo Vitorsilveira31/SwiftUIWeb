@@ -44,9 +44,6 @@ enum BinaryParserFacts {
   static let hostOwned: UInt32 = 1 << 26
   /// The placeholder the snapshot writes for an element the host holds.
   static let isKeep: UInt32 = 1 << 27
-  /// Elements whose text the page does not read as plain text (raw text, a dropped first line feed, a template's content, a
-  /// script that is never built): a shape does not stand for them.
-  static let specialText: UInt32 = 1 << 28
   /// Elements that keep white space and nothing else among their children: the parser moves text out of them.
   static let tableContent: UInt32 = table | tableSection | tableRow | columnGroup
 
@@ -61,7 +58,6 @@ enum BinaryParserFacts {
     ("style script template", allowedInTable), ("hr script template", allowedInSelect), ("svg", startsSvg), ("math", startsMathML),
     ("area base br col embed hr img input link meta param source track wbr", isVoid),
     ("input textarea select option details dialog video audio canvas iframe object embed", hostOwned), ("keep", isKeep),
-    ("style xmp iframe noembed noframes plaintext textarea pre listing script template title noscript", specialText),
   ]
 
   /// The facts of each atom, by atom index: worked out once.

@@ -239,13 +239,9 @@ private let _embeddedStateSnapshotKey = "state"
 /// What the host holds of the list of the page's own children (the record of the tree), as the fibers' records hold what it
 /// holds of their elements.
 @MainActor private var _embeddedBinaryRootRecord = BinaryNodeRecord()
-/// The shapes the host holds (`BinaryShapeTable`), unless flag 64 turns them off. The table is made with the first publication.
-@MainActor private var _embeddedBinaryShapesEnabled = false
-@MainActor private var _embeddedBinaryShapes: BinaryShapeTable?
-@MainActor private var _embeddedBinaryShapeTuning = (instances: 0, elements: 0)
 /// Diagnostics read through `fiber_metric` 40 to 49: bytes published, 41 unused (elements the HTML transport wrote without
 /// their attributes), binary publications, publications sent as the whole tree because an element the host held could not
-/// stay where it sat, then roots, records, held nodes and shapes.
+/// stay where it sat, then roots, records and held nodes; 48 and 49 are unused (they counted shapes).
 @MainActor private var _embeddedPublishCounters: [UInt64] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 /// Wall time of each publication phase in microseconds, accumulated until the
 /// host reads them through `fiber_metric` (indexes 35...39: reconcile, snapshot walk, annotate and
@@ -328,7 +324,6 @@ private func _embeddedEnvironmentValue(_ key: String) -> String? {
   _embeddedBrowserMaterializedLazy.removeAll(keepingCapacity: false)
   _embeddedPublishAckedEpoch = 0
   _embeddedBinaryRootRecord = BinaryNodeRecord()
-  _embeddedBinaryShapes = nil
   _embeddedPublishSequence = 0
   _embeddedPublishPending.removeAll(keepingCapacity: false)
   _embeddedPublishCount = 0
@@ -834,8 +829,7 @@ private typealias _EmbeddedWrittenFibers = [(fiber: Fiber, copy: _RenderNode, in
   byCopy.reserveCapacity(context.written.count + context.kept.count)
   for entry in context.written { byCopy[ObjectIdentifier(entry.copy)] = entry.fiber }
   for entry in context.kept { byCopy[ObjectIdentifier(entry.node)] = entry.fiber }
-  if _embeddedBinaryShapesEnabled && _embeddedBinaryShapes == nil { _embeddedBinaryShapes = BinaryShapeTable(minimumElements: _embeddedBinaryShapeTuning.elements == 0 ? 3 : _embeddedBinaryShapeTuning.elements, instancesBeforeDefinition: _embeddedBinaryShapeTuning.instances == 0 ? 3 : _embeddedBinaryShapeTuning.instances) }
-  let encoder = BinaryFiberEncoder(maxElementDepth: _embeddedMaxNestedElements, acked: context.acked, covered: covered, rootRecord: _embeddedBinaryRootRecord, shapes: _embeddedBinaryShapes, lookup: { node in
+  let encoder = BinaryFiberEncoder(maxElementDepth: _embeddedMaxNestedElements, acked: context.acked, covered: covered, rootRecord: _embeddedBinaryRootRecord, lookup: { node in
     _assumeMainActor { byCopy[ObjectIdentifier(node)].map { BinaryHeldState.record(of: $0) } }
   })
   // The tree with nothing replaced by a placeholder: the snapshot itself when the host held nothing, otherwise another.
@@ -855,7 +849,7 @@ private typealias _EmbeddedWrittenFibers = [(fiber: Fiber, copy: _RenderNode, in
     return full!
   }
   // The verification mode's reference: the whole tree encoded again by an encoder that holds nothing and shares no state with
-  // the publication (no shapes, no held state, no root record).
+  // the publication (no held state, no root record).
   let reference = _embeddedBinaryVerify
     ? BinaryFiberEncoder(maxElementDepth: _embeddedMaxNestedElements, acked: 0, covered: covered, rootRecord: BinaryNodeRecord(), lookup: { _ in nil }).encode(fullSnapshot().root)?.bytes
     : nil
@@ -875,7 +869,7 @@ private typealias _EmbeddedWrittenFibers = [(fiber: Fiber, copy: _RenderNode, in
     var fullByCopy: [ObjectIdentifier: Fiber] = .init()
     fullByCopy.reserveCapacity(everything.written.count)
     for entry in everything.written { fullByCopy[ObjectIdentifier(entry.copy)] = entry.fiber }
-    let whole = BinaryFiberEncoder(maxElementDepth: _embeddedMaxNestedElements, acked: context.acked, covered: covered, rootRecord: BinaryNodeRecord(), shapes: _embeddedBinaryShapes, lookup: { node in
+    let whole = BinaryFiberEncoder(maxElementDepth: _embeddedMaxNestedElements, acked: context.acked, covered: covered, rootRecord: BinaryNodeRecord(), lookup: { node in
       _assumeMainActor { fullByCopy[ObjectIdentifier(node)].map { BinaryHeldState.record(of: $0) } }
     })
     guard let encoded = encode(whole, everything.root) else { fatalError("a tree without placeholders is always encoded") }
@@ -890,8 +884,6 @@ private typealias _EmbeddedWrittenFibers = [(fiber: Fiber, copy: _RenderNode, in
   _embeddedPublishCounters[5] += UInt64(output.attrsRecords)
   _embeddedPublishCounters[6] += UInt64(output.childrenRecords)
   _embeddedPublishCounters[7] += UInt64(output.heldNodes)
-  _embeddedPublishCounters[8] += UInt64(output.shapeDefinitions)
-  _embeddedPublishCounters[9] += UInt64(output.shapeInstances)
   BinaryHeldState.published(output, visited: visited.map { ($0.fiber, $0.copy, $0.inHostContent) }, kept: kept, covered: covered)
   _embeddedBinaryRootRecord = output.rootRecord
   return output.bytes.count
@@ -1469,14 +1461,11 @@ public extension BrowserAppLauncher {
   }
 
   /// `flags`: 1 reduced motion, 32 publications with a reference
-  /// encoding of the same tree attached (see `_embeddedBinaryVerify`), 64 no shapes. 8 and 16 are retired (they chose the HTML transport), and so is 2 (CSS layout worked out by Swift).
+  /// encoding of the same tree attached (see `_embeddedBinaryVerify`). 8 and 16 are retired (they chose the HTML transport), 2 (CSS layout worked out by Swift), and 64 and bits 8 to 15 (they turned off and tuned the shapes).
   static func embeddedBrowserSetInitialPreferences(dark: UInt32, reducedMotion flags: UInt32) {
     ColorSchemeRuntime.install(dark == 1 ? .dark : .light)
     AccessibilityRuntime.install(reduceMotion: flags & 1 == 1)
     _embeddedBinaryVerify = flags & 32 == 32
-    _embeddedBinaryShapesEnabled = flags & 64 == 0
-    // Tuning, from the page (window.__binaryShapeInstances, window.__binaryShapeElements): bits 8 to 11 and 12 to 15, 0 for the default.
-    _embeddedBinaryShapeTuning = (Int(flags >> 8 & 15), Int(flags >> 12 & 15))
   }
 
   static func embeddedBrowserAcknowledgeScroll(_ sequence: UInt32) {
@@ -1600,7 +1589,6 @@ public extension BrowserAppLauncher {
   /// publish everything again.
   static func embeddedBrowserPublishFull() {
     _embeddedPublishAckedEpoch = 0
-    _embeddedBinaryShapes?.reset()
     _embeddedPublishPending.removeAll(keepingCapacity: true)
     if let tree = _embeddedBrowserTree { _embeddedBrowserPublish(tree) }
   }

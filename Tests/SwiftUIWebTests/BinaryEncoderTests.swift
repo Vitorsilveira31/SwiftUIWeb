@@ -13,7 +13,6 @@ private struct BinaryStream {
   var strings: [String] = []
   var ownCount = 0
   var reference: [UInt8]?
-  var generation: UInt32 = 0
 
   init(_ bytes: [UInt8]) {
     func u16(_ offset: Int) -> Int { Int(bytes[offset]) | Int(bytes[offset + 1]) << 8 }
@@ -21,11 +20,10 @@ private struct BinaryStream {
     precondition(Array(bytes[0..<4]) == [0, 0x53, 0x57, 0x42], "no header")
     precondition(u16(4) == Int(_BinaryFormat.version) && u32(8) == _BinaryFormat.atomsHash, "format")
     let flags = u16(6)
-    let wordCount = Int(u32(16)), count = Int(u32(20)), stringBytes = Int(u32(24))
+    let wordCount = Int(u32(12)), count = Int(u32(16)), stringBytes = Int(u32(20))
     ownCount = count
-    generation = u32(12)
-    words = (0..<wordCount).map { u32(28 + $0 * 4) }
-    let stringsStart = 28 + wordCount * 4
+    words = (0..<wordCount).map { u32(24 + $0 * 4) }
+    let stringsStart = 24 + wordCount * 4
     let own = count == 0 ? [] : bytes[stringsStart..<(stringsStart + stringBytes)].split(separator: 0, omittingEmptySubsequences: false).map { String(decoding: $0, as: UTF8.self) }
     precondition(own.count == count, "strings")
     if flags & 1 != 0 { reference = Array(bytes[(stringsStart + stringBytes)...]) }
@@ -69,13 +67,7 @@ private indirect enum ReadNode {
   }
 }
 
-/// The templates a page holds, for the generation of the table that defined them.
-private final class DecodedTemplates {
-  var map: [Int: ReadNode] = [:]
-  var generation: UInt32 = 0
-}
-
-/// A binary publication read back into the nodes of a ROOT, or into its records. A shape is read as the nodes it builds.
+/// A binary publication read back into the nodes of a ROOT, or into its records.
 private struct DecodedPublication {
   /// A ROOT: the nodes of the tree.
   var nodes: [ReadNode] = []
@@ -84,25 +76,18 @@ private struct DecodedPublication {
   var reference: [UInt8]?
   /// Records: `ATTRS 3:1 a="v"` and `CHILDREN 3:1 <nodes>` (`root` for the page's own list).
   var records: [String] = []
-  /// The shapes the publication defines (their ids), and the nodes it builds as shapes (their ids, in order).
-  var definitions: [Int] = []
-  var shapes: [Int] = []
-  var generation: UInt32 = 0
   var wordCount = 0
 
   var description: String { nodes.map(\.description).joined() }
   var topLevel: Int { nodes.count }
 
-  init(_ bytes: [UInt8], templates: DecodedTemplates = DecodedTemplates()) {
+  init(_ bytes: [UInt8]) {
     let stream = BinaryStream(bytes)
     stringCount = stream.ownCount
     reference = stream.reference
-    generation = stream.generation
     wordCount = stream.words.count
-    if templates.generation != stream.generation { templates.map.removeAll(); templates.generation = stream.generation }
     let words = stream.words, strings = stream.strings
     var position = 0
-    var definitions: [Int] = [], shapes: [Int] = []
     func handle(_ index: UInt32, _ generation: UInt32) -> String? { index == 0 ? nil : "\(index - 1):\(generation)" }
     func pairs() -> [(String, String)] {
       let count = Int(words[position]); position += 1
@@ -115,20 +100,6 @@ private struct DecodedPublication {
       while words[position] != _BinaryFormat.opEnd { if let made = node() { out.append(made) } }
       return out
     }
-    /// A copy of a template with the handles of a shape and its fills.
-    func instantiate(_ template: ReadNode, _ handles: inout [(String?, String)], _ fills: [Int: String], _ slot: inout Int) -> ReadNode {
-      switch template {
-      case .text(let text):
-        defer { slot += 1 }
-        return .text(fills[slot] ?? text)
-      case .held: return template
-      case .element(_, _, let tag, let attributes, let children):
-        let (id, descriptor) = handles.removeFirst()
-        var filled: [(String, String)] = []
-        for (name, value) in attributes { filled.append((name, fills[slot] ?? value)); slot += 1 }
-        return .element(handle: id, descriptor: descriptor, tag: tag, attributes: filled, children: children.map { instantiate($0, &handles, fills, &slot) })
-      }
-    }
     func node() -> ReadNode? {
       let word = words[position]; position += 1
       switch word {
@@ -138,26 +109,6 @@ private struct DecodedPublication {
       case _BinaryFormat.opText:
         let result = ReadNode.text(strings[Int(words[position])]); position += 1
         return result
-      case _BinaryFormat.opDefine:
-        let id = Int(words[position]); position += 1
-        templates.map[id] = node()
-        definitions.append(id)
-        return nil
-      case _BinaryFormat.opShape:
-        let id = Int(words[position]), count = Int(words[position + 1]); position += 2
-        var handles: [(String?, String)] = []
-        for _ in 0..<count {
-          handles.append((handle(words[position], words[position + 1]), strings[Int(words[position + 2])]))
-          position += 3
-        }
-        let fillCount = Int(words[position]); position += 1
-        var fills: [Int: String] = [:]
-        for _ in 0..<fillCount { fills[Int(words[position])] = strings[Int(words[position + 1])]; position += 2 }
-        guard let template = templates.map[id] else { preconditionFailure("shape \(id) was never defined") }
-        precondition(template.elementCount == count, "shape \(id) has \(count) handles for \(template.elementCount) elements")
-        var slot = 0
-        shapes.append(id)
-        return instantiate(template, &handles, fills, &slot)
       case _BinaryFormat.opElement, _BinaryFormat.opElementNs:
         let id = handle(words[position], words[position + 1]), descriptor = strings[Int(words[position + 2])]; position += 3
         var prefix = ""
@@ -171,23 +122,17 @@ private struct DecodedPublication {
         preconditionFailure("unknown op \(word)")
       }
     }
-    defer { self.definitions = definitions; self.shapes = shapes }
     if words.first == _BinaryFormat.opRoot {
       isRoot = true
       let count = Int(words[1])
       position = 2
       while nodes.count < count { if let made = node() { nodes.append(made) } }
-      // Definitions after the last node are not possible: a definition comes before its first use.
       precondition(position == words.count, "words after the root")
       return
     }
     while position < words.count {
       let word = words[position]; position += 1
       switch word {
-      case _BinaryFormat.opDefine:
-        let id = Int(words[position]); position += 1
-        templates.map[id] = node()
-        definitions.append(id)
       case _BinaryFormat.opAttrs:
         let id = handle(words[position], words[position + 1]) ?? "root"; position += 2
         records.append("ATTRS \(id)" + pairs().map { " \($0.0)=\"\($0.1)\"" }.joined())
@@ -206,10 +151,10 @@ private struct DecodedPublication {
 /// Encodes `root` for a host that holds nothing, and serializes it as the HTML transport does (the markup the page fixtures are
 /// compared with). `attachReference` also attaches the reference publication of the same tree (the verification mode).
 @MainActor
-private func publish(_ root: _RenderNode, depth: Int? = nil, attachReference: Bool = false, shapes: BinaryShapeTable? = nil) -> (stream: [UInt8]?, html: String) {
+private func publish(_ root: _RenderNode, depth: Int? = nil, attachReference: Bool = false) -> (stream: [UInt8]?, html: String) {
   let renderer = StaticHTMLFiberRenderer(maxElementDepth: depth)
   return renderer.withRenderedUTF8(root) { bytes in
-    let encoder = BinaryFiberEncoder(maxElementDepth: depth, acked: 0, covered: 1, rootRecord: BinaryNodeRecord(), shapes: shapes, lookup: { _ in nil })
+    let encoder = BinaryFiberEncoder(maxElementDepth: depth, acked: 0, covered: 1, rootRecord: BinaryNodeRecord(), lookup: { _ in nil })
     let reference = attachReference ? BinaryFiberEncoder(maxElementDepth: depth, acked: 0, covered: 1, rootRecord: BinaryNodeRecord(), lookup: { _ in nil }).encode(root)?.bytes : nil
     let output = reference.map { attached in attached.withUnsafeBufferPointer { encoder.encode(root, reference: $0) } } ?? encoder.encode(root)
     return (output?.bytes, String(decoding: bytes, as: UTF8.self))
@@ -417,14 +362,12 @@ struct BinaryEncoderTests {
     var root = BinaryNodeRecord()
     var acked: UInt64 = 0
     var epoch: UInt64 = 0
-    var shapes: BinaryShapeTable?
-    let templates = DecodedTemplates()
 
     @MainActor
     func publish(_ tree: _RenderNode) -> DecodedPublication? {
       epoch += 1
       let known = records
-      let encoder = BinaryFiberEncoder(maxElementDepth: nil, acked: acked, covered: epoch, rootRecord: root, shapes: shapes, lookup: { node in
+      let encoder = BinaryFiberEncoder(maxElementDepth: nil, acked: acked, covered: epoch, rootRecord: root, lookup: { node in
         node.attributes["data-embedded-node-id"].flatMap { known[$0] }
       })
       guard let output = encoder.encode(tree) else { return nil }
@@ -435,7 +378,7 @@ struct BinaryEncoderTests {
       if firstBytes.isEmpty { firstBytes = output.bytes }
       history.append(output.bytes)
       bytes = output.bytes
-      return DecodedPublication(output.bytes, templates: templates)
+      return DecodedPublication(output.bytes)
     }
 
     var bytes: [UInt8] = []
@@ -515,7 +458,7 @@ struct BinaryEncoderTests {
     // The page is visited, the heading and the list are not.
     let unchanged = try #require(publisher.publish(page(keeping: ["2:1:", "3:1:"])))
     #expect(unchanged.records.isEmpty)
-    #expect(publisher.bytes.count == 28)
+    #expect(publisher.bytes.count == 24)
   }
 
   @Test
@@ -620,190 +563,6 @@ struct BinaryEncoderTests {
     #expect(publisher.publish(C.fragment([element("3:1:", "a", [:], [placeholder("2:1:", "a")])])) == nil)
   }
 
-  // MARK: Shapes
-
-  /// A row of four elements: the structure a shape stands for, with values of its own.
-  @MainActor
-  private func row(_ index: Int, text: String = "t", extra: [_RenderNode] = [], skeleton: String = "a") -> _RenderNode {
-    let base = 20 + index * 10
-    return element("\(base):1:", "li", ["data-name": "n\(index)", "data-\(skeleton)": "x"], [
-      element("\(base + 1):1:", "span", ["class": "a"], [.text(text)]),
-      element("\(base + 2):1:", "span", ["title": "x\(index)"], [.text("b")]),
-      element("\(base + 3):1:", "button", [:], [.text("go")]),
-    ] + extra)
-  }
-
-  @MainActor
-  private func list(_ rows: [_RenderNode]) -> _RenderNode { C.fragment([element("1:1:", "ul", [:], rows)]) }
-
-  @MainActor
-  private func shaping(_ table: BinaryShapeTable = BinaryShapeTable(instancesBeforeDefinition: 2)) -> Publisher {
-    let publisher = Publisher()
-    publisher.shapes = table
-    return publisher
-  }
-
-  @Test
-  func aRepeatedSubtreeIsDefinedOnceItHasRepeatedEnoughAndAllOfItsInstancesAreShapes() throws {
-    let rows = (0..<5).map { row($0, text: "t\($0)") }
-    let publisher = shaping()
-    let shaped = try #require(publisher.publish(list(rows)))
-    // Five rows of a skeleton are enough to define it, and all five are built from it.
-    #expect(shaped.definitions == [0])
-    #expect(shaped.shapes == [0, 0, 0, 0, 0])
-    // What it builds is what the rows are, and it is smaller than the rows written out.
-    let plain = try #require(DecodedPublication(publish(list((0..<5).map { row($0, text: "t\($0)") })).stream!))
-    #expect(shaped.description == plain.description)
-    #expect(shaped.wordCount < plain.wordCount)
-  }
-
-  @Test
-  func aShapeCarriesTheValuesThatDifferFromItsTemplate() throws {
-    // Only the text of the first span differs between the rows, and the attribute of the second one.
-    let rows = (0..<4).map { row($0, text: "t\($0)") }
-    let published = try #require(shaping().publish(list(rows)))
-    #expect(published.shapes.count == 4)
-    // In every row the id, the descriptor and the values a row names itself differ: the fills are those.
-    let expected = try #require(DecodedPublication(publish(list(rows)).stream!))
-    #expect(published.description == expected.description)
-  }
-
-  @Test
-  func whatIsNotForAShapeIsBuiltInFull() throws {
-    func rows(_ make: (Int) -> _RenderNode) -> _RenderNode { list((0..<4).map(make)) }
-    let cases: [(String, _RenderNode)] = [
-      ("a control inside", rows { self.row($0, extra: [self.element("\(900 + $0):1:", "input", ["type": "text"])]) }),
-      ("a host-owned container", rows { self.row($0, extra: [self.element("\(900 + $0):1:", "div", ["data-keep-lazy-index": "0"])]) }),
-      ("host content", rows { self.row($0, extra: [self.element("\(900 + $0):1:", "div", ["data-host-managed": "*children"])]) }),
-      ("two texts in a row", rows { self.element("\(20 + $0 * 10):1:", "li", [:], [self.element("\(21 + $0 * 10):1:", "span", [:], [.text("a"), .text("b")]), self.element("\(22 + $0 * 10):1:", "b"), self.element("\(23 + $0 * 10):1:", "i"), self.element("\(24 + $0 * 10):1:", "u")]) }),
-      ("a text that keeps its first line feed", rows { self.row($0, extra: [self.element("\(900 + $0):1:", "pre", [:], [.text("x")])]) }),
-      ("an element without an id", rows { self.row($0, extra: [C.element("b")]) }),
-      ("too few elements", rows { self.element("\(20 + $0 * 10):1:", "li", [:], [self.element("\(21 + $0 * 10):1:", "span", [:], [.text("a")])]) }),
-    ]
-    for (name, tree) in cases {
-      let published = try #require(shaping().publish(tree), "\(name)")
-      #expect(published.definitions.isEmpty && published.shapes.isEmpty, "\(name) was built as a shape")
-    }
-  }
-
-  @Test
-  func aSubtreeWithAnElementTheHostHoldsIsNotAShape() throws {
-    let publisher = shaping()
-    func tree(keeping: Bool) -> _RenderNode {
-      list((0..<4).map { index in row(index, extra: [keeping ? placeholder("\(900 + index):1:", "i") : element("\(900 + index):1:", "i")]) })
-    }
-    _ = publisher.publish(tree(keeping: false))
-    publisher.acked = 1
-    let published = try #require(publisher.publish(C.fragment([element("1:1:", "ul", [:], (0..<4).map { index in row(index, extra: [placeholder("\(900 + index):1:", "i")]) })])))
-    #expect(published.shapes.isEmpty)
-  }
-
-  @Test
-  func aDefinitionIsSentAgainUntilTheHostAcknowledgesIt() throws {
-    let publisher = shaping()
-    let first = try #require(publisher.publish(list([row(0)])))
-    // One row is only counted. The host acknowledged the first publication; two rows are added.
-    #expect(first.definitions.isEmpty)
-    publisher.acked = 1
-    let second = try #require(publisher.publish(C.fragment([element("1:1:", "ul", [:], [placeholder("20:1:", "li"), row(1), row(2)])])))
-    #expect(second.definitions == [0])
-    #expect(second.shapes == [0, 0])
-    // The host dropped it: it is defined again, with the template it was defined with, and a page that only applies this one
-    // ends where the other would.
-    let third = try #require(publisher.publish(C.fragment([element("1:1:", "ul", [:], [placeholder("20:1:", "li"), row(1), row(2), row(3, text: "other")])])))
-    #expect(third.definitions == [0])
-    #expect(third.shapes == [0, 0, 0])
-    let page = Page()
-    page.apply(publisher.firstBytes)
-    page.apply(publisher.bytes)
-    #expect(page.failed == nil)
-    #expect(page.description().contains("other"))
-    // It acknowledged the third publication, which carried the definition: the next one needs none.
-    publisher.acked = 3
-    let fourth = try #require(publisher.publish(C.fragment([element("1:1:", "ul", [:], [placeholder("20:1:", "li"), placeholder("30:1:", "li"), placeholder("40:1:", "li"), placeholder("50:1:", "li"), row(4), row(5)])])))
-    #expect(fourth.definitions.isEmpty)
-    #expect(fourth.shapes == [0, 0])
-  }
-
-  @Test
-  func aShapeIsTheSameTemplateWhicheverPublicationDefinedItAgain() throws {
-    let publisher = shaping()
-    _ = publisher.publish(list([row(0, text: "first")]))
-    publisher.acked = 1
-    _ = publisher.publish(C.fragment([element("1:1:", "ul", [:], [placeholder("20:1:", "li"), row(1, text: "second"), row(2, text: "third")])]))
-    let lagging = Page()
-    lagging.apply(publisher.firstBytes)
-    // A later publication redefines it while the host has not acknowledged: the template is the one of the definition, not of
-    // the rows this publication builds.
-    _ = publisher.publish(C.fragment([element("1:1:", "ul", [:], [placeholder("20:1:", "li"), row(1, text: "second"), row(2, text: "third"), row(3, text: "fourth"), row(4, text: "fifth")])]))
-    lagging.apply(publisher.bytes)
-    #expect(lagging.failed == nil)
-    let expected = DecodedPublication(publish(C.fragment([element("1:1:", "ul", [:], [row(0, text: "first"), row(1, text: "second"), row(2, text: "third"), row(3, text: "fourth"), row(4, text: "fifth")])])).stream!)
-    #expect(lagging.description() == expected.description)
-  }
-
-  @Test
-  func aPendingDefinitionIsCarriedByEveryPublicationEvenWhenItIsNotUsed() throws {
-    func page(_ title: String, rows: [_RenderNode], kept: [String] = []) -> _RenderNode {
-      C.fragment([element("1:1:", "ul", ["title": title], kept.map { placeholder($0, "li") } + rows)])
-    }
-    let publisher = shaping()
-    _ = publisher.publish(page("a", rows: [row(0)]))
-    publisher.acked = 1
-    // The rows are added, and the shape is defined: the host drops this publication.
-    let defining = try #require(publisher.publish(page("a", rows: [row(1), row(2)], kept: ["20:1:"])))
-    #expect(defining.definitions == [0])
-    // The next publication does not use the shape, and still carries its definition: the host acknowledges this one and not the
-    // one before.
-    let between = try #require(publisher.publish(page("b", rows: [], kept: ["20:1:"])))
-    #expect(between.definitions == [0] && between.shapes.isEmpty)
-    publisher.acked = publisher.epoch
-    // The shape is held now, and used without a definition by the next rows.
-    let later = try #require(publisher.publish(page("b", rows: [row(3), row(4)], kept: ["20:1:"])))
-    #expect(later.definitions.isEmpty && later.shapes == [0, 0])
-    let lagging = Page()
-    lagging.apply(publisher.history[0])
-    lagging.apply(publisher.history[2])
-    lagging.apply(publisher.history[3])
-    #expect(lagging.failed == nil)
-    #expect(lagging.description().contains("n3") && lagging.description().contains("n4"))
-  }
-
-  @Test
-  func theLeastRecentlyUsedShapeGivesUpItsId() throws {
-    let table = BinaryShapeTable(capacity: 2, instancesBeforeDefinition: 2)
-    let publisher = shaping(table)
-    func group(_ skeleton: String, _ base: Int) -> [_RenderNode] { [row(base, skeleton: skeleton), row(base + 1, skeleton: skeleton)] }
-    // Three skeletons twice each: the third finds no id it may take, because the other two are in use in this publication.
-    let first = try #require(publisher.publish(list(group("a", 0) + group("b", 2) + group("c", 4))))
-    #expect(first.definitions == [0, 1])
-    #expect(table.definedCount == 2)
-    // The next publication needs the third: the least recently used of the others gives its id up.
-    let second = try #require(publisher.publish(list(group("c", 4) + group("c", 6))))
-    // The other shape is not acknowledged yet, so it is carried again.
-    #expect(second.definitions == [0, 1])
-    #expect(second.shapes.count == 4)
-  }
-
-  @Test
-  func aNewGenerationOfTheTableMakesThePageForgetWhatItHolds() throws {
-    let table = BinaryShapeTable(instancesBeforeDefinition: 2)
-    let publisher = shaping(table)
-    let first = try #require(publisher.publish(list((0..<3).map { row($0) })))
-    #expect(first.definitions == [0] && first.generation == 0)
-    table.reset()
-    publisher.acked = 0
-    let second = try #require(publisher.publish(list((0..<3).map { row($0) })))
-    #expect(second.generation == 1)
-    #expect(second.definitions == [0])
-    // A publication the encoder gives up on for the whole tree tells the page nothing, so the table starts again.
-    let generation = table.generation
-    _ = publisher.publish(C.fragment([element("1:1:", "div", [:], [element("2:1:", "a")])]))
-    publisher.acked = publisher.epoch
-    #expect(publisher.publish(C.fragment([element("3:1:", "a", [:], [placeholder("2:1:", "a")])])) == nil)
-    #expect(table.generation == generation &+ 1)
-  }
-
   // MARK: The host's view of the publications
 
   /// A model of the page: the elements it built by handle (it keeps every one), the list of children of each, and the list of
@@ -817,23 +576,14 @@ struct BinaryEncoderTests {
       init(tag: String, attributes: [String: String]) { self.tag = tag; self.attributes = attributes }
     }
     enum Child { case text(String); case node(String) }
-    /// A template the page holds: the values of an element in the order a shape names them.
-    indirect enum Template {
-      case element(tag: String, attributes: [(String, String)], children: [Template])
-      case text(String)
-    }
 
     var nodes: [String: Node] = [:]
     var top: [Child] = []
     var failed: String?
-    var templates: [Int: Template] = [:]
-    var generation: UInt32 = 0
-    var shapesBuilt = 0
 
     func apply(_ bytes: [UInt8]) {
       let stream = BinaryStream(bytes)
       let words = stream.words, strings = stream.strings
-      if stream.generation != generation { templates.removeAll(); generation = stream.generation }
       var position = 0
       func key(_ index: UInt32, _ generation: UInt32) -> String { "\(index &- 1):\(generation)" }
       func pairs() -> [(String, String)] {
@@ -841,24 +591,6 @@ struct BinaryEncoderTests {
         var out: [(String, String)] = []
         for _ in 0..<count { out.append((strings[Int(words[position])], strings[Int(words[position + 1])])); position += 2 }
         return out
-      }
-      /// The element of a definition, without handles.
-      func template() -> Template {
-        let word = words[position]; position += 1
-        switch word {
-        case _BinaryFormat.opText:
-          let text = strings[Int(words[position])]; position += 1
-          return .text(text)
-        default:
-          position += 3
-          if word == _BinaryFormat.opElementNs { position += 1 }
-          let tag = strings[Int(words[position])]; position += 1
-          let attributes = pairs()
-          var children: [Template] = []
-          while words[position] != _BinaryFormat.opEnd { children.append(template()) }
-          position += 1
-          return .element(tag: tag, attributes: attributes, children: children)
-        }
       }
       // A list of nodes up to the END that closes it, or `count` top-level nodes (a root).
       func list(count: Int?) -> [Child] {
@@ -876,39 +608,6 @@ struct BinaryEncoderTests {
             let id = key(words[position], words[position + 1]); position += 2
             if nodes[id] == nil { failed = "held \(id) is not a node of the page" }
             out.append(.node(id))
-          case _BinaryFormat.opDefine:
-            read -= 1
-            let id = Int(words[position]); position += 1
-            templates[id] = template()
-          case _BinaryFormat.opShape:
-            let id = Int(words[position]), count = Int(words[position + 1]); position += 2
-            var handles: [(String, String)] = []
-            for _ in 0..<count {
-              handles.append((key(words[position], words[position + 1]), strings[Int(words[position + 2])]))
-              position += 3
-            }
-            let fillCount = Int(words[position]); position += 1
-            var fills: [Int: String] = [:]
-            for _ in 0..<fillCount { fills[Int(words[position])] = strings[Int(words[position + 1])]; position += 2 }
-            guard let held = templates[id] else { failed = "shape \(id), which the page does not hold"; return out }
-            var slot = 0
-            func build(_ template: Template) -> Child {
-              switch template {
-              case .text(let text):
-                defer { slot += 1 }
-                return .text(fills[slot] ?? text)
-              case .element(let tag, let attributes, let children):
-                let (handle, descriptor) = handles.removeFirst()
-                var made: [String: String] = ["data-embedded-node-id": "\(handle):\(descriptor)"]
-                for (name, value) in attributes { made[name] = fills[slot] ?? value; slot += 1 }
-                let node = Node(tag: tag, attributes: made)
-                nodes[handle] = node
-                node.children = children.map(build)
-                return .node(handle)
-              }
-            }
-            shapesBuilt += 1
-            out.append(build(held))
           default:
             let id = key(words[position], words[position + 1]), descriptor = strings[Int(words[position + 2])]; position += 3
             if word == _BinaryFormat.opElementNs { position += 1 }
@@ -932,11 +631,6 @@ struct BinaryEncoderTests {
       }
       while position < words.count, failed == nil {
         let word = words[position]; position += 1
-        if word == _BinaryFormat.opDefine {
-          let id = Int(words[position]); position += 1
-          templates[id] = template()
-          continue
-        }
         let index = words[position], generation = words[position + 1]; position += 2
         if word == _BinaryFormat.opAttrs {
           guard let node = nodes[key(index, generation)] else { failed = "attributes of \(key(index, generation)), which the page does not hold"; return }
@@ -1052,9 +746,8 @@ struct BinaryEncoderTests {
       var latest: (bytes: [UInt8], covered: UInt64)?
       // The acknowledgements on their way back: the step they reach Swift at, and the epoch they carry.
       var acknowledgements: [(arrives: Int, epoch: UInt64)] = []
-      var inFull = 0, incremental = 0, shapeInstances = 0
+      var inFull = 0, incremental = 0
       var rootRecord = BinaryNodeRecord()
-      let table = BinaryShapeTable(instancesBeforeDefinition: 2)
       func publish() throws {
         _ = tree.renderNode
         let holds = BinaryHeldState.holdsTree(rootRecord, acked: acked)
@@ -1062,7 +755,7 @@ struct BinaryEncoderTests {
         let snapshot = Snapshot()
         let copy = snapshot.take(tree.root, root: tree.root, acked: effective)
         let covered = tree._advanceEpoch()
-        let encoder = BinaryFiberEncoder(maxElementDepth: 510, acked: effective, covered: covered, rootRecord: rootRecord, shapes: table, lookup: { node in
+        let encoder = BinaryFiberEncoder(maxElementDepth: 510, acked: effective, covered: covered, rootRecord: rootRecord, lookup: { node in
           MainActor.assumeIsolated {
             for entry in snapshot.written where entry.copy === node { return BinaryHeldState.record(of: entry.fiber) }
             for entry in snapshot.kept where entry.node === node { return BinaryHeldState.record(of: entry.fiber) }
@@ -1070,7 +763,6 @@ struct BinaryEncoderTests {
           }
         })
         let output = try #require(encoder.encode(copy))
-        shapeInstances += output.shapeInstances
         BinaryHeldState.published(output, visited: snapshot.written, kept: snapshot.kept, covered: covered)
         rootRecord = output.rootRecord
         if holds { incremental += 1 } else { inFull += 1 }
@@ -1093,8 +785,8 @@ struct BinaryEncoderTests {
       let labels = ["add", "remove", "rotate", "title", "flag", "extra", "name"]
       for step in 0..<60 {
         let label = labels[Int(random.next() % UInt64(labels.count))]
-        // Now and then the page asks for a publication in full: it forgets what it holds, and so does the table.
-        if random.next() % 13 == 0 { table.reset(); acked = 0; rootRecord = BinaryNodeRecord(); acknowledgements.removeAll() }
+        // Now and then the page asks for a publication in full: it forgets what it holds.
+        if random.next() % 13 == 0 { acked = 0; rootRecord = BinaryNodeRecord(); acknowledgements.removeAll() }
         if let button = buttons(in: tree.root)[label] { tree.dispatch(event: "click", at: button.identity) }
         try publish()
         // The page reads when it likes: a publication it does not read before the next one is dropped.
@@ -1105,7 +797,6 @@ struct BinaryEncoderTests {
       }
       try read(step: 99)
       #expect(incremental > 10, "seed \(seed) made \(incremental) incremental publications and \(inFull) in full")
-      #expect(shapeInstances > 10, "seed \(seed) built \(shapeInstances) subtrees as shapes")
     }
   }
 
@@ -1188,8 +879,8 @@ struct BinaryEncoderTests {
           C.element("span", ["data-embedded-node-id": "5:1:small"], [.text("small")]),
         ])
       }),
-      // Rows the table defines a shape for, with values that differ, an svg inside and a text whose first line feed the parser keeps.
-      ("shapes", nil, {
+      // Rows with values that differ, an svg inside and a text whose first line feed the parser keeps.
+      ("rows", nil, {
         C.element("ul", ["data-embedded-node-id": "1:1:list"], (0..<7).map { index in
           C.element("li", ["data-embedded-node-id": "\(10 + index):2:row", "class": index % 2 == 0 ? "even" : "odd", "data-n": "\(index)"], [
             C.element("span", ["data-embedded-node-id": "\(30 + index):1:", "title": "t\(index)"], [.text("row \(index) & <b>")]),
@@ -1256,7 +947,7 @@ struct BinaryEncoderTests {
     let update = HostFiles.environment("SWIFTUIWEB_UPDATE_BINARY_FIXTURES") == "1"
     var stale: [String] = []
     for fixture in Self.fixtures {
-      let result = publish(fixture.make(), depth: fixture.depth, shapes: fixture.name.hasPrefix("shapes") ? BinaryShapeTable() : nil)
+      let result = publish(fixture.make(), depth: fixture.depth)
       guard let stream = result.stream else { stale.append("\(fixture.name) was declined"); continue }
       // A tree written as another the parser keeps (`placed-...`) is compared with the parser's DOM of that other tree's markup:
       // the page must build what the parser would build of it.
