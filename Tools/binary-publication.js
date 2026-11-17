@@ -10,7 +10,7 @@ const MATHML_NS = 'http://www.w3.org/1998/Math/MathML';
 const XLINK_NS = 'http://www.w3.org/1999/xlink';
 const XML_NS = 'http://www.w3.org/XML/1998/namespace';
 const XMLNS_NS = 'http://www.w3.org/2000/xmlns/';
-const HEADER_BYTES = 28;
+const HEADER_BYTES = 24;
 // Flag 1: a reference publication of the same tree follows the strings (the verification mode).
 const FLAG_REFERENCE = 1;
 // Flag 2: a record names an element for a view transition, so the page may start one for this publication (see `commit`).
@@ -18,7 +18,7 @@ const FLAG_TRANSITION = 2;
 // Flag 4: the atoms follow the strings (a u32 byte count, then the atoms separated by NUL). Swift sends them until the page
 // acknowledges a publication; the page keeps them for the rest of the session and ships no copy of its own.
 const FLAG_ATOMS = 4;
-const { ROOT, ATTRS, CHILDREN, HELD, ELEMENT, ELEMENT_NS, TEXT, SHAPE, DEFINE, END } = BINARY_OPS;
+const { ROOT, ATTRS, CHILDREN, HELD, ELEMENT, ELEMENT_NS, TEXT, END } = BINARY_OPS;
 const NODE_ID = 'data-embedded-node-id';
 // The attributes a publication puts on the first element of the tree to ask something of the page. The page reads them before it
 // patches anything, and the hover rules are never written to an element: they are applied to a style sheet.
@@ -59,7 +59,7 @@ export function isEmptyUpdate(bytes) {
   if (bytes.length < HEADER_BYTES) return false;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   // Before the atoms arrived nothing is "nothing to apply": the page has not committed a publication yet.
-  return view.getUint32(16, true) === 0 && atoms !== null && (view.getUint16(6, true) & FLAG_REFERENCE) === 0 && view.getUint16(4, true) === BINARY_VERSION && view.getUint32(8, true) === BINARY_ATOMS_HASH;
+  return view.getUint32(12, true) === 0 && atoms !== null && (view.getUint16(6, true) & FLAG_REFERENCE) === 0 && view.getUint16(4, true) === BINARY_VERSION && view.getUint32(8, true) === BINARY_ATOMS_HASH;
 }
 
 const decoder = new TextDecoder('utf-8', {fatal: true, ignoreBOM: true});
@@ -71,7 +71,7 @@ export function readPublication(bytes) {
   if (bytes.length < HEADER_BYTES || bytes[0] !== 0 || bytes[1] !== 0x53 || bytes[2] !== 0x57 || bytes[3] !== 0x42) throw new BinaryFormatError('SwiftUIWeb binary publication has no header');
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const version = view.getUint16(4, true), flags = view.getUint16(6, true), atomsHash = view.getUint32(8, true);
-  const generation = view.getUint32(12, true), wordCount = view.getUint32(16, true), stringCount = view.getUint32(20, true), stringBytes = view.getUint32(24, true);
+  const wordCount = view.getUint32(12, true), stringCount = view.getUint32(16, true), stringBytes = view.getUint32(20, true);
   // A page and a worker from different builds refuse each other instead of misreading.
   if (version !== BINARY_VERSION) throw new BinaryFormatError(`SwiftUIWeb binary publication version ${version}, expected ${BINARY_VERSION}`);
   if (atomsHash !== BINARY_ATOMS_HASH) throw new BinaryFormatError('SwiftUIWeb binary publication atoms differ from the page\'s');
@@ -96,7 +96,7 @@ export function readPublication(bytes) {
   }
   if (atoms === null) throw new BinaryFormatError('SwiftUIWeb binary publication arrived before the atoms');
   const reference = flags & FLAG_REFERENCE ? bytes.subarray(next) : null;
-  return {words, strings: atoms.concat(own), reference, generation, transition: (flags & FLAG_TRANSITION) !== 0};
+  return {words, strings: atoms.concat(own), reference, transition: (flags & FLAG_TRANSITION) !== 0};
 }
 
 // What the HTML parser does to names inside SVG and MathML: it lowercases every name, then restores the case of the ones
@@ -142,13 +142,6 @@ function within(words, position, length) {
   if (!(length >= 0) || position + length > words.length) throw new BinaryFormatError('SwiftUIWeb binary publication has a count that runs past its end');
 }
 
-/** The templates of the shapes the page holds, by id (`DEFINE`), for the generation of the shape table that defined them. */
-export class Templates {
-  constructor() { this.map = new Map(); this.generation = 0; }
-  /** The templates are Swift's to keep: a new generation of its table means none of these is any longer. */
-  adopt(generation) { if (generation !== this.generation) { this.map.clear(); this.generation = generation; } }
-}
-
 /** The elements a publication built, by the handle Swift gave them (the index and generation of the fiber's structural id).
  * A record names an element this way. An element of a handle that was built again, or whose generation differs, is not the
  * one the record means: the lookup fails and the page asks Swift for a publication in full. */
@@ -174,32 +167,6 @@ export class Handles {
   clear() { if (this.size > 0) { this.elements = []; this.generations = []; this.size = 0; } }
 }
 
-/** Where the values of a template are: for each, the element that holds it (by its place among the template's elements), and
- * the attribute it is, or the child that is the text. A shape names a value by its place in this list. */
-function planOf(words, strings, begin, end) {
-  const plan = [], open = [];
-  let ordinal = -1, position = begin;
-  while (position < end) {
-    const word = words[position];
-    if (word === ELEMENT || word === ELEMENT_NS) {
-      const namespace = word === ELEMENT_NS ? words[position + 4] : 0, countAt = position + (word === ELEMENT_NS ? 6 : 5), pairs = words[countAt];
-      // The element is a child of the one open, and a text after it is the next.
-      if (open.length) open[open.length - 1].children++;
-      ordinal++;
-      open.push({ordinal, children: 0});
-      within(words, countAt + 1, pairs * 2);
-      for (let pair = 0; pair < pairs; pair++) plan.push({element: ordinal, child: -1, namespace, name: strings[words[countAt + 1 + pair * 2]]});
-      position = countAt + 1 + pairs * 2;
-    } else if (word === TEXT) {
-      const parent = open[open.length - 1];
-      plan.push({element: parent.ordinal, child: parent.children++, namespace: 0, name: null});
-      position += 2;
-    } else if (word === END) { open.pop(); position++; }
-    else throw new BinaryFormatError(`SwiftUIWeb binary publication has an unknown op ${word} in a template`);
-  }
-  return plan;
-}
-
 /** What a list of nodes is read as: the text mode of the element the list is the children of. */
 export function textModeOf(element) {
   return element.namespaceURI === 'http://www.w3.org/1999/xhtml' ? tagInfo(element.localName).text : TEXT_PLAIN;
@@ -209,8 +176,8 @@ export function textModeOf(element) {
  * inserted into the page's own, as the nodes of a parsed template do not. A script is not built: the commit strips the
  * scripts of every template it parses. */
 export class Builder {
-  constructor(publication, document, handles, templates = new Templates()) {
-    this.words = publication.words; this.strings = publication.strings; this.document = document; this.handles = handles; this.templates = templates;
+  constructor(publication, document, handles) {
+    this.words = publication.words; this.strings = publication.strings; this.document = document; this.handles = handles;
     this.attributeNames = new Map();
     this.missing = false;
   }
@@ -277,43 +244,6 @@ export class Builder {
           const last = current.lastChild;
           if (last !== null && last.nodeType === 3) last.appendData(text); else current.appendChild(document.createTextNode(text));
         }
-      } else if (word === DEFINE) {
-        position = this.define(position);
-      } else if (word === SHAPE) {
-        const id = words[position++], elements = words[position++], handlesAt = position;
-        within(words, position, elements * 3);
-        position += elements * 3;
-        const fills = words[position++], fillsAt = position;
-        within(words, position, fills * 2);
-        position += fills * 2;
-        if (containers.length === 0) topLevel++;
-        if (skipping > 0) continue;
-        const template = this.templates.map.get(id);
-        if (template === undefined) { this.missing = true; continue; }
-        const clone = template.root.cloneNode(true);
-        const built = [clone, ...clone.querySelectorAll('*')];
-        if (built.length !== elements) throw new BinaryFormatError('SwiftUIWeb binary publication has a shape of another size than its template');
-        for (let at = 0; at < elements; at++) {
-          const index = words[handlesAt + at * 3] - 1;
-          if (index < 0) continue;
-          const generation = words[handlesAt + at * 3 + 1];
-          handles.register(built[at], index, generation);
-          built[at].setAttribute(NODE_ID, index + ':' + generation + ':' + strings[words[handlesAt + at * 3 + 2]]);
-        }
-        for (let at = 0; at < fills; at++) {
-          const slot = template.plan[words[fillsAt + at * 2]], value = strings[words[fillsAt + at * 2 + 1]];
-          if (slot === undefined) throw new BinaryFormatError('SwiftUIWeb binary publication fills a place its shape does not have');
-          const target = built[slot.element];
-          if (slot.child >= 0) target.childNodes[slot.child].nodeValue = value;
-          else {
-            try {
-              if (slot.namespace === 0) target.setAttribute(slot.name, value);
-              else setForeignAttribute(target, slot.namespace, slot.name, value, this.attributeNames);
-            } catch { /* see above */ }
-          }
-        }
-        if (current === null) { nodes.push(clone); lastText = null; } else current.appendChild(clone);
-        firstChild = false;
       } else if (word === HELD) {
         const index = words[position++] - 1, generation = words[position++];
         if (containers.length === 0) topLevel++;
@@ -325,15 +255,6 @@ export class Builder {
       } else throw new BinaryFormatError(`SwiftUIWeb binary publication has an unknown op ${word}`);
     }
     return {nodes, held, position};
-  }
-
-  /** A template for a shape (the words after a DEFINE): built like any subtree, kept, and not put in the page. Returns where the
-   * definition ends. */
-  define(position) {
-    const id = this.words[position++], begin = position;
-    const built = this.readList(position, 1, null);
-    this.templates.map.set(id, {root: built.nodes[0], plan: planOf(this.words, this.strings, begin, built.position)});
-    return built.position;
   }
 
   /** The fragment of the children of the root a ROOT record holds. */
@@ -367,20 +288,6 @@ export class Builder {
   }
 }
 
-/** Where the element that starts at `position` ends: after its END. */
-function skipNode(words, position) {
-  let depth = 0;
-  for (;;) {
-    if (position >= words.length) throw new BinaryFormatError('SwiftUIWeb binary publication has a record that does not end');
-    const word = words[position];
-    if (word === ELEMENT) { position += 6 + words[position + 5] * 2; depth++; }
-    else if (word === ELEMENT_NS) { position += 7 + words[position + 6] * 2; depth++; }
-    else if (word === TEXT) position += 2;
-    else if (word === END) { position++; if (--depth === 0) return position; }
-    else throw new BinaryFormatError(`SwiftUIWeb binary publication has an unknown op ${word} in a template`);
-  }
-}
-
 /** Splits an update into its records, as `{op, position, index, generation}`: `position` is where the record's body starts (the
  * count of an ATTRS record's pairs, the first node of a CHILDREN record's list) and `index` is -1 for the page's own list of
  * children. `annotations` are the `[name, value]` pairs of what the publication asks of the page (a transaction, hover rules,
@@ -402,10 +309,6 @@ export function scanRecords(publication) {
       annotationsAt(position + 4, pairs);
       records.push({op, position: position + 3, index, generation});
       position += 4 + pairs * 2;
-    } else if (op === DEFINE) {
-      // The definition of a shape: the element that follows is its template.
-      records.push({op, position: position + 1, index: -1, generation: 0});
-      position = skipNode(words, position + 2);
     } else if (op === CHILDREN) {
       const index = words[position + 1] - 1, generation = words[position + 2];
       records.push({op, position: position + 3, index, generation});
@@ -417,8 +320,6 @@ export function scanRecords(publication) {
         const word = words[position];
         if (word === ELEMENT) { annotationsAt(position + 6, words[position + 5]); position += 6 + words[position + 5] * 2; depth++; }
         else if (word === ELEMENT_NS) { annotationsAt(position + 7, words[position + 6]); position += 7 + words[position + 6] * 2; depth++; }
-        else if (word === DEFINE) position += 2;
-        else if (word === SHAPE) { const after = position + 3 + words[position + 2] * 3; position = after + 1 + words[after] * 2; }
         else if (word === HELD) position += 3;
         else if (word === TEXT) position += 2;
         else if (word === END) { position++; if (depth === 0) break; depth--; }
@@ -440,9 +341,7 @@ export function rootHoverRules(publication) {
       const at = position + (word === ELEMENT ? 6 : 7), pairs = words[at - 1];
       for (let pair = at; pair < at + pairs * 2; pair += 2) if (words[pair] === ANNOTATION_HOVER_RULES) return strings[words[pair + 1]];
       position = at + pairs * 2;
-    } else if (word === DEFINE) position += 2;
-    else if (word === SHAPE) { const after = position + 3 + words[position + 2] * 3; position = after + 1 + words[after] * 2; }
-    else if (word === HELD) position += 3;
+    } else if (word === HELD) position += 3;
     else if (word === TEXT) position += 2;
     else if (word === END) position++;
     else throw new BinaryFormatError(`SwiftUIWeb binary publication has an unknown op ${word}`);

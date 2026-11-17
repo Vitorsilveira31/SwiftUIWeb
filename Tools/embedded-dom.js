@@ -8,7 +8,7 @@ import {GeometryHost} from './geometry-host.js';
 import {MediaHost} from './media-host.js';
 import {SplitViewHost} from './split-view-host.js';
 import {TransitionHost, ScrollTransitionHost, MatchedGeometryHost, matchViewTransitionGeometry, SCROLL_TRANSITION_ATTRIBUTES} from './transition-host.js';
-import {BinaryBuffer, BinaryFormatError, Builder, Handles, Templates, isEmptyUpdate, readPublication, rootHoverRules, sameBinary, scanRecords, compareDom} from './binary-publication.js';
+import {BinaryBuffer, BinaryFormatError, Builder, Handles, isEmptyUpdate, readPublication, rootHoverRules, sameBinary, scanRecords, compareDom} from './binary-publication.js';
 import {BINARY_OPS} from './binary-atoms.generated.js';
 // A release leaves out the hosts its application never reaches (Tools/build-runtime-bundle.mjs): each is constructed
 // behind a build-time constant, written inline because bun folds it only there, and the release defines the constant
@@ -242,7 +242,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   const MUTATION_OPTIONS = {subtree:true, childList:true, attributes:true, attributeOldValue:true, characterData:true};
   // Post-patch phases whose time each commit sample reports (`sample.phases`).
   const SAMPLE_PHASES = ['browserStateSyncMs','themeSyncMs','platformSyncMs','pluginSyncMs','layoutUpdateMs','webMountReconcileMs','geometrySyncMs','focusSyncMs','scrollSyncMs','presentationSyncMs','historySyncMs','inputHostSyncMs','motionSyncMs','meshSyncMs','lazySyncMs','timelineSyncMs','commitNotificationMs'];
-  const FIBER_PUBLISH_PHASES = [['reconcileUs',35],['snapshotWalkUs',36],['annotateUs',37],['serializeUs',38],['bookkeepingUs',39],['publishedBytes',40],['binaryPublications',42],['binaryFallbacks',43],['binaryRoots',44],['binaryAttrsRecords',45],['binaryChildrenRecords',46],['binaryHeldNodes',47],['shapeDefinitions',48],['shapeInstances',49]];
+  const FIBER_PUBLISH_PHASES = [['reconcileUs',35],['snapshotWalkUs',36],['annotateUs',37],['serializeUs',38],['bookkeepingUs',39],['publishedBytes',40],['binaryPublications',42],['binaryFallbacks',43],['binaryRoots',44],['binaryAttrsRecords',45],['binaryChildrenRecords',46],['binaryHeldNodes',47]];
   // What the patch walk spent on elements whose own attributes did not change , per sample.
   const WALK_COUNTERS = ['patchOwnUnchanged','patchOwnUnchangedMs','patchOwnChanged','patchOwnChangedMs'];
   const emptyMutationClasses = () => ({identicalHtml:0, noop:0, textAttrOnly:0, internalAttrOnly:0, structuralSmall:0, structuralLarge:0, patched:0, retried:0});
@@ -858,7 +858,6 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   // is being patched; a node patched in at any other time is cloned.
   let adoptFresh = false;
   // The elements a binary publication built, by handle; the records of a binary update name the elements they change this way.
-  const templates = new Templates();
   const handles = new Handles((index, generation) => root.querySelector('[' + NODE_ID + '^="' + index + ':' + generation + ':"]'));
   // Which attributes of `element` another owner keeps (tab shell, media host, canvas buffer), decided once per
   // element: asking per attribute ran several class and ancestor checks for every attribute of every node.
@@ -978,7 +977,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   // the page's), and the DOM the page built is compared with it. Every difference is recorded in `window.__binaryVerifyReport`
   // and logged, as `window.__layoutVerify` does for CSS layout. What another owner keeps (the patch's own skip rules) is left out.
   function verifyBinary(reference, presentedBefore) {
-    const expected = new Builder(readPublication(reference), buildDocument(), new Handles(), new Templates()).buildRoot();
+    const expected = new Builder(readPublication(reference), buildDocument(), new Handles()).buildRoot();
     for (const script of expected.querySelectorAll('script')) script.remove();
     expected.querySelector('[data-hover-rules]')?.removeAttribute('data-hover-rules');
     const hostOwns = new WeakMap();
@@ -1293,9 +1292,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
       for (const record of records) {
         if (keepFailure) break;
         const started = performanceDiagnostics ? performance.now() : 0;
-        if (record.op === BINARY_OPS.DEFINE) {
-          builder.define(record.position);
-        } else if (record.op === BINARY_OPS.ATTRS) {
+        if (record.op === BINARY_OPS.ATTRS) {
           const old = handles.lookup(record.index, record.generation);
           if (old === null) { keepFailure = true; noteFailure('attributes of ' + record.index + ':' + record.generation); break; }
           const scratch = builder.buildAttributes(record.position, old);
@@ -1306,7 +1303,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
           const parent = record.index < 0 ? root : handles.lookup(record.index, record.generation);
           if (parent === null) { keepFailure = true; noteFailure('children of ' + record.index + ':' + record.generation); break; }
           const {nodes, held} = builder.readList(record.position, -1, parent);
-          if (builder.missing) { keepFailure = true; noteFailure('a held element or a shape named in the children of ' + record.index + ':' + record.generation + ' is missing'); break; }
+          if (builder.missing) { keepFailure = true; noteFailure('a held element named in the children of ' + record.index + ':' + record.generation + ' is missing'); break; }
           if (performanceDiagnostics) metrics.binaryRecordBuildMs += performance.now() - started;
           for (const node of nodes) noteMarkersOf(node);
           if (parent === composing) continue; // IME owns text until compositionend.
@@ -2731,8 +2728,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
       try {
         const read = readPublication(nextHTML.bytes);
         binaryReference = read.reference;
-        templates.adopt(read.generation);
-        const builder = new Builder(read, buildDocument(), handles, templates);
+        const builder = new Builder(read, buildDocument(), handles);
         if (read.words.length > 0 && read.words[0] === BINARY_OPS.ROOT) {
           builtHoverRules = rootHoverRules(read);
           content = builder.buildRoot();
@@ -3352,7 +3348,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
     },
     snapshot(){
       const memory=performance.memory;
-      const fiberNames=['bodyEvaluations','renderNodeAllocations','structuralNodeVisits','reconciliationOperations','invalidatedOwners','invalidatedNodes','reconciledNodes','schedulerInvalidations','schedulerLeafFlushes','schedulerStructuralFlushes','schedulerSubtreeFlushes','domOperations','bridgeBatches','bridgeCommands','publishedObservationTargets','publishedObservationRouteMisses','stateOwnerRouteMisses','deferredRootPasses','leafRootPasses','observationRootPasses','externalRootPasses','nestedChangeRootFallbacks','ownerRouteRootFallbacks','subtreeOwnerInvalidations','subtreeTargetPathDepthTotal','subtreeTargetRenderNodeCount','staleSubtreeRendererFallbacks','staleSubtreeOwnerTokens','publishedObservationGroupsUnavailable','publishedObservationSourceCountMismatches','publishedObservationGroupsWithoutActiveOwners','publishedObservationUnresolvedOwnerTokens','publishedObservationOwnerPathsUnavailable','publishedObservationOwnerPathsNotMounted','publishedObservationOwnerPathRemaps','publishReconcileUs','publishSnapshotWalkUs','publishAnnotateUs','publishSerializeUs','publishBookkeepingUs','publishedBytes','publishKeptOwnElements','publishBinary','publishBinaryFallbacks','publishBinaryRoots','publishBinaryAttrsRecords','publishBinaryChildrenRecords','publishBinaryHeldNodes','publishShapeDefinitions','publishShapeInstances'];
+      const fiberNames=['bodyEvaluations','renderNodeAllocations','structuralNodeVisits','reconciliationOperations','invalidatedOwners','invalidatedNodes','reconciledNodes','schedulerInvalidations','schedulerLeafFlushes','schedulerStructuralFlushes','schedulerSubtreeFlushes','domOperations','bridgeBatches','bridgeCommands','publishedObservationTargets','publishedObservationRouteMisses','stateOwnerRouteMisses','deferredRootPasses','leafRootPasses','observationRootPasses','externalRootPasses','nestedChangeRootFallbacks','ownerRouteRootFallbacks','subtreeOwnerInvalidations','subtreeTargetPathDepthTotal','subtreeTargetRenderNodeCount','staleSubtreeRendererFallbacks','staleSubtreeOwnerTokens','publishedObservationGroupsUnavailable','publishedObservationSourceCountMismatches','publishedObservationGroupsWithoutActiveOwners','publishedObservationUnresolvedOwnerTokens','publishedObservationOwnerPathsUnavailable','publishedObservationOwnerPathsNotMounted','publishedObservationOwnerPathRemaps','publishReconcileUs','publishSnapshotWalkUs','publishAnnotateUs','publishSerializeUs','publishBookkeepingUs','publishedBytes','publishKeptOwnElements','publishBinary','publishBinaryFallbacks','publishBinaryRoots','publishBinaryAttrsRecords','publishBinaryChildrenRecords','publishBinaryHeldNodes','unused48','unused49'];
       const fiber=typeof api.fiber_metric==='function'?Object.fromEntries(fiberNames.map((name,index)=>[name,api.fiber_metric(index)])):null;
       return {
         schemaVersion:1, namespace:'swiftuiweb.browser', elapsedMs:performance.now()-metricsStartedAt,

@@ -1,8 +1,7 @@
 # Binary patches
 
 Instead of HTML that the page parses and diffs into the live DOM, the worker sends a binary stream: records for the
-elements that changed, and instructions that build new subtrees with `createElement` or by cloning a cached template of
-their shape. No publication is parsed as HTML in the browser: not updates, not new screens, not the first publication.
+elements that changed, and instructions that build new subtrees with `createElement`. No publication is parsed as HTML in the browser: not updates, not new screens, not the first publication.
 Static rendering (`SwiftUIWebHTML` for server-side rendering and previews) still produces HTML.
 
 ## Goals
@@ -19,10 +18,10 @@ Static rendering (`SwiftUIWebHTML` for server-side rendering and previews) still
 
 The stream travels in the HTML slot (`html_pointer`, `html_length`, and the `html` field of the worker's `publish`
 message). Its first byte is 0, which HTML never contains. All words are little-endian `u32`, as in BrowserIO. The format
-version is 4 (`_BinaryFormat.version`).
+version is 5 (`_BinaryFormat.version`).
 
 ```
-header   u8 0, "SWB", u16 version, u16 flags, u32 atoms hash, u32 shape generation,
+header   u8 0, "SWB", u16 version, u16 flags, u32 atoms hash,
          u32 word count, u32 string count, u32 string bytes
 words    the records, in tree order
 strings  UTF-8, separated by NUL
@@ -40,7 +39,7 @@ bits 1 and 2, so adding them kept the version; the atoms section moves the refer
 one list (`Tools/binary-atoms.json`) into Swift and JavaScript by `swiftuiweb-tools`, as BrowserIO's protocol is. The
 header carries the hash of the list, so a page and a worker from different builds refuse each other instead of
 misreading. The page's runtime does not ship the list: the wasm has it already, so every publication carries it (flag 4)
-until the host acknowledges one, as shape definitions are carried, and the page keeps the first copy it reads for the rest
+until the host acknowledges one, and the page keeps the first copy it reads for the rest
 of the session (`installAtoms` in `Tools/binary-publication.js`). A publication that arrives before the atoms, which a page
 that acknowledged nothing never sees, is refused. `BINARY_ATOMS` in `Tools/binary-atoms.generated.js` is for the tests and
 tools; the bundle drops it. Higher indices name this publication's own strings, which are decoded once per publication. Swift interns
@@ -75,8 +74,6 @@ see "Placement" under "Swift side".
 | `ELEMENT` (17) | handle×2, descriptor, tag, count, (name, value)\*, node\*, `END` | a new HTML element; the index word is 0 for an element without a fiber of its own. The element's `data-embedded-node-id` is not among the attributes: the page makes it from the handle and the descriptor (`index:generation:descriptor`) |
 | `ELEMENT_NS` (18) | handle×2, descriptor, ns, tag, count, (name, value)\*, node\*, `END` | the same for SVG and MathML |
 | `TEXT` (19) | value | a text node |
-| `SHAPE` (20) | shape, n, (index+1, generation, descriptor)×n, k, (slot, value)×k | a clone of the template of `shape`; the handle and descriptor of each of its `n` elements in order; and the `k` values that differ from the template's, each named by its place among the template's values (the attribute values and the texts, in order) |
-| `DEFINE` (21) | shape, element | the template of `shape`: the subtree that follows (handles zero), built and kept, not put in the page. A `DEFINE` is a node of a list, or a record of its own at the top of an update; it is not a node of the tree |
 | `END` (22) | | closes an `ELEMENT`, and a `CHILDREN` record |
 
 `ATTRS` and `CHILDREN` are idempotent: each gives the whole current state of one thing. The page compares them with
@@ -138,32 +135,10 @@ not run for it: not for records, not for a whole tree. The bookkeeping lives in 
   holds no placeholder and which the page reconciles with the DOM it has. The `ROOT` fallback is also the only way such a
   change reaches the page.
 - **New subtrees** are written as `ELEMENT` ... `END`. The nesting limit of 510 levels below the host's root
-  (`_embeddedMaxNestedElements`) and the nested-button rule apply, so the DOM matches what the parser builds.
-- **Shapes.** While it writes a subtree, the encoder works out its skeleton: its tags, namespaces, attribute names in order,
-  whether it has an id, where its texts are, and the skeletons of its children. A subtree is for a shape when nothing in it is
-  host-owned (the parser facts and `AttributeInfo`: input, textarea, select, option, details, dialog, media, canvas, iframe, a
-  tab view, a lazy container, a secure field), is `data-web-mount-key`, `data-dom-view`, `data-hover-rules` or
-  `data-host-managed="*children"`, is read by the page as other than plain text (`BinaryParserFacts.specialText`), holds
-  two texts in a row, an element without an id or a `HELD` node, and has at least 3 elements. Icons are allowed: they are
-  realized after the fill. Every such subtree counts for its skeleton (`BinaryShapeTable.touch`).
-  - At the end of the publication, of each region of the tree the outermost subtree whose skeleton was met at least 3 times
-    (counting the earlier publications) or that the host holds is built as `SHAPE`; all of the instances of a new skeleton
-    are shapes, the first one defining it. The decision comes at the end because it needs the counts, and the outermost
-    subtree is the largest saving. A publication counts at most 4,096 subtrees.
-  - The template is the subtree of the first instance, kept by Swift as a blueprint (its words, without handles, and its
-    strings). An instance is `SHAPE id`, its handles and the values that differ from the blueprint's, found by walking the
-    two in step. The node id of an element is not a value: it is its handle and descriptor. The template is built detached,
-    not as a second build of the first instance.
-  - **Every publication carries the definitions the host may lack**, at its start, until the host acknowledges one: a
-    definition is written with the values it had when it was made, so that a host that dropped publications ends with the
-    same template whichever it applied. A publication that does not use a shape carries its definition too, because the host
-    that acknowledges a later publication holds the template only if every publication it may have applied carried it.
-  - The table holds at most 1,024 shapes. When it is full, the shape used least recently (and not by this publication)
-    gives its id up: the next `DEFINE` of that id overwrites the page's template.
-  - The header's shape generation changes when the table is emptied: on `publish_full`, and when the encoder gives up on a
-    publication for the whole tree. The page drops its templates when it sees a new one.
-  - Tuning: `window.__binaryShapeInstances` and `window.__binaryShapeElements` set the thresholds (3 instances, 3 elements).
-    `window.__binaryShapes = false` (`?binary-shapes=0`) turns shapes off.
+  (`_embeddedMaxNestedElements`) and the nested-button rule apply, so the DOM matches what the parser builds. A repeated
+  subtree is written in full each time: cloning a cached template of it changed no metric of the Board benchmark
+  (`Tools/compare-react.mjs`, 16 interleaved rounds) and cost about 22 KB of wasm before `wasm-opt`, so the format has no
+  templates. Ops 20 and 21 are unassigned.
 
 ## Page side
 
@@ -198,10 +173,6 @@ acknowledged and nothing else.
      `HELD` inside a built subtree is appended to it as it is read. A built element whose handle the page already holds
      (its acknowledgement was on its way when Swift wrote this publication) is merged into the held element with the
      DOM-to-DOM `patchNode(held, built)`, so it keeps its state, and the handle names the held one from then on.
-   - **`DEFINE` and `SHAPE`**: a definition is built like any subtree and kept in the page's table of templates (with the place
-     of each of its values); `SHAPE` clones the template, lists the clone's elements once (`querySelectorAll('*')`), gives each
-     its handle and its `data-embedded-node-id`, and writes the values that differ. The clone is taken from a template that
-     never had its icons realized, and the page realizes them after the fill, as for any new element.
    - **`ROOT`**: build a fragment. Insert it into an empty root. Into a root that already has content (`publish_full`,
      migration), reconcile it with `patchChildren(root, fragment)`, which compares DOM with DOM.
 5. The layout host and the CSS mapper keep learning from the mutation records. The same DOM calls produce them.
@@ -213,10 +184,10 @@ tab buttons and panels first (`applyClientTabSelection`, `syncClientTabSelection
 
 - **`window.__binaryVerify`**: after a binary commit, the page compares the live DOM with a reference DOM of the whole current
   tree. Swift attaches the reference to the publication: the tree (a second, full snapshot when the publication is an update)
-  encoded again as a complete binary publication, by a fresh encoder that holds nothing (no shapes, no held state, no root
+  encoded again as a complete binary publication, by a fresh encoder that holds nothing (no held state, no root
   record), so the page builds it as it builds the first publication. The reference follows the strings of the publication
   (flag 1 in the header, see the layout above). The page reads it with `readPublication`, builds it in the inert document with
-  its own handles and templates, and compares the two. The comparison covers element by element, attributes, text and order,
+  its own handles, and compares the two. The comparison covers element by element, attributes, text and order,
   and ignores what the skip predicates say the host owns. Every difference is reported, as `window.__layoutVerify` does for
   CSS layout. The reference shares the encoder and the builder with the publication, so the check covers the records against
   the whole tree, not the builder against the HTML parser: that parity is checked by the fixtures of
@@ -231,8 +202,8 @@ tab buttons and panels first (`applyClientTabSelection`, `syncClientTabSelection
 - **Swift tests**: the encoder's output over fixtures that the JavaScript reader builds and compares with the parser
   (`BinaryEncoderTests`, `Tools/test-binary-publication-browser.mjs`), the records of hand-built trees, and a model of the
   page (it applies only the newest publication, acknowledges late, and must end in the tree Swift has) driven by real
-  fibers over random sequences of changes, with the shape table (it also asks for a publication in full now and then). Shape
-  eligibility, eviction, the generation and definitions carried until acknowledged have tests of their own.
+  fibers over random sequences of changes (it also asks for a publication in full now and then). The atoms carried until
+  acknowledged have a test of their own.
 - **Diagnostics.** `window.__binaryFailures` names why the page asked for a publication in full.
 
 ## Page writes into elements Swift renders

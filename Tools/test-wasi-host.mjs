@@ -67,14 +67,13 @@ const root = { ...located, defaultView: { history: { state: { swuiNavigation: { 
 assert.deepEqual(readDocumentEnvironment(root), ["SWIFTUIWEB_INITIAL_LOCATION=/stackDepth?tab-selection=a%3Ab#x"], "a depth-zero entry is a plain route");
 
 
-// The publication flags Swift is told at start: 32 attaches a reference encoding for the page to verify against, 64 turns the shapes off.
+// The publication flags Swift is told at start: 32 attaches a reference encoding for the page to verify against.
 const flags = (window) => publicationFlags(window);
 assert.equal(flags(undefined), 0);
 assert.equal(flags({}), 0);
 assert.equal(flags({ location: { search: "?binary=0&keep-own=0" } }), 0, "the HTML transport is gone: its switches do nothing");
 assert.equal(flags({ __binaryVerify: true }), 32);
 assert.equal(flags({ location: { search: "?x=1&binary-verify=1" } }), 32);
-assert.equal(flags({ location: { search: "?binary-shapes=0" } }), 64);
-assert.equal(flags({ __binaryShapes: true, location: { search: "?binary-shapes=0" } }), 0, "the property wins over the address");
+assert.equal(flags({ __binaryShapes: false, location: { search: "?binary-shapes=0" } }), 0, "the shapes are gone: their switches do nothing");
 
 console.log("WASI host environment checks passed.");

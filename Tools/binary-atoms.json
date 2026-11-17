@@ -1,6 +1,6 @@
 {
- "version": 4,
- "ops": {"ROOT": 1, "ATTRS": 2, "CHILDREN": 3, "HELD": 16, "ELEMENT": 17, "ELEMENT_NS": 18, "TEXT": 19, "SHAPE": 20, "DEFINE": 21, "END": 22},
+ "version": 5,
+ "ops": {"ROOT": 1, "ATTRS": 2, "CHILDREN": 3, "HELD": 16, "ELEMENT": 17, "ELEMENT_NS": 18, "TEXT": 19, "END": 22},
  "namespaces": {"svg": 1, "mathml": 2},
  "tags": [
   "div", "span", "button", "svg", "path", "g", "defs", "stop", "linearGradient", "radialGradient", "circle", "rect", "line",

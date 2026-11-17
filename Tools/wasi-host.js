@@ -41,15 +41,12 @@ export function readDocumentEnvironment(document, navigator = undefined) {
 
 /** How the page asks Swift to publish (`set_initial_preferences` flags, Documentation/Architecture/BINARY_PATCHES.md):
  * 32 to attach a reference encoding of the tree to each publication for the page to compare the DOM it built with (`window.__binaryVerify = true`,
- * `?binary-verify=1`); 64 to build the subtrees of a publication in full instead of as shapes (`window.__binaryShapes = false`,
- * `?binary-shapes=0`). 8 and 16 are retired: they chose the HTML transport. */
+ * `?binary-verify=1`). 8 and 16 are retired (they chose the HTML transport), and so are 64 and bits 8 to 15 (they turned off and
+ * tuned the shapes, which are gone). */
 export function publicationFlags(window) {
   const search = window?.location?.search || '';
   const verify = window?.__binaryVerify === true || /[?&]binary-verify=1\b/.test(search);
-  const shapes = typeof window?.__binaryShapes === 'boolean' ? window.__binaryShapes : !/[?&]binary-shapes=0\b/.test(search);
-  // Tuning of the shapes (0, the default, or 1 to 15): subtrees of a skeleton that make it worth defining, and elements in a shape.
-  const tuning = (name, shift) => ((Number(window?.[name]) || 0) & 15) << shift;
-  return (verify ? 32 : 0) | (shapes ? 0 : 64) | tuning('__binaryShapeInstances', 8) | tuning('__binaryShapeElements', 12);
+  return verify ? 32 : 0;
 }
 
 /** Whether the page is served from this machine (localhost, 127.0.0.1, ::1, *.localhost). The diagnostic switches in the

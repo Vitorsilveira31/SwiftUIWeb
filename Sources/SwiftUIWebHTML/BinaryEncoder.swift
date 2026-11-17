@@ -59,11 +59,7 @@ package struct BinaryFiberEncoder {
   package var rootRecord: BinaryNodeRecord
   /// What the publisher keeps of the fiber a visited node is the copy of.
   package var lookup: (_RenderNode) -> BinaryNodeRecord?
-  /// The shapes the host holds, when the publication may use them.
-  package var shapes: BinaryShapeTable?
-
-  package init(maxElementDepth: Int? = nil, acked: UInt64, covered: UInt64, rootRecord: BinaryNodeRecord, shapes: BinaryShapeTable? = nil, lookup: @escaping (_RenderNode) -> BinaryNodeRecord?) {
-    self.shapes = shapes
+  package init(maxElementDepth: Int? = nil, acked: UInt64, covered: UInt64, rootRecord: BinaryNodeRecord, lookup: @escaping (_RenderNode) -> BinaryNodeRecord?) {
     self.maxElementDepth = maxElementDepth
     self.acked = acked
     self.covered = covered
@@ -82,23 +78,17 @@ package struct BinaryFiberEncoder {
     package var attrsRecords: Int
     package var childrenRecords: Int
     package var heldNodes: Int
-    /// Shapes defined by this publication, and subtrees it builds as shapes.
-    package var shapeDefinitions: Int
-    package var shapeInstances: Int
   }
 
-  /// Subtrees counted per publication for the shapes: a publication that builds more has the rest built in full.
-  private static let maximumShapePotentials = 4096
-
-  private static let headerLength = 28
+  private static let headerLength = 24
   /// Header flag 1: a reference publication follows the strings (see `encode`).
   private static let verifyFlag: UInt16 = 1
   /// Header flag 2: a record carries an element named for a view transition (`ViewTransitionNameModifier`). The page starts a
   /// view transition only for such a publication; every other publication is applied exactly as before.
   private static let transitionFlag: UInt16 = 2
   /// Header flag 4: the atoms follow the strings (a u32 byte count, then the atoms in index order, separated by NUL). The page
-  /// has no copy of its own; every publication carries them until the host acknowledges one, as shape definitions are carried,
-  /// so that whichever publication the host applies first it has them.
+  /// has no copy of its own; every publication carries them until the host acknowledges one, so that
+  /// whichever publication the host applies first it has them.
   private static let atomsFlag: UInt16 = 4
 
   /// Whether the host holds the tree already, so that a publication lists changes.
@@ -106,18 +96,16 @@ package struct BinaryFiberEncoder {
 
   /// `root` as a publication, or nil when an element the host holds would have to be written as another one where it now sits
   /// (see `Placement`): the publisher then encodes the whole tree, which holds no placeholder. `reference` is another
-  /// publication of the same tree, encoded whole for a host that holds nothing (`encode` of a fresh encoder with no shapes). It
+  /// publication of the same tree, encoded whole for a host that holds nothing (`encode` of a fresh encoder). It
   /// is appended after the strings for the page's verification mode (`window.__binaryVerify`), which builds it and compares the
   /// DOM it ends with. Flag 1 says it is there; it is a complete publication with its own header, so the page reads it as any
   /// other.
   package func encode(_ root: _RenderNode, reference: UnsafeBufferPointer<UInt8>? = nil) -> Output? {
-    shapes?.beginPublication()
     var engine = Engine(encoder: self)
     defer { engine.release() }
     engine.run(root)
     // The whole tree goes out instead: what the table says the host holds is not to be trusted.
-    if engine.needsFull { shapes?.reset(); return nil }
-    engine.useShapes()
+    if engine.needsFull { return nil }
     var out: [UInt8] = []
     let words = engine.words
     let strings = engine.strings.ownBytes
@@ -132,7 +120,6 @@ package struct BinaryFiberEncoder {
     if carriesAtoms { flags |= Self.atomsFlag }
     Self.append(flags, to: &out)
     Self.append(_BinaryFormat.atomsHash, to: &out)
-    Self.append(shapes?.generation ?? 0, to: &out)
     Self.append(UInt32(words.count), to: &out)
     Self.append(UInt32(engine.strings.ownCount), to: &out)
     Self.append(UInt32(strings.count), to: &out)
@@ -144,7 +131,7 @@ package struct BinaryFiberEncoder {
       out.append(contentsOf: UnsafeBufferPointer(start: atoms.utf8Start, count: atoms.utf8CodeUnitCount))
     }
     if let reference { out.append(contentsOf: reference) }
-    return Output(bytes: out, updates: engine.updates, rootRecord: engine.rootRecord, isRoot: !hostHoldsTree, attrsRecords: engine.attrsRecords, childrenRecords: engine.childrenRecords, heldNodes: engine.heldNodes, shapeDefinitions: engine.shapeDefinitions, shapeInstances: engine.shapeInstances)
+    return Output(bytes: out, updates: engine.updates, rootRecord: engine.rootRecord, isRoot: !hostHoldsTree, attrsRecords: engine.attrsRecords, childrenRecords: engine.childrenRecords, heldNodes: engine.heldNodes)
   }
 
   private static func append(_ value: UInt16, to out: inout [UInt8]) {
@@ -323,15 +310,6 @@ package struct BinaryFiberEncoder {
     let ownsState: Bool
     /// The table parts `Placement` opened around the element, closed after it.
     var wrappers = 0
-    /// For a shape (`BinaryShapeTable`): where the element's words start, the skeleton of what is below it so far, how many
-    /// elements it holds, whether a shape may stand for it, whether the last child was a text, and the subtrees below it that
-    /// a shape may stand for.
-    var start = 0
-    var skeleton: UInt64 = 0
-    var elements = 1
-    var shapeable = false
-    var lastWasText = false
-    var candidates: [BinaryShapePotential] = []
   }
 
   private struct Engine {
@@ -352,9 +330,6 @@ package struct BinaryFiberEncoder {
     /// Whether a record written here names an element for a view transition (see `transitionFlag`).
     var namedRecords = false
     var reasserted: [Item] = []
-    var shapeRoots: [BinaryShapePotential] = []
-    var shapePotentials = 0
-    var shapeDefinitions = 0, shapeInstances = 0
 
     init(encoder: BinaryFiberEncoder) {
       self.encoder = encoder
@@ -552,7 +527,6 @@ package struct BinaryFiberEncoder {
     /// Writes the list of nodes a cursor yields, and everything built inside them, as nodes. Returns the hash of the list.
     mutating func writeList(_ start: Cursor, chain: Int32, context: Context, topLevel: inout Int) -> UInt64 {
       let covered = encoder.covered
-      let shaping = encoder.shapes != nil
       var frames: [Frame] = [Frame(cursor: start, chain: chain, context: context, hash: BinaryHash.seed, item: nil, ownHash: 0, ownsState: false)]
       var result = BinaryHash.seed
       while !needsFull, let top = frames.indices.last {
@@ -562,10 +536,8 @@ package struct BinaryFiberEncoder {
             words.append(_BinaryFormat.opEnd)
             closeWrappers(frame.wrappers)
             updates.append((item.node, sentAgain(item.prior, idHash: item.idHash, ownHash: frame.ownHash, childrenHash: frame.hash, ownsState: frame.ownsState, covered: covered)))
-            if shaping { closeShape(frame, into: &frames[frames.count - 1]) }
           } else {
             result = frame.hash
-            shapeRoots.append(contentsOf: frame.candidates)
           }
           continue
         }
@@ -575,16 +547,11 @@ package struct BinaryFiberEncoder {
         case .text(let text):
           let place = textPlacement(text, parent: parentChain)
           if top == 0 { topLevel += 1 }
-          if !place.wrappers.isEmpty { frames[top].shapeable = false }
           _ = openWrappers(place, parent: parentChain)
           words.append(_BinaryFormat.opText)
           words.append(stringIndex(of: text, dropsNUL: true))
           closeWrappers(place.wrappers.count)
           frames[top].hash = BinaryHash.mix(BinaryHash.mix(frames[top].hash, 0x7465_7874), text)
-          // Two texts in a row are one text node, which a shape does not stand for.
-          if frames[top].lastWasText { frames[top].shapeable = false }
-          frames[top].lastWasText = true
-          frames[top].skeleton = BinaryHash.mix(frames[top].skeleton, 0x7465_7874)
         case .kept(let node):
           guard let handle = keep(node, context: parentContext, parent: parentChain) else { break }
           if top == 0 { topLevel += 1 }
@@ -596,7 +563,6 @@ package struct BinaryFiberEncoder {
           words.append(handle.generation)
           closeWrappers(place.wrappers.count)
           frames[top].hash = BinaryHash.mix(frames[top].hash, Self.word(handle))
-          frames[top].shapeable = false
         case .hidden:
           break
         case .element(let node, let isSpan, let flat, let facts):
@@ -604,16 +570,13 @@ package struct BinaryFiberEncoder {
           if place.flattens {
             // What the parser keeps of an element in an `option`: its text.
             let text = Self.text(of: node)
-            frames[top].shapeable = false
             if text.isEmpty { break }
             if top == 0 { topLevel += 1 }
             words.append(_BinaryFormat.opText)
             words.append(stringIndex(of: text, dropsNUL: true))
             frames[top].hash = BinaryHash.mix(BinaryHash.mix(frames[top].hash, 0x7465_7874), text)
-            frames[top].lastWasText = true
             break
           }
-          if !place.isPlain { frames[top].shapeable = false }
           let wrapped = openWrappers(place, parent: parentChain)
           let item = classify(node, isSpan: isSpan, flat: flat, place: place, context: parentContext, parentChain: wrapped, parentDepth: frames[top].cursor.depth)
           if top == 0 { topLevel += 1 }
@@ -625,80 +588,24 @@ package struct BinaryFiberEncoder {
             words.append(item.handle.generation)
             closeWrappers(place.wrappers.count)
             tasks.append(item)
-            frames[top].shapeable = false
             break
           }
           // Built here: its header, then its children.
-          frames[top].lastWasText = false
-          let start = words.count
           let hasHandle = item.handle != Self.noHandle
           words.append(item.elementContext == .html ? _BinaryFormat.opElement : _BinaryFormat.opElementNs)
           words.append(item.handle.index &+ 1)
           words.append(item.handle.generation)
           words.append(hasHandle ? descriptorIndex(of: item.node) : 0)
           if item.elementContext != .html { words.append(item.elementContext.rawValue) }
-          let tag = stringIndex(of: item.tag, dropsNUL: false)
-          words.append(tag)
+          words.append(stringIndex(of: item.tag, dropsNUL: false))
           let own = writeAttributes(item.node, isElement: !item.isSpan, facts: item.facts, extra: item.extra, dropsNodeID: hasHandle)
           let itemCursor = cursor(of: item)
           var frame = Frame(cursor: itemCursor, chain: item.chain, context: item.childContext, hash: BinaryHash.seed, item: item, ownHash: own.hash, ownsState: own.hostOwned)
           frame.wrappers = place.wrappers.count
-          if shaping {
-            frame.start = start
-            frame.shapeable = hasHandle && !own.hostOwned && !own.forbidsShape && item.facts & (BinaryParserFacts.hostOwned | BinaryParserFacts.specialText | BinaryParserFacts.neverBuilt) == 0
-            frame.skeleton = skeletonSeed(item: item, tag: tag, hasHandle: hasHandle)
-          }
           frames.append(frame)
         }
       }
       return result
-    }
-
-    /// What names an element's own part of a shape: its tag, its namespace, its attribute names in order and whether it has an id.
-    func skeletonSeed(item: Item, tag: UInt32, hasHandle: Bool) -> UInt64 {
-      var seed = BinaryHash.mix(BinaryHash.seed, UInt64(item.elementContext.rawValue))
-      seed = BinaryHash.mix(seed, strings.identity(of: tag))
-      let count = sink.pairs.count / 2
-      seed = BinaryHash.mix(seed, UInt64(count) << 1 | (hasHandle ? 1 : 0))
-      var index = 0
-      while index < count {
-        seed = BinaryHash.mix(seed, strings.identity(of: sink.pairs[index * 2]))
-        index += 1
-      }
-      return seed
-    }
-
-    /// An element's frame is done: tells the frame of its parent what is below it, and which subtrees a shape may stand for. Which
-    /// of them are chosen is for the end of the publication, when it is known how often each skeleton was met.
-    mutating func closeShape(_ frame: Frame, into parent: inout Frame) {
-      guard let table = encoder.shapes else { return }
-      parent.skeleton = BinaryHash.mix(parent.skeleton, frame.skeleton)
-      parent.elements += frame.elements
-      parent.shapeable = parent.shapeable && frame.shapeable
-      guard frame.shapeable else {
-        // Something in it is not for a shape, so nothing above it is: what is below it that is one stays one.
-        shapeRoots.append(contentsOf: frame.candidates)
-        return
-      }
-      // A subtree too small for a shape holds none; and a publication that builds this many subtrees is not counting them all.
-      guard frame.elements >= table.minimumElements else { return }
-      guard shapePotentials < BinaryFiberEncoder.maximumShapePotentials else {
-        parent.candidates.append(contentsOf: frame.candidates)
-        return
-      }
-      shapePotentials += 1
-      let key = BinaryHash.mix(frame.skeleton, UInt64(frame.elements))
-      table.touch(key)
-      parent.candidates.append(BinaryShapePotential(key: key, start: frame.start, end: words.count, children: frame.candidates))
-    }
-
-    /// Builds the subtrees that are shapes as `SHAPE` nodes, and carries the definitions the host may lack.
-    mutating func useShapes() {
-      guard let table = encoder.shapes, !shapeRoots.isEmpty || table.newestDefinition > encoder.acked else { return }
-      var assembler = BinaryShapeAssembler(strings: strings, table: table, covered: encoder.covered, acked: encoder.acked)
-      words = assembler.assemble(words, shapeRoots, defineAt: words.first == _BinaryFormat.opRoot ? 2 : 0)
-      shapeDefinitions = assembler.definitions
-      shapeInstances = assembler.instances
     }
 
     /// The string of an element's id after its index and generation: what tells it from the others the same fiber made.
@@ -731,14 +638,14 @@ package struct BinaryFiberEncoder {
     }
 
     /// Writes the attributes of `node` as a count and (name, value) pairs. Returns their hash.
-    mutating func writeAttributes(_ node: _RenderNode, isElement: Bool, facts: UInt32, extra: [(name: String, value: String)] = [], dropsNodeID: Bool) -> (hash: UInt64, hostOwned: Bool, forbidsShape: Bool) {
+    mutating func writeAttributes(_ node: _RenderNode, isElement: Bool, facts: UInt32, extra: [(name: String, value: String)] = [], dropsNodeID: Bool) -> (hash: UInt64, hostOwned: Bool) {
       if node.styles["view-transition-name"] != nil { namedRecords = true }
       sink.dropsNodeID = dropsNodeID
       let result = assemble(node, isElement: isElement, facts: facts, extra: extra, collects: true)
       sink.dropsNodeID = false
       words.append(UInt32(sink.pairs.count / 2))
       words.append(contentsOf: sink.pairs)
-      return (result.hash, result.hostOwned, sink.forbidsShape)
+      return (result.hash, result.hostOwned)
     }
 
     func stringIndex(of string: String, dropsNUL: Bool) -> UInt32 {
@@ -1013,8 +920,6 @@ struct BinaryAttributeSink: HTMLAttributeSink {
   var hash = BinaryHash.seed
   /// Set before assembling: the node id is not collected, because the element's handle and descriptor carry it.
   var dropsNodeID = false
-  /// Set while collecting: the element holds something a shape cannot stand for (see `BinaryShapeTable`).
-  var forbidsShape = false
   private var collects = true
   private var name: UInt32 = 0
   /// Whether the value being assembled is unique to the element (its node id, its event token): it is not looked up.
@@ -1029,7 +934,6 @@ struct BinaryAttributeSink: HTMLAttributeSink {
   mutating func start(collects: Bool) {
     self.collects = collects
     hash = BinaryHash.seed
-    forbidsShape = false
     pairs.removeAll(keepingCapacity: true)
   }
 
@@ -1068,8 +972,6 @@ struct BinaryAttributeSink: HTMLAttributeSink {
     hash = BinaryHash.mix(hash, 0x01)
     guard collects else { return }
     if name == BinaryAttributeSink.nodeIDAtom && dropsNodeID { return }
-    if name == BinaryAttributeSink.hoverRulesAtom || name == BinaryAttributeSink.webMountAtom || name == BinaryAttributeSink.domViewAtom { forbidsShape = true }
-    if name == BinaryAttributeSink.hostManagedAtom && value.count >= 9 && value.base[0] == UInt8(ascii: "*") && value.base[1] == UInt8(ascii: "c") { forbidsShape = true }
     pairs.append(name)
     pairs.append(unique ? strings.appendUnique(value.base, count: value.count) : strings.intern(value.base, count: value.count))
   }
@@ -1112,8 +1014,4 @@ struct BinaryAttributeSink: HTMLAttributeSink {
   /// The indices of the attributes whose values are never shared between elements.
   private static let nodeIDAtom: UInt32 = BinaryAtomTable.shared.index(of: "data-embedded-node-id")
   private static let eventIDAtom: UInt32 = BinaryAtomTable.shared.index(of: "data-embedded-event-id")
-  private static let hoverRulesAtom: UInt32 = BinaryAtomTable.shared.index(of: "data-hover-rules")
-  private static let webMountAtom: UInt32 = BinaryAtomTable.shared.index(of: "data-web-mount-key")
-  private static let domViewAtom: UInt32 = BinaryAtomTable.shared.index(of: "data-dom-view")
-  private static let hostManagedAtom: UInt32 = BinaryAtomTable.shared.index(of: "data-host-managed")
 }

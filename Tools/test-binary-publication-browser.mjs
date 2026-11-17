@@ -26,7 +26,7 @@ await runSuite(async () => {
     const page = await browser.newPage();
     await page.goto(`${server.base}/binary-publication.js`);
     const results = await page.evaluate(async ({ base, fixtures }) => {
-      const { readPublication, Builder, Handles, Templates, scanRecords, compareDom, BinaryFormatError, installAtoms } = await import(`${base}/binary-publication.js`);
+      const { readPublication, Builder, Handles, scanRecords, compareDom, BinaryFormatError, installAtoms } = await import(`${base}/binary-publication.js`);
       const { BINARY_ATOMS, BINARY_OPS } = await import(`${base}/binary-atoms.generated.js`);
       // Fixtures that are updates carry no atoms (Swift sends them until the page acknowledges a publication).
       installAtoms(BINARY_ATOMS);
@@ -56,7 +56,7 @@ await runSuite(async () => {
       const records = [];
       const check = (name, ok, detail = "") => records.push({ name, ok, detail });
       {
-        const { ROOT, ATTRS, CHILDREN, HELD, ELEMENT, ELEMENT_NS, TEXT, SHAPE, DEFINE, END } = BINARY_OPS;
+        const { ROOT, ATTRS, CHILDREN, HELD, ELEMENT, ELEMENT_NS, TEXT, END } = BINARY_OPS;
         const own = [];
         const str = (text) => { const atom = BINARY_ATOMS.indexOf(text); if (atom >= 0) return atom; let at = own.indexOf(text); if (at < 0) at = own.push(text) - 1; return BINARY_ATOMS.length + at; };
         const publication = (words) => ({ words: Uint32Array.from(words), strings: BINARY_ATOMS.concat(own), reference: null });
@@ -121,44 +121,15 @@ await runSuite(async () => {
         check("attributes of an SVG element are built in its namespace", foreign.namespaceURI === "http://www.w3.org/2000/svg" && foreign.getAttribute("clipPathUnits") === "objectBoundingBox" && foreign.getAttributeNS("http://www.w3.org/1999/xlink", "href") === "#a");
       }
       {
-        const { ROOT, CHILDREN, HELD, ELEMENT, TEXT, SHAPE, DEFINE, END } = BINARY_OPS;
-        const own = [];
-        const str = (text) => { const atom = BINARY_ATOMS.indexOf(text); if (atom >= 0) return atom; let at = own.indexOf(text); if (at < 0) at = own.push(text) - 1; return BINARY_ATOMS.length + at; };
-        const publication = (words, generation = 0) => ({ words: Uint32Array.from(words), strings: BINARY_ATOMS.concat(own), reference: null, generation });
-        const attributes = (pairs) => [pairs.length, ...pairs.flatMap(([name, value]) => [str(name), str(value)])];
-        const anonymous = (tag, pairs, ...children) => [ELEMENT, 0, 0, str(""), str(tag), ...attributes(pairs), ...children.flat(), END];
-        const text = (value) => [TEXT, str(value)];
-        // A template: <li data-n="0" class="a"><span title="x">t</span><b></b></li>, three elements and two texts' worth of values.
-        const definition = [DEFINE, 7, ...anonymous("li", [["class", "a"], ["data-n", "0"]], anonymous("span", [["title", "x"]], text("t")), anonymous("b", []))];
-        const templates = new Templates();
-        const handles = new Handles();
-        const shape = (id, entries, fills) => [SHAPE, id, entries.length, ...entries.flatMap(([index, generation, descriptor]) => [index + 1, generation, str(descriptor)]), fills.length, ...fills.flatMap(([slot, value]) => [slot, str(value)])];
-        // Two rows built from it: the first changes the class and the text, the second changes nothing but the handles.
-        const words = [ROOT, 2, ...definition, ...shape(7, [[10, 1, "row"], [11, 1, ""], [12, 3, "x"]], [[0, "b"], [3, "other"]]), ...shape(7, [[20, 1, ""], [21, 1, ""], [22, 1, ""]], [])];
-        const root = new Builder(publication(words), inert(), handles, templates).buildRoot();
-        const rows = [...root.childNodes];
-        check("a definition builds a template and a shape builds from it", rows.length === 2 && rows[0].localName === "li" && rows[0].getAttribute("class") === "b" && rows[0].firstChild.firstChild.nodeValue === "other"
-          && rows[1].getAttribute("class") === "a" && rows[1].firstChild.firstChild.nodeValue === "t" && rows[1].getAttribute("data-n") === "0" && rows[0].children.length === 2, rows.map((row) => row.outerHTML).join(" "));
-        check("a shape registers its elements and gives them their ids", rows[0].getAttribute("data-embedded-node-id") === "10:1:row" && rows[0].lastChild.getAttribute("data-embedded-node-id") === "12:3:x"
-          && handles.lookup(11, 1) === rows[0].firstChild && handles.lookup(22, 1) === rows[1].lastChild && rows[1].getAttribute("data-embedded-node-id") === "20:1:");
-        check("the template is not in the page and is not changed by its instances", templates.map.get(7).root.getAttribute("class") === "a" && templates.map.get(7).root.getAttribute("data-embedded-node-id") === null && templates.map.get(7).root.firstChild.firstChild.nodeValue === "t");
-        // In a list of children, a definition is not a node, and a shape is one.
-        const update = publication([CHILDREN, 0, 0, ...shape(7, [[30, 1, ""], [31, 1, ""], [32, 1, ""]], [[1, "9"]]), END]);
-        const scanned = scanRecords(update);
-        check("the records of a list that holds a shape are split", scanned.records.length === 1);
-        const list = new Builder(update, inert(), handles, templates).readList(scanned.records[0].position, -1, document.body);
-        check("a list builds a shape as one node", list.nodes.length === 1 && list.nodes[0].getAttribute("data-n") === "9");
-        const missing = new Builder(publication([CHILDREN, 0, 0, ...shape(99, [[40, 1, ""]], []), END]), inert(), handles, templates);
-        missing.readList(3, -1, document.body);
-        check("a shape the page does not have is missing", missing.missing);
-        templates.adopt(1);
-        const forgotten = new Builder(update, inert(), handles, templates);
-        forgotten.readList(3, -1, document.body);
-        check("a new generation makes the page forget its templates", forgotten.missing && templates.map.size === 0);
-        let wrong = false;
-        templates.adopt(1);
-        try { new Builder(publication([ROOT, 1, ...definition, ...shape(7, [[50, 1, ""]], [])], 1), inert(), handles, templates).buildRoot(); } catch (error) { wrong = error instanceof BinaryFormatError; }
-        check("a shape of another size than its template is refused", wrong);
+        const { ROOT, ELEMENT, END } = BINARY_OPS;
+        const publication = (words) => ({ words: Uint32Array.from(words), strings: BINARY_ATOMS.concat([""]), reference: null });
+        // 20 and 21 were the shapes' ops (SHAPE, DEFINE): the format has none any more, and a stream that holds one is refused.
+        for (const op of [20, 21]) {
+          let refused = false;
+          try { new Builder(publication([ROOT, 1, op, 0, 0, END]), inert(), new Handles()).buildRoot(); } catch (error) { refused = error instanceof BinaryFormatError; }
+          check(`the retired op ${op} is refused`, refused);
+        }
+        check("an element is still built after the shapes left", new Builder(publication([ROOT, 1, ELEMENT, 0, 0, BINARY_ATOMS.length, BINARY_ATOMS.indexOf("div"), 0, END]), inert(), new Handles()).buildRoot().firstChild?.localName === "div");
       }
       // A stream the page cannot read is refused, not misread.
       const refusals = [];
