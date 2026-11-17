@@ -94,8 +94,13 @@ export function installRecorder(readyCondition) {
       state.readyAt = settle();
       presented(state.inFrame, (timestamp) => { state.readyFrameAt = timestamp; });
       state.readyNodes = document.getElementsByTagName("*").length;
-      state.readyBytes = [performance.getEntriesByType("navigation"), performance.getEntriesByType("resource")]
-        .flat().reduce((sum, entry) => sum + (entry.encodedBodySize || 0), 0);
+      // Each file counts once: a module the page and its worker both import (a shared chunk) has two resource entries,
+      // the second answered from the memory cache, but crossed the network once.
+      const bytesByURL = new Map();
+      for (const entry of [performance.getEntriesByType("navigation"), performance.getEntriesByType("resource")].flat()) {
+        bytesByURL.set(entry.name, Math.max(bytesByURL.get(entry.name) || 0, entry.encodedBodySize || 0));
+      }
+      state.readyBytes = [...bytesByURL.values()].reduce((sum, bytes) => sum + bytes, 0);
       readyObserver.disconnect();
     }
   });

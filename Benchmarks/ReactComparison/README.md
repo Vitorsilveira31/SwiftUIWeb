@@ -65,6 +65,11 @@ plain React column for what virtualization buys React, and against SwiftUIWeb fo
 - **Warm load.** After the scenario, the same address is loaded again in the same browser context. The HTTP cache holds the
   first visit's files, so the second visit fetches only `index.html` (revalidated) and nothing else: both sides' scripts and
   styles are content-hashed and served with a one-year `immutable` cache header. It is read the way the cold load is.
+- **Transferred to show the board.** The compressed body bytes (`encodedBodySize`) of the page and of every file its
+  timeline has fetched when the board is on screen, each address once (the page and its worker import one shared chunk,
+  which appears twice but crosses the network once). Files the worker fetches itself are on the worker's timeline, not
+  the page's: SwiftUIWeb's `app.wasm` is fetched by the page and counted, while `app-rest.wasm`, which the worker fetches
+  after the first screen, is not.
 - **Slow 4G.** `--network slow4g` measures the cold load under `Network.emulateNetworkConditions`: 1.6 Mbps down (Chromium's
   Fast 3G bandwidth), 750 kbps up and a 150 ms round trip, added to each request. Chromium applies these conditions to the
   page's workers too: a 400 KB fetch made by a worker takes 2.16 s under them, against 2 ms without, so SwiftUIWeb's Swift
