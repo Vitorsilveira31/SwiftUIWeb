@@ -23,10 +23,10 @@ async function result(name, fn) {
   }
 }
 
-async function module(page, path, names, globalName, prefix = "") {
+async function module(page, path, names, globalName, prefix = "", edit = (code) => code) {
   let code = readFileSync(join(ROOT, path), "utf8");
   code = code.replace(/^import .*?;\s*$/gm, "");
-  code = code.replace(/\bexport\s+(?=(?:async\s+)?(?:function|class)\b|(?:const|let|var)\b)/g, "");
+  code = edit(code.replace(/\bexport\s+(?=(?:async\s+)?(?:function|class)\b|(?:const|let|var)\b)/g, ""));
   await page.addScriptTag({ content: `globalThis.${globalName}=(()=>{\n${prefix}\n${code}\nreturn {${names.join(",")}};\n})();` });
 }
 
@@ -47,7 +47,11 @@ await runSuite(async () => {
     await module(page, "Tools/showcase-host.js", ["mountShowcaseHost"], "Docs");
     await module(page, "Tools/css-layout.js", ["CssLayout"], "CssLayoutModule");
     await module(page, "Tools/layout-host.js", ["SemanticLayoutHost", "ownsLayoutStyle", "ownsLayoutAttribute"], "Layout");
-    await module(page, "Tools/host-interactions.js", ["FocusCoordinator", "ScrollCoordinator", "PresentationCoordinator", "KeyboardShortcutCoordinator", "HistoryCoordinator", "NativeDragDropCoordinator", "shareContent", "moveFiles", "reopenMovedFile"], "Interactions");
+    await module(page, "Tools/host-interactions.js", ["FocusCoordinator", "ScrollCoordinator", "KeyboardShortcutCoordinator", "HistoryCoordinator"], "Interactions");
+    // The coordinators embedded-dom.js loads after the first screen (deferred-hosts.js), under the same global.
+    await module(page, "Tools/presentation-host.js", ["PresentationCoordinator"], "InteractionsPresentation");
+    await module(page, "Tools/transfer-host.js", ["NativeDragDropCoordinator", "shareContent", "moveFiles", "reopenMovedFile"], "InteractionsTransfer");
+    await page.evaluate(() => Object.assign(Interactions, InteractionsPresentation, InteractionsTransfer));
     const topics = ["", "layout", "state", "themes", "responsive", "components", "forms", "collections", "navigation", "presentation", "advanced"]
       .map((name) => `<button data-docs-part="topic" data-docs-route="/${name}"` + (name === "layout" ? ' aria-current="page"' : "") + `>${capitalize(name)}</button>`).join("");
     const cards = Array.from({ length: 12 }, (_, i) => `<section data-docs-part="example"><h2 data-docs-part="example-title">Example ${i}</h2><div data-docs-part="preview"><p>Real documentation host CSS, without changing demo layout.</p></div></section>`).join("");
@@ -233,6 +237,7 @@ await runSuite(async () => {
     await module(page, "Tools/tab-shell.js", ["AdaptiveTabShell"], "TabShell");
     await module(page, "Tools/first-paint-host.js", ["takeFirstPaint"], "FirstPaint");
     await module(page, "Tools/geometry-host.js", ["GeometryHost", "measurementPayload"], "Geometry");
+    await module(page, "Tools/text-layout-host.js", ["textLayoutPayload", "paintKey", "clearFontMetrics"], "TextLayout");
     await module(page, "Tools/event-value.js", ["writeEventValue", "readSecureBytes", "readSecureIDs", "concatBytes"], "EventValue");
     await module(page, "Tools/media-host.js", ["MediaHost"], "Media");
     await module(page, "Tools/split-view-host.js", ["SplitViewHost"], "SplitView");
@@ -244,7 +249,9 @@ await runSuite(async () => {
     await module(page, "Tests/EmbeddedUI/binary-root.js", ["binaryRoot"], "BinaryRoot",
       "const {BINARY_VERSION,BINARY_ATOMS_HASH,BINARY_OPS,BINARY_NAMESPACES,BINARY_ATOMS}=BinaryAtoms;");
     await module(page, "Tools/embedded-dom.js", ["mountEmbeddedBrowser"], "DOM",
-      "const {BINARY_OPS}=BinaryAtoms;const {CssLayout}=CssLayoutModule;const {writeEventValue,readSecureBytes,concatBytes}=EventValue;const {MediaHost}=Media;const {SplitViewHost}=SplitView;const {TransitionHost,ScrollTransitionHost,MatchedGeometryHost,matchViewTransitionGeometry}=Transitions;const {GeometryHost}=Geometry;const {SemanticLayoutHost,ownsLayoutStyle,ownsLayoutAttribute}=Layout;const {FocusCoordinator,ScrollCoordinator,PresentationCoordinator,KeyboardShortcutCoordinator,HistoryCoordinator,NativeDragDropCoordinator,shareContent,moveFiles}=Interactions;const {AdaptiveTabShell}=TabShell;const {takeFirstPaint}=FirstPaint;const {BinaryBuffer,BinaryFormatError,Builder,Handles,Templates,isEmptyUpdate,sameBinary,readPublication,rootHoverRules,scanRecords,compareDom}=BinaryPublication;");
+      "const {BINARY_OPS}=BinaryAtoms;const {CssLayout}=CssLayoutModule;const {writeEventValue,readSecureBytes,concatBytes}=EventValue;const {MediaHost}=Media;const {SplitViewHost}=SplitView;const {TransitionHost,ScrollTransitionHost,MatchedGeometryHost,matchViewTransitionGeometry}=Transitions;const {GeometryHost}=Geometry;const {SemanticLayoutHost,ownsLayoutStyle,ownsLayoutAttribute}=Layout;const {FocusCoordinator,ScrollCoordinator,PresentationCoordinator,KeyboardShortcutCoordinator,HistoryCoordinator,NativeDragDropCoordinator,shareContent,moveFiles}=Interactions;const {AdaptiveTabShell}=TabShell;const {takeFirstPaint}=FirstPaint;const {BinaryBuffer,BinaryFormatError,Builder,Handles,Templates,isEmptyUpdate,sameBinary,readPublication,rootHoverRules,scanRecords,compareDom}=BinaryPublication;",
+      // The import() of the hosts the first screen does not run resolves to the modules loaded above.
+      (code) => code.replace("import(new URL('./deferred-hosts.js', import.meta.url).href)", "Promise.resolve({...Interactions, ...TextLayout})"));
     await result("geometry host: coordinate-space records, scroll-driven position updates and resize changes", () => page.evaluate(async () => {
       document.body.innerHTML = '<div id="groot"><div id="scroller" class="scroll-view scroll-vertical" data-coordinate-space="scroll" style="height:100px;overflow:auto;border:2px solid"><div style="height:40px"></div><div id="reader" data-geometry-reader="true" data-geometry-position="true" data-embedded-event-id="7" data-embedded-events="geometry" style="height:30px"></div><div id="size" data-geometry-reader="true" data-embedded-event-id="8" data-embedded-events="geometry" style="height:20px"></div><div id="change" data-geometry-change="1" data-embedded-event-id="9" data-embedded-events="geometryChange" style="height:10px"></div><div style="height:600px"></div></div></div>';
       const frames = (n) => new Promise((r) => { const step = () => --n <= 0 ? r() : requestAnimationFrame(step); requestAnimationFrame(step); });

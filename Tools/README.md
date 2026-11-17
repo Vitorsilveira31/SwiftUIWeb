@@ -33,9 +33,9 @@ flowchart TB
 
 | Group | Files | What they do |
 |---|---|---|
-| Runtime and DOM | `embedded-runtime.js`, `embedded-dom.js`, `embedded-worker.js`, `embedded-worker-client.js`, `binary-publication.js`, `build-runtime-bundle.mjs` | Start the WebAssembly app, run it in a Worker, and apply the binary patches Swift sends to the DOM. `build-runtime-bundle.mjs` builds the runtime and the worker with one shared chunk, and leaves out of a release the hosts it does not reach. |
-| Layout | `css-layout.js`, `layout-host.js`, `geometry-host.js` | Turn the layout intent Swift describes into flexbox and grid styles, and report measured sizes back. |
-| Browser features | `media-host.js`, `host-interactions.js`, `split-view-host.js`, `tab-shell.js`, `feature-loader.js`, `mesh-gradient.js` | One host per feature (media playback, drag and drop, split views, tabs, features loaded on demand). |
+| Runtime and DOM | `embedded-runtime.js`, `embedded-dom.js`, `embedded-worker.js`, `embedded-worker-client.js`, `binary-publication.js`, `build-runtime-bundle.mjs` | Start the WebAssembly app, run it in a Worker, and apply the binary patches Swift sends to the DOM. `build-runtime-bundle.mjs` builds the runtime and the worker with one shared chunk, puts the page hosts the first screen does not run in `runtime-deferred.js` (`deferred-hosts.js`, loaded right after the first publication), and leaves out of a release the hosts it does not reach. |
+| Layout | `css-layout.js`, `layout-host.js`, `geometry-host.js`, `text-layout-host.js` | Turn the layout intent Swift describes into flexbox and grid styles, and report measured sizes back. |
+| Browser features | `media-host.js`, `host-interactions.js`, `presentation-host.js`, `transfer-host.js`, `split-view-host.js`, `tab-shell.js`, `feature-loader.js`, `mesh-gradient.js` | One host per feature (media playback, drag and drop, split views, tabs, features loaded on demand). |
 | BrowserIO | [`BrowserIO/`](BrowserIO) | The JavaScript half of the Swift-to-browser bridge (fetch, IndexedDB, cookies, text, predicates) and its own host tests. |
 
 ## Build, launch and serve

@@ -31,7 +31,10 @@ it lets Swift keep unchanged subtrees out of later publications.
 `Tools/build-runtime-bundle.mjs` builds the page's runtime (`index.js`) and the worker (`render-worker.js`) together,
 with code splitting: the modules both run (the host core, BrowserIO, the WASI host) are one chunk, `runtime-shared.js`,
 that both import, so the worker downloads only its own entry. The worker is a module worker; `index.html` preloads the
-chunk next to `index.js`.
+chunk next to `index.js`. A third entry, `runtime-deferred.js` (`Tools/deferred-hosts.js`), holds the page hosts the first
+screen does not run (the presentation coordinator, drag and drop, sharing, the file mover, the text layout of a
+`TextRenderer`): the DOM host requests it with `import()` as soon as the first publication is on screen, and nothing
+announces it before.
 
 ## Differences from the main-thread mode
 

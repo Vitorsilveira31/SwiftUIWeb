@@ -21,7 +21,7 @@ This is the runtime contract for the canonical Embedded Swift + browser host. `s
 | `lazyCollections` | **supported** | `Sources/SwiftUIWebFiber/LazyLayout.swift`, `Tools/embedded-dom.js` |
 | `geometry` | **supported** | `Sources/SwiftUIWebCore/Geometry.swift`, `Sources/SwiftUIWebCore/GeometryMeasurement.swift`, `Tools/geometry-host.js`, `Tools/layout-host.js`, `Tools/test-geometry-browser.mjs` |
 | `navigation` | **supported** | `Sources/SwiftUIWebCore/Navigation.swift`, `Tools/host-interactions.js` |
-| `dragDrop` | **supported** | `Sources/SwiftUIWebCore/DragDrop.swift`, `Tools/host-interactions.js` |
+| `dragDrop` | **supported** | `Sources/SwiftUIWebCore/DragDrop.swift`, `Tools/transfer-host.js` |
 | `networking` | **supported** | `Sources/SwiftUIWebNetworking/Networking.swift`, `Tools/BrowserIO/browser-io.mjs` |
 | `storage` | **supported** | `Sources/SwiftUIWebBrowser/WebStorage.swift`, `Tools/BrowserIO/browser-io.mjs` |
 | `containerRelativeFrame` | **supported** | `Sources/SwiftUIWebFeatures/ContainerRelativeFrame.swift`, `Tools/css-layout.js` |
@@ -32,7 +32,7 @@ This is the runtime contract for the canonical Embedded Swift + browser host. `s
 | `animatedShapeTrim` | **supported** | `Sources/SwiftUIWebCore/Modifiers.swift`, `Tools/embedded-dom.js` |
 | `sensoryFeedbackNoOp` | **no-op** | `Sources/SwiftUIWebCore/TextAndSymbolModifiers.swift` |
 | `keyboardShortcuts` | **supported** | `Sources/SwiftUIWebCore/KeyboardShortcut.swift`, `Sources/SwiftUIWebCore/KeyPress.swift`, `Tools/host-interactions.js`, `Tools/embedded-dom.js` |
-| `presentationDetents` | **supported** | `Sources/SwiftUIWebFeatures/PresentationDetents.swift`, `Tools/host-interactions.js` |
+| `presentationDetents` | **supported** | `Sources/SwiftUIWebFeatures/PresentationDetents.swift`, `Tools/presentation-host.js` |
 | `controlStyles` | **supported** | `Sources/SwiftUIWebCore/PickerSegmented.swift`, `Sources/SwiftUIWebCore/ToggleStyles.swift`, `Sources/SwiftUIWebCore/ButtonPressState.swift` |
 | `optionalTintNoOp` | **no-op** | `Sources/SwiftUIWebCore/MissingFeatures.swift` |
 | `nativeFoundation` | **unsupported** | `Sources/WebFoundation` |
