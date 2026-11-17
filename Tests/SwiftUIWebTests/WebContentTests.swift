@@ -354,4 +354,26 @@ final class WebContentTests {
     _expectEqual(model.navigationState.loadState, .failed)
     _expectNotNil(model.navigationState.error)
   }
+
+  @Test
+  func inlineDocumentBaseGoesAfterLeadingWhitespaceAndDoctype() {
+    let base = URL(string: "https://app.example.test/start")!
+    let model = WebContentModel(.html("  \n<!doctype html><p>Doc</p>", baseURL: base))
+    let html = StaticHTMLFiberRenderer().renderNode(FiberTree(WebContentView(model: model)).renderNode)
+    _expectTrue(
+      html.contains("&lt;!doctype html&gt;&lt;base href=&quot;https://app.example.test/start&quot;&gt;"),
+      html
+    )
+  }
+
+  @Test
+  func inlineDocumentBaseOpensBeforeACommentThatNeverCloses() {
+    let base = URL(string: "https://app.example.test/start")!
+    let model = WebContentModel(.html("<!-- never closed <p>Doc</p>", baseURL: base))
+    let html = StaticHTMLFiberRenderer().renderNode(FiberTree(WebContentView(model: model)).renderNode)
+    _expectTrue(
+      html.contains("&lt;base href=&quot;https://app.example.test/start&quot;&gt;&lt;!-- never closed"),
+      html
+    )
+  }
 }

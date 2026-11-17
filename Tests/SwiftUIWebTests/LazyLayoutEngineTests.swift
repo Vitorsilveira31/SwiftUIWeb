@@ -158,4 +158,12 @@ struct LazyLayoutEngineTests {
     _expectLessThan(plan.range.count, 30)
     _expectEqual(plan.totalExtent, layout.totalExtent)
   }
+
+  @Test
+  func indexAtAnOffsetRoundingToTheTotalReadsTheLastRow() {
+    // Two 1e20-point rows: the clamped target rounds to the total, so no running sum passes it.
+    let layout = _LazyLayoutEngine(axis: .vertical, count: 2, estimatedExtent: 1e20, overscan: 0)
+    _expectEqual(layout.totalExtent, 2e20)
+    _expectEqual(layout.index(at: 1e300), 1)
+  }
 }

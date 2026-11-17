@@ -217,4 +217,12 @@ struct StructuralArenaTests {
     _expectFalse(a.isLive(child))
     _expectEqual(failure { try a.setChildren(of: parent, to: [child]) }, .stale)
   }
+
+  @Test
+  func packedNodeIDKeepsGenerationAboveIndexAndRoundTrips() {
+    let id = StructuralNodeID(index: 0xDEAD_BEEF, generation: 7)
+    _expectEqual(id.packed, (UInt64(7) << 32) | 0xDEAD_BEEF)
+    _expectEqual(StructuralNodeID(packed: id.packed), id)
+    _expectEqual(StructuralNodeID(packed: 0x0000_0003_0000_0002), StructuralNodeID(index: 2, generation: 3))
+  }
 }

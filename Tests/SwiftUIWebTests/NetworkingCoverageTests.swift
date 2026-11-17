@@ -172,4 +172,64 @@ private final class QuietDownloadDelegate: URLSessionDownloadDelegate {
   }
   }
 }
+
+@Suite(.serialized, .processGlobalState) struct URLSessionWithoutDelegateCoverageTests {
+  private let url = URL(string: "https://example.test/resource")!
+
+  @Test func dataFromURLWithoutDelegateReturnsTheTransportBody() async throws {
+    defer { resetNetworkHooks() }
+    resetNetworkHooks()
+    NetworkRuntime.install { request in (Data("hello".utf8), HTTPURLResponse(url: request.url!, statusCode: 200)) }
+
+    // `data(from:)` without a delegate is a disfavored overload: a call picks `data(from:delegate:)`, a reference this one.
+    let call: (URL) async throws -> (Data, URLResponse) = directSession().data(from:)
+    let (data, response) = try await call(url)
+    #expect(data == Data("hello".utf8))
+    #expect((response as? HTTPURLResponse)?.statusCode == 200)
+  }
+
+  @Test func dataForRequestWithoutDelegateReturnsTheTransportBody() async throws {
+    defer { resetNetworkHooks() }
+    resetNetworkHooks()
+    NetworkRuntime.install { request in (Data("body".utf8), HTTPURLResponse(url: request.url!, statusCode: 203)) }
+
+    let call: (URLRequest) async throws -> (Data, URLResponse) = directSession().data(for:)
+    let (data, response) = try await call(URLRequest(url: url))
+    #expect(data == Data("body".utf8))
+    #expect((response as? HTTPURLResponse)?.statusCode == 203)
+  }
+
+  @Test func uploadWithoutDelegateHandsTheBodyToTheTransport() async throws {
+    defer { resetNetworkHooks() }
+    resetNetworkHooks()
+    final class SentBody: @unchecked Sendable { var data: Data? }
+    let sent = SentBody()
+    NetworkRuntime.install { request in
+      sent.data = request.httpBody
+      return (Data("stored".utf8), HTTPURLResponse(url: request.url!, statusCode: 201))
+    }
+    var request = URLRequest(url: url)
+    request.httpMethod = "POST"
+
+    let call: (URLRequest, Data) async throws -> (Data, URLResponse) = directSession().upload(for:from:)
+    let (data, response) = try await call(request, Data("payload".utf8))
+    #expect(sent.data == Data("payload".utf8))
+    #expect(data == Data("stored".utf8))
+    #expect((response as? HTTPURLResponse)?.statusCode == 201)
+  }
+
+  @Test func requestWithAnEmptyURLFailsAsBadURL() async {
+    defer { resetNetworkHooks() }
+    resetNetworkHooks()
+    // `URL(string:)` rejects "", so the empty URL is built as written.
+    do {
+      _ = try await directSession().data(for: URLRequest(url: URL("")))
+      Issue.record("expected a bad URL error")
+    } catch let error as URLError {
+      #expect(error.code == .badURL)
+    } catch {
+      Issue.record("unexpected error: \(error)")
+    }
+  }
+}
 #endif
