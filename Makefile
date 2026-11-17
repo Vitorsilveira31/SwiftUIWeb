@@ -342,7 +342,7 @@ help:
 	@echo "  make geometry-browser-test     GeometryReader/onGeometryChange/coordinate spaces in Chromium"
 	@echo "Wasm size and Embedded diagnostics"
 	@echo "  make wasm-audit BUNDLE=...      Audit exact sections and local asset sizes"
-	@echo "  make wasm-budget BUNDLE=...     Require local runtime payload < 3,000,000 Brotli bytes"
+	@echo "  make wasm-budget BUNDLE=...     Report the local runtime payload against the 3,000,000 Brotli-byte target"
 	@echo "  make embedded-preflight         Probe the actual compiler; not an application build"
 	@echo "  make embedded-core-check WASM_SDK=...   Attempt the actual Core with an Embedded SDK"
 	@echo "  make lowering-test             Golden, idempotence and real Embedded lowering fixture"

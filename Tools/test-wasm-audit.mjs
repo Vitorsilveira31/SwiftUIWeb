@@ -127,7 +127,7 @@ test("a whole run writes the JSON and Markdown reports and the size gate", () =>
   assert.equal(report.modules[0].path, "app.wasm");
   assert.equal(report.modules[0].link_attribution, null);
   assert.equal(report.size_gate.limit_exclusive_bytes, 1000000);
-  assert.ok(["PASS_LOCAL_ONLY", "UNMEASURED"].includes(report.size_gate.status));
+  assert.ok(["WITHIN_TARGET", "UNMEASURED"].includes(report.size_gate.status));
   // The report's layout: two-space indent, sorted keys, no trailing newline.
   const text = readFileSync(output, "utf8");
   assert.ok(text.startsWith('{\n  "brotli_quality": 5,\n  "compression_profiles": {\n    "7z_ultra": {\n      "delivery": false,'));
