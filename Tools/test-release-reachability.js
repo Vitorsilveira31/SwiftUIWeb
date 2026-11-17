@@ -279,10 +279,43 @@ function main() {
       ]);
       return JSON.parse(fs.readFileSync(out, "utf8"));
     };
-    const draggable = planFor("Draggable", "import SwiftUIWeb\nstruct V: View { let item: Item\n var body: some View { Text(\"a\").draggable(item) } }\n");
+    // The browser hosts a release leaves out of its JavaScript (Tools/build-runtime-bundle.mjs): a plain app reaches none,
+    // and each construct below brings its host back from consumer code alone.
+    const plain = planFor("PlainHosts", "import SwiftUIWeb\nstruct V: View { @State var n = 0\n var body: some View { VStack { Text(\"\\(n)\"); Button(\"Add\") { n += 1 } } } }\n");
+    for (const feature of ["motion", "media", "splitViews", "predicates", "navigation", "dragDrop"]) {
+      assert(plain.features[feature] === false, `a plain app reached the '${feature}' host`);
+    }
+    const hostCases = [
+      ["motion", "Text(\"a\").animation(.default, value: n)"],
+      ["motion", "Button(\"a\") { withAnimation { n += 1 } }"],
+      ["motion", "Text(\"a\").transition(.opacity)"],
+      ["motion", "Text(\"a\").sheet(isPresented: $shown) { Text(\"b\") }"],
+      ["motion", "Text(\"a\").alert(\"t\", isPresented: $shown) { }"],
+      ["motion", "Image(systemName: \"star\").symbolEffect(.bounce, value: n)"],
+      ["motion", "Text(\"a\").accessibilityAddTraits(.updatesFrequently)"],
+      ["motion", "NavigationStack { Text(\"a\") }"],
+      ["media", "VideoPlayer(player: player)"],
+      ["media", "Text(\"a\").onAppear { AVAudioPlayer().play() }"],
+      ["splitViews", "HSplitView { Text(\"a\"); Text(\"b\") }"],
+      ["predicates", "Text(\"\\(NSPredicate(format: \"age > 3\"))\")"],
+      ["navigation", "TabView { Text(\"a\") }.tabViewStyle(.sidebarAdaptable)"],
+      ["dragDrop", "Text(\"a\").onDrop(of: [], isTargeted: nil) { _ in true }"],
+    ];
+    hostCases.forEach(([feature, body], index) => {
+      const reached = planFor(`Host${index}`, `import SwiftUIWeb\nstruct V: View { @State var n = 0\n @State var shown = false\n var body: some View { ${body} } }\n`);
+      assert(reached.features[feature] === true, `\`${body}\` did not keep the '${feature}' host`);
+    });
+    // A media type alone keeps the host, as does importing the module.
+    assert(planFor("MediaImport", "import AVFoundation\nimport SwiftUIWeb\nstruct V: View { var body: some View { Text(\"a\") } }\n").features.media === true,
+      "`import AVFoundation` did not keep the media host");
+    const draggable = planFor("Draggable","import SwiftUIWeb\nstruct V: View { let item: Item\n var body: some View { Text(\"a\").draggable(item) } }\n");
     assert(draggable.features.dragDrop === true, "`.draggable(` alone did not enable dragDrop");
     assert(draggable.swiftDefines.includes("SWIFTUIWEB_RELEASE_HAS_DRAGDROP"), "`.draggable(` alone did not keep BrowserDragDrop compiled in");
     assert(draggable.browserBindings.includes("drag-drop"), "`.draggable(` alone did not keep the drag-drop binding");
+    const hover = planFor("Hover", "import SwiftUIWeb\nstruct V: View { @State private var hovered = false\n var body: some View { Text(\"a\").onHover { hovered = $0 } } }\n");
+    assert(hover.features.hover === true, "`.onHover` did not enable hover");
+    assert(hover.swiftDefines.includes("SWIFTUIWEB_RELEASE_HAS_HOVER"), "`.onHover` did not keep the hover rules compiled in");
+    assert(!draggable.swiftDefines.includes("SWIFTUIWEB_RELEASE_HAS_HOVER"), "an app without `onHover` kept the hover rules");
     const labelImage = planFor("LabelImage", "import SwiftUIWeb\nstruct V: View { var body: some View { Label(\"Logo\", image: \"logo\") } }\n");
     assert(labelImage.features.images === true, "`Label(_, image:)` did not enable the image loader");
     assert(labelImage.swiftDefines.includes("SWIFTUIWEB_RELEASE_HAS_IMAGES"), "`Label(_, image:)` did not keep image support compiled in");

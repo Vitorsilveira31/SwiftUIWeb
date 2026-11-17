@@ -1,12 +1,12 @@
 /** The page's layout host. The browser lays the page out with CSS (Tools/css-layout.js, Documentation/Architecture/CSS_LAYOUT.md);
- * this module finds the semantic roots of the page, hands each to the CSS layout mapper (or leaves it to the CSS Swift
- * emitted), applies what the mapper styled after every DOM patch, and keeps the DOM patch away from what the layout owns.
+ * this module finds the semantic roots of the page, hands each to the CSS layout mapper, applies what the mapper styled
+ * after every DOM patch, and keeps the DOM patch away from what the layout owns.
  * A root nobody can lay out is reported once (`metrics.unlaid`), not laid out.
  */
 // The `display: none` of an element the layout hides (`data-layout-hidden`): a DOM patch that writes Swift's own `display`
 // there would show what the layout hides (a ViewThatFits's other candidates). The CSS layout's container lengths
-// (`--sl-cw`, `--sl-ch`) are the layout's too, and so are the lengths of the blocks the page's mapper writes (`--cl-len<i>`, see
-// `lengthVariables`; the ones of Swift's blocks, `--len<i>`, arrive with the publication).
+// (`--sl-cw`, `--sl-ch`) are the layout's too, and so are the lengths of the blocks the mapper writes (`--cl-len<i>`, see
+// `lengthVariables`).
 // `--motion-` properties are the transition host's: the box and color of a screen under a push (transition-host.js).
 export function ownsLayoutStyle(element, name) { return (name === 'display' && element.hasAttribute('data-layout-hidden')) || name.startsWith('--sl-') || name.startsWith('--cl-') || name.startsWith('--motion-'); }
 // The attributes the layout writes, which a DOM patch leaves alone. Swift renders a ViewThatFits with its first candidate
@@ -22,8 +22,6 @@ export const RESIZING_ATTRIBUTE = 'data-layout-resizing';
 // Whether an element has a box (none when it or an ancestor is `display: none`, or it is `display: contents`), from its
 // style alone: unlike `getClientRects`, `checkVisibility` does not lay the page out.
 const displayed = element => element.checkVisibility ? element.checkVisibility() : element.getClientRects().length > 0;
-// Whether CSS layout styles an element: the page's mapper (`data-cl`) or Swift (an `slN` class).
-const cssLaid = element => element.hasAttribute('data-cl') || [...element.classList].some(c => /^sl\d+$/.test(c));
 
 export class SemanticLayoutHost {
   constructor(root, options={}) {
@@ -65,10 +63,6 @@ export class SemanticLayoutHost {
         if(this.ownAttributes.has(r.attributeName))continue;
         // A text field's `value` is what it shows, not its box, and Swift writes it on every key.
         if(r.attributeName==='value'&&(target.localName==='input'||target.localName==='textarea'))continue;
-        // The rules Swift sends with the blocks of a publication, adopted as soon as the patch writes them (the mutation
-        // callback runs before the browser renders): a frame drawn before the pass would show the elements whose block is
-        // new without their rule, and a GeometryReader would report that.
-        if(r.attributeName==='data-sl-rules'){this.adoptSwiftRules(target);continue;}
         // A write that leaves the attribute as it was (a patch that removes and re-adds it) changes nothing.
         if(r.oldValue===target.getAttribute(r.attributeName))continue;
       }
@@ -111,10 +105,10 @@ export class SemanticLayoutHost {
   findOrphans(){
     const found=[];
     for(const element of this.root.querySelectorAll('[data-layout-kind="table"]')){
-      // A Grid CSS layout styles (the page's mapper, `data-cl`, or Swift, an `slN` class) is not an orphan, nor one an island
+      // A Grid CSS layout styles (`data-cl`) is not an orphan, nor one an island
       // claimed in this pass holds (its block is written at the end of the pass): its parent places it, as a frame centres
       // what it holds. One that is itself a root of the mapper is, so that it stays one.
-      if(!element.getClientRects().length||((cssLaid(element)||this.css.holds(element))&&!this.css.roots.has(element)))continue;
+      if(!element.getClientRects().length||((element.hasAttribute('data-cl')||this.css.holds(element))&&!this.css.roots.has(element)))continue;
       if(element.closest('[hidden],[data-layout-hidden],[data-navigation-inactive="true"],.presentation-backdrop'))continue;
       // Only the topmost: an orphan under another orphan belongs to it.
       if(found.some(o=>o.contains(element)))continue;
@@ -150,10 +144,9 @@ export class SemanticLayoutHost {
     // A commit whose patch wrote nothing the layout reads, with nothing scheduled, finds nothing to claim or to style.
     if(!requested&&this.unchangedSincePass()){this.metrics.passesSkipped++;this.metrics.unlaid=this.unlaid.size;completed=true;return;}
     this.unlaid=new Set();
-    // The rules of the blocks Swift styled the window root with, and the CSS of the islands the mapper already holds, go in
+    // The CSS of the islands the mapper already holds goes in
     // before the first read below: the analysis reads attributes only, so the patch and the CSS are recalculated by one
     // forced style recalculation instead of one each. An island claimed during this pass is styled at its end.
-    this.adoptSwiftRules(this.root.querySelector(':scope > [data-sl-rules]'));
     this.flushCss();
     // Grids a native widget hosts (a Grid in a Form row) are roots of their own; the previous pass found them, this one keeps them.
     const roots=this.roots();
@@ -183,12 +176,6 @@ export class SemanticLayoutHost {
       if(this.updateRequested){this.updateRequested=false;this.schedule();}
     }
   }
-  /** Adopts the rules a root Swift styled carries (`data-sl-rules`) that the mapper does not hold yet. */
-  adoptSwiftRules(carrier){
-    if(!this.css||!carrier)return;
-    const rules=carrier.getAttribute('data-sl-rules');
-    if(rules&&rules!==this.swiftRules){this.swiftRules=rules;this.css.adoptSwiftRules(rules);}
-  }
   /** Hands the mapper the semantic roots CSS can lay out whole and returns them; a root it cannot is reported. A mutation
    * inside one of those is not the mapper's even where an island holds it. */
   claimCssRoots(roots){
@@ -199,8 +186,6 @@ export class SemanticLayoutHost {
     this.mutations.disconnect();
     try{
       for(const element of roots){
-        // A root Swift styled (`data-sl-root`, `_CSSLayoutEmitter`) is CSS's: the mapper leaves it alone.
-        if(element.hasAttribute('data-sl-root')){this.css.release(element);claimed.add(element);if(this.window.__layoutVerify)this.css.verifySwift(element,this.cssRootProposal(element,native)||{def:{x:true,y:true},ax:.5,height:'100dvh',key:'window'});continue;}
         // A documentation page's roots are its examples, laid out where the page puts them (`cssRootProposal`), and the
         // roots inside its native widgets; its presentations are the same as an application's.
         const proposal=this.cssRootProposal(element,native);

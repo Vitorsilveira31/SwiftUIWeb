@@ -41,6 +41,21 @@ const INSPECT_INDEXEDDB = `async () => {
 }`;
 
 /**
+ * Every page a context opens (tab B and the new tab included) reports into `errors`: an uncaught exception, and a
+ * runtime failure the session reports on the console (a trap in a call the page made from an event, such as the
+ * cookie-change export), with the page it came from.
+ */
+function collectErrors(context, errors) {
+  context.on("page", (page) => {
+    const where = () => { try { return new URL(page.url()).search || "/"; } catch { return "?"; } };
+    page.on("pageerror", (error) => errors.push(`${where()}: ${error.message}`));
+    page.on("console", (message) => {
+      if (message.type() === "error" && message.text().startsWith("[SwiftUIWeb]")) errors.push(`${where()}: ${message.text()}`);
+    });
+  });
+}
+
+/**
  * Tab B writes and then expires a cookie; tab A (`page`, not reloaded) must show each change.
  *
  * Chromium reports each write through cookieStore; WebKit has no cookieStore, so tab A hears the BroadcastChannel
@@ -78,9 +93,9 @@ await runSuite(async () => {
   try {
     // Counts the workers each page constructs, so the cross-tab check can tell the two modes apart.
     context = await launchPersistent(profile);
+    collectErrors(context, errors);
     await context.addInitScript("window.__workers = 0; const NativeWorker = window.Worker; window.Worker = function (...args) { window.__workers++; return new NativeWorker(...args); };");
     let page = await context.newPage();
-    page.on("pageerror", (error) => errors.push(error.message));
     // `render-in-worker=1` keeps the app in the worker on every engine: WebKit may otherwise fall back to the main
     // thread, which has no cookie mirror to refresh.
     await page.goto(worker);
@@ -99,7 +114,6 @@ await runSuite(async () => {
     // The same two-tab check on the main thread (`render-in-worker=0`): the page reads its own jar and must not load
     // the worker at all.
     const mainPage = await context.newPage();
-    mainPage.on("pageerror", (error) => errors.push(error.message));
     await mainPage.goto(mainUrl);
     await mainPage.getByText("Cookies: swui_pref=compact", { exact: true }).waitFor({ timeout: 30_000 });
     await crossTabRefresh(context, mainPage, mainUrl);
@@ -125,8 +139,8 @@ await runSuite(async () => {
 
     // The browser restarts on the same profile.
     context = await launchPersistent(profile);
+    collectErrors(context, errors);
     page = await context.newPage();
-    page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(base);
     await page.getByText("Found: s3cret-from-swift").waitFor({ timeout: 30_000 });
     await page.getByRole("button", { name: "Forget" }).click();
@@ -139,12 +153,12 @@ await runSuite(async () => {
     // An insecure origin (plain HTTP, not localhost) has no Web Crypto.
     browser = await launch();
     const insecure = await browser.newContext();
+    collectErrors(insecure, errors);
     await insecure.route("http://keychain.test/**", async (route) => {
       const response = await insecure.request.fetch(route.request().url().replace("http://keychain.test", base));
       await route.fulfill({ response });
     });
     page = await insecure.newPage();
-    page.on("pageerror", (error) => errors.push(error.message));
     await page.goto("http://keychain.test/");
     assert.equal(await page.evaluate(() => window.isSecureContext), false);
     await page.getByText("Not available: -25291").waitFor({ timeout: 30_000 });

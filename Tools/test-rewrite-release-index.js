@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-/* The release index rewrite: worker preload, deferred classic helpers, unreachable helpers removed. */
+/* The release index rewrite: shared-chunk and worker preloads, deferred classic helpers, unreachable helpers removed. */
 "use strict";
 
 const assert = require("assert");
@@ -29,9 +29,13 @@ try {
   // 1. The worker script is announced next to the runtime module, once.
   assert.strictEqual(count(everything, '<link rel="modulepreload" href="./render-worker.js">'), 1, "worker modulepreload missing or duplicated");
   assert.ok(everything.indexOf('href="./index.js"') < everything.indexOf('href="./render-worker.js"'), "worker preload must follow the runtime preload");
+  // The chunk index.js and the worker share is announced right after the runtime module, once, before the worker.
+  assert.strictEqual(count(everything, '<link rel="modulepreload" href="./runtime-shared.js">'), 1, "shared chunk modulepreload missing or duplicated");
+  assert.match(everything, /<link rel="modulepreload" href="\.\/index\.js">\n[ \t]*<link rel="modulepreload" href="\.\/runtime-shared\.js">\n[ \t]*<link rel="modulepreload" href="\.\/render-worker\.js">\n/, "preload order must be index.js, runtime-shared.js, render-worker.js");
   // Running the rewrite again must not add a second hint.
   const again = rewrite({ runtime: { initial: [] } }, [], everything);
   assert.strictEqual(count(again, 'href="./render-worker.js"'), 1, "the worker preload is not idempotent");
+  assert.strictEqual(count(again, 'href="./runtime-shared.js"'), 1, "the shared chunk preload is not idempotent");
   // 2. Every classic helper is deferred and keeps the order feature-loader -> icons -> mesh-gradient -> module.
   assert.deepStrictEqual(classicOrder(everything), ["feature-loader.js", "icon-adapter.js", "mesh-gradient.js"]);
   for (const helper of classicOrder(everything)) assert.match(everything, new RegExp(`<script defer src="\\./${helper.replace(".", "\\.")}"></script>`), `${helper} is not deferred`);
@@ -43,7 +47,9 @@ try {
   const partial = rewrite({ runtime: { initial: ["feature-loader.js"] }, icons: { asset: "icon-adapter.js" } });
   assert.deepStrictEqual(classicOrder(partial), ["feature-loader.js", "icon-adapter.js"]);
   // 4. A main-thread-only build never requests the worker.
-  assert.strictEqual(count(rewrite({ runtime: { initial: [] } }, ["--no-worker"]), "render-worker.js"), 0, "--no-worker still preloads the worker");
+  const mainThreadOnly = rewrite({ runtime: { initial: [] } }, ["--no-worker"]);
+  assert.strictEqual(count(mainThreadOnly, "render-worker.js"), 0, "--no-worker still preloads the worker");
+  assert.strictEqual(count(mainThreadOnly, 'href="./runtime-shared.js"'), 1, "--no-worker dropped the shared chunk index.js imports");
   assert.strictEqual(count(rewrite({ runtime: { initial: [], worker: false } }), "render-worker.js"), 0, "runtime.worker=false still preloads the worker");
   console.log("release index rewrite: ok");
 } finally {

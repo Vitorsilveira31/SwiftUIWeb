@@ -17,16 +17,19 @@ function writeBundle(root, { font = "font-a" } = {}) {
     "index.html": `<!doctype html>
 <link rel="stylesheet" href="./styles.css">
 <link rel="modulepreload" href="./index.js">
+<link rel="modulepreload" href="./runtime-shared.js">
 <script>globalThis.__appModuleFetch={href:new URL("./app.wasm",document.baseURI).href,response:fetch("./app.wasm")};</script>
 <link rel="icon" href="./catalog-assets/A.svg">
 <meta name="runtime-environment" content="SWIFTUIWEB_IMAGE_ASSETS=A=catalog-assets/A.svg">
 <script defer src="./feature-loader.js"></script>
 <script type="module">const { instantiate: init } = await import("./index.js");</script>`,
-    "index.js": `const app = new URL("./app.wasm", import.meta.url);
+    "index.js": `import{r as core}from"./runtime-shared.js";
+const app = new URL("./app.wasm", import.meta.url);
 const extra = new URL("extra.wasm", base);
 const worker = new Worker(new URL("./render-worker.js", import.meta.url));
 const decoys = ["myapp.wasm", "x.index.js", "xextra.wasm", "extra.wasm.map"];`,
-    "render-worker.js": `postMessage("ready");`,
+    "render-worker.js": `import{r}from"./runtime-shared.js";postMessage("ready");`,
+    "runtime-shared.js": `export const r = 1;`,
     "app.wasm": Buffer.from([0, 97, 115, 109, 1, 0, 0, 0, 9, 9, 9]),
     "extra.wasm": Buffer.from([0, 97, 115, 109, 2, 0, 0, 0, 8, 8]),
     "styles.css": `@font-face { font-family: "F"; src: url("./fonts/F.woff2") format("woff2"); }`,
@@ -61,7 +64,7 @@ describe("hash-release-bundle", () => {
       const { renamed } = hashBundle(root);
       assert.deepEqual(
         [...renamed.keys()].sort(),
-        ["app.wasm", "avfoundation.js", "catalog-assets.css", "catalog-assets/A.svg", "extra.wasm", "feature-loader.js", "features-manifest.json", "fonts/F.woff2", "index.js", "render-worker.js", "shaka-loader.js", "styles.css"],
+        ["app.wasm", "avfoundation.js", "catalog-assets.css", "catalog-assets/A.svg", "extra.wasm", "feature-loader.js", "features-manifest.json", "fonts/F.woff2", "index.js", "render-worker.js", "runtime-shared.js", "shaka-loader.js", "styles.css"],
       );
       for (const [from, to] of renamed) {
         assert.equal(to, hashedName(from, to.match(HASH)[1]), `${to} keeps the extension of ${from}`);
@@ -98,6 +101,10 @@ describe("hash-release-bundle", () => {
       assert.ok(js.includes(`new URL("./${name("app.wasm")}", import.meta.url)`), "the wasm fetch");
       assert.ok(js.includes(`new URL("${name("extra.wasm")}", base)`), "the second wasm fetch");
       assert.ok(js.includes(`new URL("./${name("render-worker.js")}", import.meta.url)`), "the worker URL");
+      // The chunk the runtime and the worker share (Tools/build-runtime-bundle.mjs), as the minified import names it.
+      assert.ok(js.includes(`from"./${name("runtime-shared.js")}"`), "the runtime's import of the shared chunk");
+      assert.ok(readFileSync(join(root, name("render-worker.js")), "utf8").includes(`from"./${name("runtime-shared.js")}"`), "the worker's import of the shared chunk");
+      assert.ok(html.includes(`href="./${name("runtime-shared.js")}"`), "the shared chunk's preload");
       assert.ok(js.includes(`["myapp.wasm", "x.index.js", "xextra.wasm", "extra.wasm.map"]`), "decoy names are untouched");
 
       const css = readFileSync(join(root, name("styles.css")), "utf8");

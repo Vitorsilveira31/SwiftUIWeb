@@ -10,7 +10,7 @@ compile gates, runtime helper scripts, the icon catalog and optional CSS.
 - **Application evidence** (`--source`) is the consumer's own code: for an
   external package its `Sources` and `Web`; for the framework's examples and test apps
   only `Examples/<product>` or `Tests/Apps/<product>`. Only this text switches a feature on (`MeshGradient`,
-  `Canvas`, `onDrop`, `PhotosPicker`, `URLSession`, `@AppStorage`, ...).
+  `Canvas`, `onDrop`, `onHover`, `PhotosPicker`, `URLSession`, `@AppStorage`, ...).
 - **Framework roots** (`--framework-source`, plus `SwiftUIWebCore` and
   `SwiftUIWebBrowser`) supply vocabulary only: CSS class names, the icon
   catalog and asset discovery. The framework mentioning a feature is never
@@ -56,7 +56,17 @@ pipeline may prune, and `proof` records the evidence behind each decision. Other
   `rewrite-release-index.js` drops the unreachable `<script>` tags;
 - generates `icon-adapter.js` from `icons.symbols` unless `icons.dynamic`;
 - runs `prune-release-css.js` on `styles.css`, which removes optional
-  rules for absent features and is a no-op when `css.dynamic`.
+  rules for absent features and is a no-op when `css.dynamic`;
+- builds the JavaScript runtime with `Tools/build-runtime-bundle.mjs`, which leaves out the browser hosts of
+  unreachable features through `bun build --define` constants and dead-code elimination (nothing is loaded
+  later): `motion` (transition-host.js: transitions, `.animation`, matched geometry, symbol and content effects,
+  and the motion of presentations and navigation), `media` (media-host.js), `splitViews` (split-view-host.js),
+  `predicates` (the NSPredicate engine, in the page and the worker), `navigation` (the adaptive TabView shell)
+  and `dragDrop` (the native drag coordinator). Their rules are deliberately wider than the API they serve: a
+  false positive only keeps a host.
+  Like every feature here, the evidence is the application's own sources and its local packages: a feature used
+  only inside a remote Swift package dependency is not seen. Such an application names it in a JSON file passed as
+  `SWIFTUIWEB_RELEASE_ASSETS` (`{"features": {"motion": true}}`), which turns the feature on.
 
 Debug builds compile every feature in and skip the defines, so a feature can
 work in debug yet be absent from release. Check release with a release build of the consuming app (`make browser-release

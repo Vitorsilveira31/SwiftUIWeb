@@ -18,6 +18,7 @@ import { createBrowserIO, safeErrorMessage } from './BrowserIO/browser-io.mjs';
 import { createWasiHost } from './wasi-host.js';
 import { createHeadroomMeter } from './stack-probe.js';
 import { writeEventValue, readSecureBytes, readSecureIDs } from './event-value.js';
+import { createSplitLoader, isSplitModule } from './wasm-split-loader.js';
 
 const PREFIX = 'embedded_browser_';
 /** The frames a trap ran through (a trap carries no message): they name the Swift code that hit it. */
@@ -95,6 +96,8 @@ export function isStackOverflow(error) {
 export function createHostCore({ post: send, scope, canMigrate: mayMigrate = false }) {
   let canMigrate = mayMigrate;
   let instance = null, exports = null, browserIO = null;
+  // The second half of a split release module (Tools/wasm-split-loader.js); null for a module that is not split.
+  let split = null;
   let stackMeter = null, stackSamples = 0;
   let drainTimer = 0, drainScheduled = false, lastSeq = 0, diagnostics = false;
   // Diagnostics only: when the call behind the next publication reached this thread and when Swift returned from it (epoch
@@ -294,8 +297,15 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
     if (config.environment.includes('SWIFTUIWEB_STACK_DIAGNOSTICS=1')) stackMeter = createHeadroomMeter();
     browserIO = createBrowserIO({ getInstance: () => (halted || poisoned ? null : instance), environment: environmentFor(), baseURL: config.baseURL, wake: scheduleTaskDrain, onError: fail, remoteDOM: true, stackMeter });
     imports.browser_io = browserIO.imports;
+    // A Worker may wait for the second half synchronously when a call needs it before it arrived; the main thread loads
+    // it before the instance runs (`adopt`). The launcher leaves the loader out of a bundle that is not split (Tools/wasm-split-loader.js).
+    if (globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER !== false && config.secondary && isSplitModule(module)) {
+      split = createSplitLoader(module, { url: config.secondary, canBlock: typeof XMLHttpRequest === 'function' && typeof document === 'undefined' });
+      Object.assign(imports, split.imports);
+    }
     instance = await WebAssembly.instantiate(module, imports);
     exports = instance.exports;
+    if (globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER !== false && split) split.attach(instance);
   }
 
   function setUp(message) {
@@ -304,6 +314,7 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
     // `window.__renderWorkerMigration = false` keeps the app on the older recovery (a restart), for tests.
     if (message.migrate === false) canMigrate = false;
     config = { diagnostics, migrate: message.migrate !== false, baseURL: message.baseURL, environment: Array.isArray(message.environment) ? message.environment : [], dark: message.dark === true, reducedMotion: message.reducedMotion === true, hostname: message.hostname || '', secure: message.secure === true };
+    if (globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER !== false && typeof message.secondary === 'string') config.secondary = message.secondary;
     localMirror = new MirrorStorage(0, message.local || [], post);
     sessionMirror = new MirrorStorage(1, message.session || [], post);
     cookieMirror = new CookieMirror(message, post);
@@ -313,8 +324,8 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
     setUp(message);
     await instantiateModule(message.module);
     if (typeof exports._initialize === 'function') exports._initialize();
-    // The second argument is flags: 1 reduced motion, 2 CSS layout worked out by Swift.
-    exports.embedded_browser_set_initial_preferences?.(message.dark ? 1 : 0, (message.reducedMotion ? 1 : 0) | (message.cssLayout ? 2 : 0) | ((message.publication | 0) & 0xFF78));
+    // The second argument is flags: 1 reduced motion, then the publication flags.
+    exports.embedded_browser_set_initial_preferences?.(message.dark ? 1 : 0, (message.reducedMotion ? 1 : 0) | ((message.publication | 0) & 0xFF78));
     if (typeof exports.embedded_browser_start !== 'function') throw new Error('Embedded browser entry export is missing');
     // The window before the start, so the first render lays out at it (the page reports it again after its first commit).
     const viewport = message.viewport;
@@ -325,6 +336,8 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
     publishIfChanged();
     takeSnapshot();
     scheduleTaskDrain();
+    // The first screen is published: the rest of a split module downloads now, behind it.
+    if (globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER !== false && split) split.prefetch();
   }
 
   /** Continues an app another host gave up on (a Worker whose stack ran out): same module, the snapshot as memory. The
@@ -337,6 +350,8 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
     // shift this thread's monotonic clock so it continues from the Worker's.
     clock.monotonicOffsetMs = performance.timeOrigin - state.clock.origin;
     await instantiateModule(module);
+    // The snapshot may be anywhere in the app, so the whole module is here before the replay.
+    if (globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER !== false && split) await split.load();
     const memory = exports.memory;
     const missing = Math.ceil(state.length / 65536) - memory.buffer.byteLength / 65536;
     if (missing > 0) memory.grow(missing);

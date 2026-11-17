@@ -3,10 +3,10 @@
 //
 // Each fixture below is opened in the lowering app and every element under the app root is measured: after the fixture opens
 // and, where it has them, after a click (a publication patches the page), after the root's `aria-hidden` is removed and after
-// the window narrows. CSS layout must lay the fixture out (blocks of Swift's or of the page's mapper), no semantic root may
+// the window narrows. CSS layout must lay the fixture out (the page's mapper), no semantic root may
 // be left without a layout (`layoutMetrics.unlaid`), the boxes Apple's SwiftUI measures (`apart`, `apple`) must be as it
-// gives them, and the page may report no error or mismatch (with `window.__layoutVerify` it also compares every block Swift
-// sent with its own analysis). The boxes themselves are not recorded: what a fixture must satisfy is asserted.
+// gives them, and the page may report no error or mismatch (with `window.__layoutVerify` it also compares every incremental
+// block with an analysis from scratch). The boxes themselves are not recorded: what a fixture must satisfy is asserted.
 //
 //   bun Tools/test-css-layout-fixtures-browser.mjs [bundle] [--only <fixture>]
 //
@@ -32,9 +32,9 @@
 //   lays out the slots it is given.
 //
 // The mapper must refuse nothing (`stats.unsupported`, `window.__cssLayoutInstance`, which the diagnostics flag publishes) in
-// the fixtures marked `onlyCss`, and Swift emits the CSS of the ones marked `swift` (a `data-sl-root` on the page).
+// the fixtures marked `onlyCss`.
 // - EmbeddedScrollFixture: a horizontal shelf in a VStack and vertical ScrollViews of a short text and of full-width rows.
-// - EmbeddedScrollRootFixture: a vertical ScrollView as the root view (the verifier compares its block with Swift's).
+// - EmbeddedScrollRootFixture: a vertical ScrollView as the root view.
 // - EmbeddedTextFixture: TextFields in HStacks (default and plain styles) and texts with `lineLimit(2)` and `lineLimit(3)`.
 // - EmbeddedPrincipalFixture: two principal toolbar items between a leading and a trailing item, with and without a title; and
 //   several items on a side: between blocks as wide as each other (the mapper centres the principal group on the bar only
@@ -53,7 +53,7 @@
 //   publication changes the chips (`click`) and after the window narrows. The page reports each Layout's proposal and its
 //   subviews' sizes to Swift (`reportLayouts`), so CSS lays all of it out.
 // - EmbeddedAspectFixture: aspect boxes capped by the height of the frame around them (and a padding in between): the boxes
-//   are the ones Apple's SwiftUI gives (`apple`), and Swift must emit the page's blocks.
+//   are the ones Apple's SwiftUI gives (`apple`).
 // - EmbeddedControlsFixture: Divider, linear ProgressView, Slider, menu Picker, linear Gauge, TextEditor and Canvas in stacks, in rows,
 //   framed and not. Every group has a frame of its own, and the test checks its boxes against what Apple's SwiftUI gives for the
 //   same tree (`apart`, a `data-testid`; `Tests/LayoutConformance/apple-macos-css-extra.json`, the `x-divider-*` and the other
@@ -77,14 +77,14 @@ import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { engineName, launch, runSuite, serveDirectory } from "./browser-test-support.mjs";
 
-const FIXTURES = [{ button: null, name: "start", onlyCss: true }, { button: "Open inset fixture", name: "inset" }, { button: "Open grid cells fixture", name: "grid-cells", onlyCss: true, swift: true }, { button: "Open placement fixture", name: "placement" }, { button: "Open labeled fixture", name: "labeled" },
-  { button: "Open fit fixture", name: "fit", click: "Count", resize: 300, onlyCss: true, height: 1400 }, { button: "Open presented fixture", name: "presented", click: "Present", reveal: true, onlyCss: true, swift: true },
+const FIXTURES = [{ button: null, name: "start", onlyCss: true }, { button: "Open inset fixture", name: "inset" }, { button: "Open grid cells fixture", name: "grid-cells", onlyCss: true }, { button: "Open placement fixture", name: "placement" }, { button: "Open labeled fixture", name: "labeled" },
+  { button: "Open fit fixture", name: "fit", click: "Count", resize: 300, onlyCss: true, height: 1400 }, { button: "Open presented fixture", name: "presented", click: "Present", reveal: true, onlyCss: true },
   { button: "Open relative fixture", name: "relative", resize: 640, onlyCss: true, height: 1400 }, { button: "Open scroll fixture", name: "scroll" }, { button: "Open scroll root fixture", name: "scroll-root" },
-  { button: "Open text fixture", name: "text" }, { button: "Open principal fixture", name: "principal", onlyCss: true, swift: true },
-  { button: "Open navigation view fixture", name: "navigation-view", click: "Open detail", clickRole: "link", onlyCss: true, swift: true },
+  { button: "Open text fixture", name: "text" }, { button: "Open principal fixture", name: "principal", onlyCss: true },
+  { button: "Open navigation view fixture", name: "navigation-view", click: "Open detail", clickRole: "link", onlyCss: true },
   { button: "Open layer fixture", name: "layer" }, { button: "Open lazy shelf fixture", name: "lazy-shelf", texts: /^Format chip \d+$/, count: 12 },
   { button: "Open canvas fixture", name: "canvas" }, { button: "Open shapes fixture", name: "shapes" },
-  { button: "Open aspect fixture", name: "aspect", apple: [/^div\.aspect-box \S+ \S+ 160 80$/, /^div\.aspect-box \S+ \S+ 50 100$/, /^div\.aspect-box \S+ \S+ 320 160$/], swift: true },
+  { button: "Open aspect fixture", name: "aspect", apple: [/^div\.aspect-box \S+ \S+ 160 80$/, /^div\.aspect-box \S+ \S+ 50 100$/, /^div\.aspect-box \S+ \S+ 320 160$/] },
   { button: "Open layout fixture", name: "layout", click: "Count", resize: 360, onlyCss: true, height: 1400 },
   { button: "Open alert fixture", name: "alert", click: "Show alert", onlyCss: true },
   { button: "Open confirmation fixture", name: "confirmation", click: "Show dialog", onlyCss: true },
@@ -92,7 +92,7 @@ const FIXTURES = [{ button: null, name: "start", onlyCss: true }, { button: "Ope
   { button: "Open chart fixture", name: "chart", onlyCss: true },
   { button: "Open form fixture", name: "form", onlyCss: true },
   { button: "Open split fixture", name: "split", click: "Count", resize: 520, onlyCss: true, height: 1400 },
-  { button: "Open controls fixture", name: "controls", onlyCss: true, swift: true, still: true, height: 1700, apart: [
+  { button: "Open controls fixture", name: "controls", onlyCss: true, still: true, height: 1700, apart: [
     { id: "controls-divider-row", select: "hr", w: 1, h: 40,
       reason: "A Divider in an HStack is a vertical rule as tall as the row (Apple: x-divider-hstack, 1 x 40)" },
     { id: "controls-slider-row", select: ".hstack", w: 320,
@@ -138,8 +138,7 @@ const BOXES = `() => {
   return {
     boxes: out,
     unlaid: window.__embeddedSession?.layoutMetrics?.unlaid ?? null,
-    css: document.querySelectorAll('#embedded-app-root [data-cl], #embedded-app-root [data-sl-root]').length,
-    swift: document.querySelectorAll('#embedded-app-root [data-sl-root]').length,
+    css: document.querySelectorAll('#embedded-app-root [data-cl]').length,
     roots: [...document.querySelectorAll('#embedded-app-root .navigation-root')].filter(e => e.getClientRects().length).length,
     unsupported: window.__cssLayoutInstance ? window.__cssLayoutInstance.stats.unsupported : null,
     mismatches: (window.__layoutMismatch || []).map(m => JSON.stringify(m).slice(0, 300)),
@@ -166,7 +165,7 @@ await runSuite(async () => {
       if (fixture.button) await page.getByRole("button", { name: fixture.button, exact: true }).click();
       await page.waitForTimeout(1500);
       // The layout runs once the app has drawn, which a runner with few cores takes more than a fixed pause to do.
-      await page.waitForFunction(() => document.querySelectorAll("#embedded-app-root [data-cl], #embedded-app-root [data-sl-root]").length > 0, null, { timeout: 30_000 }).catch(() => {});
+      await page.waitForFunction(() => document.querySelectorAll("#embedded-app-root [data-cl]").length > 0, null, { timeout: 30_000 }).catch(() => {});
       // (`still`: a spinner turns, and the box of a turned square is the bounding box of its turn; every animation is held at its start.)
       if (fixture.still) await page.evaluate(() => document.getAnimations().forEach((animation) => { animation.pause(); animation.currentTime = 0; }));
       const result = await page.evaluate(`(${BOXES})()`);
@@ -200,9 +199,8 @@ await runSuite(async () => {
       const css = await open(fixture);
       if (fixture.texts) assert.deepEqual(css.texts, Array(css.texts.length).fill(fixture.count), `${fixture.name}: every item is rendered`);
       assert.deepEqual(css.errors, [], `${fixture.name}: errors`);
-      assert.deepEqual(css.mismatches, [], `${fixture.name}: blocks Swift sent differ from the page's analysis`);
+      assert.deepEqual(css.mismatches, [], `${fixture.name}: incremental blocks differ from an analysis from scratch`);
       assert.ok(css.css > 0, `${fixture.name}: CSS layout lays the fixture out`);
-      if (fixture.swift) assert.ok(css.swift > 0, `${fixture.name}: Swift emits the fixture's CSS`);
       const steps = { opened: css, clicked: css.clicked, revealed: css.revealed, resized: css.resized };
       if (fixture.onlyCss) {
         assert.deepEqual(css.unsupported, {}, `${fixture.name}: the mapper refuses nothing, CSS lays the whole fixture out`);

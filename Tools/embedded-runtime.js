@@ -5,6 +5,15 @@ import { createWasiHost, readDocumentEnvironment, stackDiagnosticsRequested, pub
 import { createWorkerInstance } from './embedded-worker-client.js';
 import { watchCookies } from './cookie-watch.js';
 import { writeEventValue } from './event-value.js';
+import { createSplitLoader, isSplitModule } from './wasm-split-loader.js';
+
+// The second half of a split release module (Tools/wasm-split-release.mjs): the functions the first screen did not run.
+// A bundle that is not split has no such file, and its module has no placeholder to load it for. The launcher defines
+// `globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER` as false for such a bundle, so the loader is not in its scripts at all; where it
+// is not defined (development, the tests) the loader stays.
+const SECONDARY_MODULE = './app-rest.wasm';
+// The request for it that `instantiate` started early for a start on this thread, taken by the first loader that uses it.
+let restRequest = null;
 
 const encoder = new TextEncoder();
 let instance = null;
@@ -57,7 +66,7 @@ function trapped(error) {
 }
 
 function scheduleTaskDrain() {
-  if (drainScheduled || !instance) return;
+  if (drainScheduled || !instance || browserSession?.failed) return;
   const drain = instance.exports?.embedded_browser_drain_tasks;
   if (typeof drain !== 'function') return;
   drainScheduled = true;
@@ -72,6 +81,19 @@ function scheduleTaskDrain() {
   });
 }
 
+/** The page's cookies changed (another tab, a server response): HTTPCookieStorage's notification, then the commit of
+ * what the app published. It is entered from an event, outside any call the session made, so a trap here is handled
+ * like a trap in a drain: the instance is not used again, and the session reports the error. An instance whose session
+ * already failed is not called. */
+function notifyCookiesChanged() {
+  if (!instance || browserSession?.failed) return;
+  const changed = instance.exports?.embedded_browser_cookies_changed;
+  if (typeof changed !== 'function') return;
+  try { changed(); } catch (error) { trapped(error); return; }
+  browserSession?.flush();
+  scheduleTaskDrain();
+}
+
 // The same document environment the worker client forwards, so both modes
 // expose identical `WebEnvironment` values to Swift.
 const wasiFunction = createWasiHost(() => instance, { environment: readDocumentEnvironment(globalThis.document, globalThis.navigator) });
@@ -84,7 +106,7 @@ function importsFor(module) {
   }
   let stackMeter = null;
   if (stackDiagnosticsRequested(globalThis.document)) { stackMeter = createHeadroomMeter(); globalThis.__stackProbe = stackMeter; }
-  const browserIO = createBrowserIO({ getInstance: () => instance, wake: scheduleTaskDrain, stackMeter });
+  const browserIO = createBrowserIO({ getInstance: () => instance, wake: scheduleTaskDrain, stackMeter, onCookieWrite: () => cookieWatch?.wrote() });
   browserIOHost = browserIO;
   imports.browser_io = browserIO.imports;
   return imports;
@@ -108,6 +130,13 @@ export async function instantiate(url = new URL('./app.wasm', import.meta.url), 
   // Unless a worker was asked for explicitly, check while the app module downloads that a Worker's
   // WebAssembly stack can hold a deep view tree (see `workerStackSufficient`).
   const stackCheck = wantsWorker && !workerForced(options) ? workerStackSufficient() : Promise.resolve(wantsWorker);
+  // A split build that will run on this thread needs its second module before it starts: its download goes beside the
+  // first one instead of after it (a Worker fetches it once the first screen is up). Only a split build defines the flag true.
+  restRequest = null;
+  if (globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER === true) {
+    const requestRest = () => { restRequest ||= fetch(new URL(SECONDARY_MODULE, import.meta.url)); restRequest.catch(() => {}); };
+    if (!wantsWorker) requestRest(); else stackCheck.then(sufficient => { if (!sufficient) requestRest(); });
+  }
   // The page started this download itself (Tools/browser-index.html); a page without that script, or one that names
   // another module, is fetched here.
   const early = globalThis.__appModuleFetch;
@@ -169,7 +198,19 @@ async function startOnMainThread(module, options, url) {
     const wasi = createWasiHost(() => instance, { environment: [...readDocumentEnvironment(globalThis.document, globalThis.navigator), 'SWIFT_DETERMINISTIC_HASHING=1'] });
     for (const name of Object.keys(imports.wasi_snapshot_preview1 ?? {})) imports.wasi_snapshot_preview1[name] = wasi(name);
   }
+  // This thread cannot wait for the second half of a split module in the middle of a call, so it loads both before the
+  // application runs; the download of the second starts with the instantiation of the first.
+  let split = null, secondHalf = null;
+  if (globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER !== false && !hot && isSplitModule(module)) {
+    split = createSplitLoader(module, { url: new URL(SECONDARY_MODULE, import.meta.url).href, response: restRequest });
+    restRequest = null;
+    secondHalf = split.load();
+    // Awaited below; a failure that lands while the first half instantiates is not an unhandled rejection meanwhile.
+    secondHalf.catch(() => {});
+    Object.assign(imports, split.imports);
+  }
   const result = await WebAssembly.instantiate(module, imports);
+  if (globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER !== false && split) { split.attach(result); await secondHalf; }
   instance = result;
   if (typeof instance.exports._initialize === 'function') instance.exports._initialize();
   if (hot) {
@@ -243,12 +284,9 @@ function finishMainThreadStart(options) {
     return taken;
   };
   // The page's jar is read directly here. A change reaches the app through the export the worker also calls, then the
-  // session commits the DOM the app publishes and any tasks its observers queued run.
-  cookieWatch = watchCookies({ window: globalThis.window, onChange: () => {
-    instance?.exports?.embedded_browser_cookies_changed?.();
-    browserSession?.flush();
-    scheduleTaskDrain();
-  } });
+  // session commits the DOM the app publishes and any tasks its observers queued run. The app's own writes are
+  // announced to the watcher (`onCookieWrite` above), so they do not come back as a change, and other tabs hear them.
+  cookieWatch = watchCookies({ window: globalThis.window, onChange: notifyCookiesChanged });
   // The first lifecycle pass can enqueue URLSession/BrowserIO work. Drain it
   // only after the DOM session exists so an immediate response can publish its
   // state transition instead of losing the flush while browserSession is nil.
@@ -308,7 +346,8 @@ function workerRequested(options) {
 }
 
 async function instantiateWithWorker(module, options) {
-  const facade = await createWorkerInstance(module, { baseURL: document.baseURI, diagnostics: options.performanceDiagnostics === true || window.__performanceDiagnostics === true });
+  const secondary = globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER !== false && isSplitModule(module) ? new URL(SECONDARY_MODULE, import.meta.url).href : null;
+  const facade = await createWorkerInstance(module, { baseURL: document.baseURI, secondary, diagnostics: options.performanceDiagnostics === true || window.__performanceDiagnostics === true });
   workerInstance = facade;
   browserSession = mountEmbeddedBrowser(facade, options);
   // State kept across a reload: the worker is asked to save, and its storage write reaches this thread a moment later

@@ -10,6 +10,13 @@ import {SplitViewHost} from './split-view-host.js';
 import {TransitionHost, ScrollTransitionHost, MatchedGeometryHost, matchViewTransitionGeometry, SCROLL_TRANSITION_ATTRIBUTES} from './transition-host.js';
 import {BinaryBuffer, BinaryFormatError, Builder, Handles, Templates, isEmptyUpdate, readPublication, rootHoverRules, sameBinary, scanRecords, compareDom} from './binary-publication.js';
 import {BINARY_OPS} from './binary-atoms.generated.js';
+// A release leaves out the hosts its application never reaches (Tools/build-runtime-bundle.mjs): each is constructed
+// behind a build-time constant, written inline because bun folds it only there, and the release defines the constant
+// false from the reachability manifest. Unbundled and in debug the constants are undefined and every host is here.
+// What stands in for a host a release left out: transition-host.js (no motion: views arrive and leave at once, as in a
+// commit without an animation), and the plugins and coordinators that would find nothing to do.
+const INERT_TRANSITIONS = Object.freeze({commitTiming: null, begin() {}, finish() {}, timingFor: () => null, noteChildren() {}, noteInsertion() {}, noteText() {}, noteSymbolTrigger() {}, noteSymbolReplace() {}, flashScrollIndicators() {}, isLeaving: () => false, holdRemoval: () => false});
+const INERT_HOST = Object.freeze({sync() {}, schedule() {}, didSelect() {}, dispose() {}});
 /** Retained DOM host for the Embedded Swift renderer.
  * Host-only module. Public SwiftUI source stays unchanged.
  * A commit patches existing nodes by Fiber generation, never replaces body.
@@ -515,9 +522,9 @@ export function mountEmbeddedBrowser(instance, options = {}) {
     const repetition = iterations === 'infinite' ? ' /* infinite */' : Number(iterations) > 1 ? ' /* repeat ' + Number(iterations) + ' */' : '';
     return timing + repetition + (repetition && nearest.getAttribute('data-animation-direction') === 'alternate' ? ' /* alternate */' : '');
   };
-  const transitions = new TransitionHost({window, root, reducedMotion: motion.media, armedTiming: armedTimingOf, motionTiming, supportedTransition});
-  const scrollTransitions = new ScrollTransitionHost({window, root, reducedMotion: motion.media, motionTiming, supportedTransition});
-  const matchedGeometry = new MatchedGeometryHost({window, root, timingFor: (element, parent) => transitions.timingFor(element, parent), supportedTransition});
+  const transitions = (typeof SWIFTUIWEB_HAS_MOTION === 'undefined' || SWIFTUIWEB_HAS_MOTION) ? new TransitionHost({window, root, reducedMotion: motion.media, armedTiming: armedTimingOf, motionTiming, supportedTransition}) : INERT_TRANSITIONS;
+  const scrollTransitions = (typeof SWIFTUIWEB_HAS_MOTION === 'undefined' || SWIFTUIWEB_HAS_MOTION) ? new ScrollTransitionHost({window, root, reducedMotion: motion.media, motionTiming, supportedTransition}) : INERT_HOST;
+  const matchedGeometry = (typeof SWIFTUIWEB_HAS_MOTION === 'undefined' || SWIFTUIWEB_HAS_MOTION) ? new MatchedGeometryHost({window, root, timingFor: (element, parent) => transitions.timingFor(element, parent), supportedTransition}) : INERT_HOST;
   // A frame or two past the animation's end, so its last frame is drawn with the transition still in place.
   const ARMED_TRANSITION_GRACE_MS = 50;
   // The Swift selection sink remains the source of truth for native hosts.
@@ -529,7 +536,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   const semanticTabSelections = new WeakMap();
   // `.sidebarAdaptable` presentation (mobile / rail / sidebar, the mobile
   // panel, tooltips) is browser-only state owned by a focused host adapter.
-  const tabShell = new AdaptiveTabShell(root, {window, document, signal: listenerController.signal, onLayoutChange: () => layout?.schedule()});
+  const tabShell = (typeof SWIFTUIWEB_HAS_ADAPTIVE_TABS === 'undefined' || SWIFTUIWEB_HAS_ADAPTIVE_TABS) ? new AdaptiveTabShell(root, {window, document, signal: listenerController.signal, onLayoutChange: () => layout?.schedule()}) : INERT_HOST;
   let baseDocumentTitle = null;
   let locationTabRestoreKey = null;
   // Set when a publication named DOM this host does not have (a record's element, a held element or a shape);
@@ -1720,9 +1727,9 @@ export function mountEmbeddedBrowser(instance, options = {}) {
     measuring.clear();
   }
   // AVPlayer state rendered by Swift, applied to the <video>/<audio> elements after each commit.
-  plugins.push(new MediaHost(root, {dispatchNamed, dispatchHeadless, window}));
+  if (typeof SWIFTUIWEB_HAS_MEDIA === 'undefined' || SWIFTUIWEB_HAS_MEDIA) plugins.push(new MediaHost(root, {dispatchNamed, dispatchHeadless, window}));
   // Divider drag and keys for HSplitView and VSplitView: the panes move here and report their settled positions to Swift.
-  plugins.push(new SplitViewHost(root, {dispatchNamed, window}));
+  if (typeof SWIFTUIWEB_HAS_SPLIT_VIEWS === 'undefined' || SWIFTUIWEB_HAS_SPLIT_VIEWS) plugins.push(new SplitViewHost(root, {dispatchNamed, window}));
 
   function syncTimelines() {
     if (typeof api.timeline_tick !== 'function' || !markerSeen('timeline')) return;
@@ -2597,7 +2604,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   // Without either it keeps the browser's timing.
   function timeViewTransition(transition) {
     // `matchedGeometryEffect(properties:anchor:)`: the groups morph only the parts of the frame the sources match.
-    transition.ready.then(() => matchViewTransitionGeometry(document, root), () => {});
+    if (typeof SWIFTUIWEB_HAS_MOTION === 'undefined' || SWIFTUIWEB_HAS_MOTION) transition.ready.then(() => matchViewTransitionGeometry(document, root), () => {});
     let source = transitions.commitTiming;
     if (!source && armedTransitions.size) {
       for (const element of root.querySelectorAll('[style*="view-transition-name"]')) {
@@ -2731,12 +2738,6 @@ export function mountEmbeddedBrowser(instance, options = {}) {
       // A whole tree's are read from its stream: the builder does not put them in the DOM.
       const hoverRules = update ? annotation('data-hover-rules')?.getAttribute('data-hover-rules') : builtHoverRules;
       if (hoverRules) applyHoverRules(hoverRules);
-      // The rules of the blocks Swift styled the window root with (`data-sl-rules`, CSS_LAYOUT.md) are adopted before the
-      // patch: an element whose class names a block the page does not hold yet would be styled without it by any style
-      // read before the patch's mutation records are handled, and its subtree laid out again twice.
-      let swiftRules=null;
-      if (update) swiftRules = annotation('data-sl-rules'); else for (const child of content.children) if (child.hasAttribute('data-sl-rules')) { swiftRules=child; break; }
-      if (swiftRules) layout?.adoptSwiftRules?.(swiftRules);
       if (!update) noteSyncMarkers(content);
       const active=document.activeElement;
       if (active && active!==document.body && root.contains(active)) { focusChain=[]; for (let element=active; element && element!==root; element=element.parentElement) focusChain.push(element); }
@@ -2836,7 +2837,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
       if (markerSeen('urlPath')) syncPhase(null,'url path',urlPathNeeded(),syncUrlPath);
       measureSyncPhase('inputHostSyncMs',syncFileAndClipboardHosts);
       syncPhase('motionSyncMs','motion',motionNeeded(),syncMotionPhase);
-      if (markerSeen('scrollTransition')) syncPhase(null,'scroll transitions',patched('[data-scroll-transition]', SCROLL_TRANSITION_ATTRIBUTES) || commitChanges.childrenChangedUnder('[data-scroll-transition]') || commitChanges.attributesChangedOnChildrenOf('[data-scroll-transition]'),()=>scrollTransitions.sync());
+      if ((typeof SWIFTUIWEB_HAS_MOTION === 'undefined' || SWIFTUIWEB_HAS_MOTION) && markerSeen('scrollTransition')) syncPhase(null,'scroll transitions',patched('[data-scroll-transition]', SCROLL_TRANSITION_ATTRIBUTES) || commitChanges.childrenChangedUnder('[data-scroll-transition]') || commitChanges.attributesChangedOnChildrenOf('[data-scroll-transition]'),()=>scrollTransitions.sync());
       // Any commit can move a transitioning view in its scroll view (content above it changed): measured again next frame.
       if (markerSeen('scrollTransition')) scrollTransitions.schedule();
       // A view that takes a source's frame follows any change of layout: every commit places it again.
@@ -3339,7 +3340,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
     }
   };
   // `worker` says where the Swift side runs; browser gates assert the runtime they meant to test.
-  const session={root, metrics, performanceMetrics, fail:error=>{if(!failed)report(error);}, get worker() { return typeof instance.htmlBytes === 'function' && instance.migrated !== true; }, flush:()=>{if(frame)window.cancelAnimationFrame(frame);commit();},
+  const session={root, metrics, performanceMetrics, fail:error=>{if(!failed)report(error);}, get failed() { return failed; }, get worker() { return typeof instance.htmlBytes === 'function' && instance.migrated !== true; }, flush:()=>{if(frame)window.cancelAnimationFrame(frame);commit();},
     // Whether Swift published since the last commit: a publication made outside a call or a task (a timer's callback).
     publicationPending:()=>Number(api.publish_seq?.()||0)!==committedSequence,
     // Resolves once the app has stopped changing: no geometry report or publication happened for a few frames. A Worker answers the host's geometry reports (a canvas learning its box) a round
@@ -3389,7 +3390,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   historyHost = new HistoryCoordinator(root,{window,ack:seq=>api.history_ack?.(seq),restore:key=>{sendValue(key);api.history_restore?.();schedule();},onPop:()=>{locationTabRestoreKey=null;locationTabRestoreView=null;restoreTabSelectionFromLocation({dispatch:false});openPathAddress();},onRoot:()=>{locationTabRestoreKey=null;locationTabRestoreView=null;locationStale=true;restoreRootTabSelections();},onLocation:()=>{sendValue(window.location.href);api.history_location?.();const host=root.querySelector('[data-open-url-handler]');if(host)dispatchNamed(host,'openURL',window.location.href);}});
   for(const factory of options.plugins||[])plugins.push(factory(root,{dispatchNamed,window,document}));
   session.layoutMetrics=layout.metrics;
-  const nativeDragDrop = new NativeDragDropCoordinator(root,dispatchNamed);
+  const nativeDragDrop = (typeof SWIFTUIWEB_HAS_DRAG_DROP === 'undefined' || SWIFTUIWEB_HAS_DRAG_DROP) ? new NativeDragDropCoordinator(root,dispatchNamed) : INERT_HOST;
   installGestures();installSharing();installContextMenus();
   // Called without the event: `syncPlatform` takes a resolved scheme.
   const syncPlatformNow=()=>syncPlatform();

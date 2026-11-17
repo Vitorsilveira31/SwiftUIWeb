@@ -227,8 +227,24 @@ const rules = {
   navigation: /\b(?:NavigationStack|NavigationView|NavigationLink|TabView|toolbar|sheet|fullScreenCover)\b/.test(applicationText),
   // `.draggable(_)` is `onDrag` for a Transferable value (DragDrop.swift).
   dragDrop: /(?:onDrag|onDrop|dropDestination|\.draggable\s*\(|Transferable)/.test(applicationText),
+  // `.onHover { hovered = $0 }` is lowered to `onHover(_assigning:)`, whose hovered look the renderer learns and publishes as
+  // CSS rules (FiberTree's hover rules). Without it a release leaves that machinery out (`SWIFTUIWEB_RELEASE_HAS_HOVER`).
+  hover: /\bonHover\b/.test(applicationText),
   networking: /(?:\bURLSession\b|\bURLRequest\b|\bURLComponents\b|\bWebSocket\b|NetworkRuntime|NetworkError|data\s*\(from:)/.test(applicationText),
-  storage: /(?:@AppStorage|@SceneStorage|WebIndexedDB|StorageRuntime|UserDefaults|IndexedDB)/.test(applicationText)
+  storage: /(?:@AppStorage|@SceneStorage|WebIndexedDB|StorageRuntime|UserDefaults|IndexedDB)/.test(applicationText),
+  // The browser hosts below leave a release's JavaScript when these are false (`bun build --define`, see
+  // Tools/build-runtime-bundle.mjs); `navigation` and `dragDrop` above gate the tab shell and the native drag coordinator.
+  // Each rule is wider than the API it serves: a false positive only keeps a host.
+  // Playback (media-host.js): any AVFoundation/AVKit type, VideoPlayer, or an import of either module.
+  media: /\b(?:AV[A-Z]\w*|VideoPlayer)\b|\bimport\s+AV(?:Foundation|Kit)\b/.test(applicationText),
+  // Divider drag and keys (split-view-host.js).
+  splitViews: /\b[HV]SplitView\b/.test(applicationText),
+  // NSPredicate's format language (BrowserIO/predicate-engine.mjs).
+  predicates: /\bNS(?:Compound|Comparison)?Predicate\b|\bNSExpression\b|\bpredicateFormat\b|\bfiltered\s*\(\s*using\b/.test(applicationText),
+  // transition-host.js: insertion and removal transitions, `.animation`, matched geometry, content and symbol effects,
+  // scroll transitions and indicator flashes, and the enter and exit motion of presentations, navigation pushes and pops,
+  // live regions (`.updatesFrequently`, the date pickers, a Table's status) and media controls.
+  motion: /\b(?:withAnimation|withTransaction|[Tt]ransaction|[Aa]nimations?|[Tt]ransitions?|AnyTransition|ContentTransition|matchedGeometryEffect|matchedTransitionSource|navigationTransition|Namespace|contentTransition|symbolEffect|SymbolEffect\w*|scrollTransition|PhaseAnimator|phaseAnimator|KeyframeAnimator|keyframeAnimator|scrollIndicatorsFlash|visualEffect|sheet|fullScreenCover|popover|alert|Alert|confirmationDialog|inspector|updatesFrequently|DatePicker|MultiDatePicker|Table|VideoPlayer|NavigationStack|NavigationView|NavigationSplitView|NavigationLink|navigationDestination|TabView|toolbar)\b/.test(applicationText)
 };
 
 const dynamic = {
@@ -411,6 +427,7 @@ const compileFeatureFlags = {
   images: "SWIFTUIWEB_RELEASE_HAS_IMAGES",
   photos: "SWIFTUIWEB_RELEASE_HAS_PHOTOS",
   dragDrop: "SWIFTUIWEB_RELEASE_HAS_DRAGDROP",
+  hover: "SWIFTUIWEB_RELEASE_HAS_HOVER",
   canvas: "SWIFTUIWEB_RELEASE_HAS_CANVAS",
   meshGradient: "SWIFTUIWEB_RELEASE_HAS_MESH_GRADIENT",
   networking: "SWIFTUIWEB_RELEASE_HAS_NETWORKING",

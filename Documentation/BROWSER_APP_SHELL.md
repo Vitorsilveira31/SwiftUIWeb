@@ -214,6 +214,24 @@ differ, when what the runtime shows first is not what was captured: a screen tha
 value cannot be prerendered. It adds one inline script to the page (about 1 KB), allowed by hash in the policy: no `unsafe-eval`,
 no new origin. An application with its own policy needs a `script-src` in it.
 
+## Split module (experimental)
+
+A release build can split `app.wasm` by what the first screen runs: `app.wasm` keeps those functions and downloads before the
+screen, `app-rest.wasm` holds the rest and downloads right after it. A call that needs a function of the rest before it
+arrived waits for it; nothing fails. Design, measurements and limits: [Architecture/WASM_SPLIT.md](Architecture/WASM_SPLIT.md).
+
+```sh
+SWIFTUIWEB_WASM_SPLIT=1 CONFIGURATION=release make run site        # or Tools/run-browser.sh <example>
+```
+
+| Variable | Meaning |
+|---|---|
+| `SWIFTUIWEB_WASM_SPLIT=1` | Turns it on (release only). Absent or `0`: one `app.wasm`, as before. |
+| `SWIFTUIWEB_WASM_SPLIT_ROUTE` | The route whose first screen is profiled (default `/`). |
+| `SWIFTUIWEB_WASM_SPLIT_VIEWPORTS` | The viewports profiled, `WIDTHxHEIGHT,...` (default `1280x800,390x844`: the regular and the compact layout). |
+
+The step needs Binaryen (`wasm-split`, `wasm-opt`) and headless Chromium (`bunx --bun playwright install chromium`).
+
 ## TabView `.sidebarAdaptable` shell
 
 ```swift

@@ -33,7 +33,7 @@ flowchart TB
 
 | Group | Files | What they do |
 |---|---|---|
-| Runtime and DOM | `embedded-runtime.js`, `embedded-dom.js`, `embedded-worker.js`, `embedded-worker-client.js`, `binary-publication.js` | Start the WebAssembly app, run it in a Worker, and apply the binary patches Swift sends to the DOM. |
+| Runtime and DOM | `embedded-runtime.js`, `embedded-dom.js`, `embedded-worker.js`, `embedded-worker-client.js`, `binary-publication.js`, `build-runtime-bundle.mjs` | Start the WebAssembly app, run it in a Worker, and apply the binary patches Swift sends to the DOM. `build-runtime-bundle.mjs` builds the runtime and the worker with one shared chunk, and leaves out of a release the hosts it does not reach. |
 | Layout | `css-layout.js`, `layout-host.js`, `geometry-host.js` | Turn the layout intent Swift describes into flexbox and grid styles, and report measured sizes back. |
 | Browser features | `media-host.js`, `host-interactions.js`, `split-view-host.js`, `tab-shell.js`, `feature-loader.js`, `mesh-gradient.js` | One host per feature (media playback, drag and drop, split views, tabs, features loaded on demand). |
 | BrowserIO | [`BrowserIO/`](BrowserIO) | The JavaScript half of the Swift-to-browser bridge (fetch, IndexedDB, cookies, text, predicates) and its own host tests. |
@@ -47,6 +47,7 @@ flowchart TB
 | `release-reachability.js`, `embedded-capabilities.mjs`, `embedded-preflight.mjs` | Work out which optional features an app reaches and check the toolchain before building. |
 | `compile-assets.mjs`, `compile-strings.mjs`, `build-styles.mjs`, `inject-app-head.mjs` | Prepare asset catalogs, strings, styles and the page head. |
 | `precompress-bundle.mjs`, `hash-release-bundle.mjs`, `measure-bundle.mjs` | Compress, fingerprint and measure the release bundle. |
+| `wasm-split-release.mjs`, `wasm-split-loader.js` | Split a release app.wasm by what the first screen runs, and load the rest behind it (opt-in, `SWIFTUIWEB_WASM_SPLIT=1`). |
 | `bun-server.ts`, `dev-watch.mjs`, `live-reload.mjs` | The local server and the watch/reload loop. |
 
 ## Checks

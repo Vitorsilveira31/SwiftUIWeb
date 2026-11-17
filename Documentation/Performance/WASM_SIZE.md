@@ -57,8 +57,20 @@ Brotli -9. The release sizes of each build are reported by `make wasm-size`.
 
 ## Options that were measured
 
-- `SWIFTUIWEB_WASM_MERGEFUNC_THRESHOLD` (Swift's function-merging pass). Thresholds 2 and 8 grow the Showcase by 1.1 % and 0.7 %. A
-  threshold of 30 or 100 shrinks it by 0.6 % and 0.7 % raw (1.4 % brotli at 100). The default is off.
+- `SWIFTUIWEB_WASM_MERGEFUNC_THRESHOLD` (Swift's function-merging pass). Thresholds 2 and 8 grow the Showcase by 1.1 % and 0.7 %.
+  A release merges at 30 by default; `off` keeps the toolchain default, as a debug build does. Measured after wasm-opt
+  (brotli -q11 of app.wasm, release, 2026-11-16):
+
+  | app.wasm | off | 30 | 100 |
+  |---|---|---|---|
+  | Board, raw | 1,318,163 | 1,313,889 (-0.3 %) | +1.1 % |
+  | Board, brotli | 397,799 | 396,962 (-0.2 %) | 0.0 % |
+  | Showcase, raw | 3,861,036 | 3,846,174 (-0.4 %) | 3,906,953 (+1.2 %) |
+  | Showcase, brotli | 961,001 | 957,732 (-0.3 %) | 957,798 (-0.3 %) |
+
+  wasm-opt already folds most of what the pass would merge, so the gain is small; 100 grows the raw binary. An interleaved
+  A/B of the Board at 30 against off (`Tools/compare-react.mjs`, 10 rounds, CPU 1x) found no significant difference in any
+  interaction or load metric.
 - `wasm-opt` (Binaryen) runs on the release bundle by default in `Tools/strip-wasm-release.sh` when it is installed. `WASM_OPT=0`
   disables it. On a large application's release bundle (6.71 MB stripped, not the Showcase):
 

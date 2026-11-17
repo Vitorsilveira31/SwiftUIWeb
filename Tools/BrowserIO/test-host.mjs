@@ -96,7 +96,8 @@ const alloc=n=>{const p=top;top+=n+16;if(top>memory.buffer.byteLength)memory.gro
 const instance={exports:{memory,browser_io_alloc:alloc,browser_io_deliver(id,status,p,n){pending.get(id)?.(status,new Uint8Array(memory.buffer,p,n).slice());}}};
 const listeners=new Map();
 const environment={fetch:globalThis.fetch,Intl:globalThis.Intl,localStorage:new MemoryStorage(),sessionStorage:new MemoryStorage(),navigator:{onLine:true},addEventListener(name,fn){if(!listeners.has(name))listeners.set(name,new Set());listeners.get(name).add(fn);},removeEventListener(name,fn){listeners.get(name)?.delete(fn);}};
-const host=createBrowserIO({getInstance:()=>instance,environment,baseURL});
+let cookieWrites=0;
+const host=createBrowserIO({getInstance:()=>instance,environment,baseURL,onCookieWrite:()=>{cookieWrites++;}});
 function request(path,{method='GET',body=null,stream=false,timeout=1000,limit=1024,downloadProgress=false}={}){return new Writer().text(path).text(method).text('same-origin').text('follow').u32(timeout).u32(limit).u32((stream?1:0)|(downloadProgress?4:0)).u32(0).u32(body===null?0:1).data(body??new Uint8Array()).bytes();}
 function send(op,packet,cancel=false,callbackTimeout=3000){return new Promise((resolve,reject)=>{const id=next++;const events=[];const p=alloc(packet.length);new Uint8Array(memory.buffer,p,packet.length).set(packet);const timer=setTimeout(()=>reject(new Error('callback timeout')),callbackTimeout);pending.set(id,(status,bytes)=>{events.push({status,bytes});if(status<100){clearTimeout(timer);pending.delete(id);resolve(events);}});assert.equal(host.imports.request(id,op,p,packet.length),0);if(cancel)host.imports.cancel(id);});}
 function storage(scope,space,action,key='',value=''){const data=new Writer().u32(scope).text(space).u32(action).text(key).text(value).bytes();const p=alloc(data.length);new Uint8Array(memory.buffer,p,data.length).set(data);const h=host.imports.sync(2,p,data.length);assert.ok(h);const n=host.imports.length(h);const out=alloc(n);assert.equal(host.imports.copy(h,out,n),n);const bytes=new Uint8Array(memory.buffer,out,n).slice();host.imports.release(h);const reader=new Reader(bytes);assert.equal(reader.u32(),0);return reader;}
@@ -292,7 +293,9 @@ try {
     environment.document={cookie:'session=abc; theme=dark'};environment.location={hostname:'shop.example.test',protocol:'https:'};
     let cookie=syncResult(16,new Writer().u32(0).text('').bytes());assert.equal(cookie.u32(),0);assert.equal(cookie.text(),'session=abc; theme=dark');assert.equal(cookie.text(),'shop.example.test');assert.equal(cookie.u32(),1);cookie.finish();
     cookie=syncResult(16,new Writer().u32(1).text('pref=compact; Path=/').bytes());assert.equal(cookie.u32(),0);cookie.finish();assert.equal(environment.document.cookie,'pref=compact; Path=/');
-    cookie=syncResult(16,new Writer().u32(1).text('x'.repeat(4097)).bytes());assert.equal(cookie.u32()|0,-1);cookie.text();
+    // The page announces its own write to its cookie watcher (Tools/cookie-watch.js), so it does not return as a change.
+    assert.equal(cookieWrites,1);
+    cookie=syncResult(16,new Writer().u32(1).text('x'.repeat(4097)).bytes());assert.equal(cookie.u32()|0,-1);cookie.text();assert.equal(cookieWrites,1,'a refused write was announced');
     cookie=syncResult(16,new Writer().u32(9).text('').bytes());assert.equal(cookie.u32()|0,-1);cookie.text();
     environment.document=null;cookie=syncResult(16,new Writer().u32(0).text('').bytes());assert.equal(cookie.u32()|0,-7);cookie.text();
     delete environment.document;delete environment.location;tests++; }
