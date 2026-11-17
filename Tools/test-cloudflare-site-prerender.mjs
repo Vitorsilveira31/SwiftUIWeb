@@ -55,6 +55,7 @@ function setup() {
   writeFileSync(join(bundle, "app.css"), "body{}");
   writeFileSync(join(bundle, "assets", "app.js"), "export {};");
   writeFileSync(join(bundle, "app.wasm.br"), "compressed");
+  writeFileSync(join(bundle, "index.html.br"), "compressed");
   writeFileSync(join(bundle, "build.log"), "log");
   copied = [...stage(bundle, assets), ...prerender(assets, { origin: ORIGIN })];
 }
@@ -173,11 +174,12 @@ describe("the files around the routes", () => {
     );
   });
 
-  test("the staged files keep the bundle's files and drop the compressed copies and logs", () => {
+  test("the staged files keep the bundle's files and the brotli copies worker.js serves, and drop the other copies and logs", () => {
     assert.ok(copied.includes("app.wasm"));
     assert.ok(copied.includes("assets/app.js"));
     assert.ok(existsSync(join(assets, "_headers")));
-    assert.equal(existsSync(join(assets, "app.wasm.br")), false);
+    assert.ok(copied.includes("app.wasm.br"));
+    assert.equal(existsSync(join(assets, "index.html.br")), false);
     assert.equal(existsSync(join(assets, "build.log")), false);
   });
 });

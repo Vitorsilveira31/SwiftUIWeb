@@ -1,7 +1,10 @@
 #!/usr/bin/env bun
 // Copies a release bundle into the assets directory of the Cloudflare site (Tools/cloudflare-site/public), with the
-// _headers file next to it. Cloudflare compresses on its own, so the .br/.gz copies stay behind, and so do build logs
-// and the build's own dotfiles (.bundle-inputs, the fingerprint that lets suites reuse a bundle).
+// _headers file next to it. The brotli copy of each .wasm, .js and .css file goes with it (worker.js serves it to a reader
+// that accepts brotli, at the build's q11 instead of Cloudflare's on-the-fly quality); the .gz copies stay behind (gzip
+// readers get Cloudflare's own), and so do the .br copies of other files (index.html is rewritten by prerender, so its
+// copy would be stale), build logs and the build's own dotfiles (.bundle-inputs, the fingerprint that lets suites reuse a
+// bundle).
 //
 // It also writes what a crawler and a browser without JavaScript need, because every route is a real file now: a
 // prerendered copy of index.html for each address of the site (its own title, description and canonical link, and a
@@ -17,6 +20,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "../..");
 const RECIPES = join(ROOT, "Examples/ShowcaseSite/Features/Components/Recipes");
 const LEFT_OUT = /^\.|\.(br|gz|log)$/;
+// The copies worker.js serves: the files it runs for (runWorkerFirst in cloudflare.config.ts).
+const SERVED_COPY = /\.(wasm|js|css)\.br$/;
 const DEFAULT_ORIGIN = "https://swiftuiweb.vitorsilveira31.workers.dev";
 
 // The site's own words come from the same source tree as the bundle, so a <title> cannot drift from the app's: the pages
@@ -168,7 +173,7 @@ export function stage(bundle, assets) {
       const source = join(directory, name);
       const path = relative(bundle, source);
       if (statSync(source).isDirectory()) walk(source);
-      else if (!LEFT_OUT.test(name)) {
+      else if (!LEFT_OUT.test(name) || (SERVED_COPY.test(name) && existsSync(source.slice(0, -3)))) {
         mkdirSync(dirname(join(assets, path)), { recursive: true });
         copyFileSync(source, join(assets, path));
         copied.push(path);
