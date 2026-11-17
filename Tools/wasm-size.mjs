@@ -52,7 +52,7 @@ function requireTools(root) {
 }
 
 function buildShowcase(root) {
-  const finished = spawnSync(join(root, "Tools/run-browser.sh"), ["showcase"], { cwd: root, env: { ...process.env, BUILD_ONLY: "1", CONFIGURATION: "release" }, stdio: "inherit" });
+  const finished = spawnSync(join(root, "Tools/run-browser.sh"), ["showcase"], { cwd: root, env: { ...process.env, BUILD_ONLY: "1", CONFIGURATION: "release", SWIFTUIWEB_WASM_SPLIT: "0" }, stdio: "inherit" });
   if (finished.status !== 0) throw new SizeError(`Command '${join(root, "Tools/run-browser.sh")} showcase' returned non-zero exit status ${finished.status}.`);
 }
 

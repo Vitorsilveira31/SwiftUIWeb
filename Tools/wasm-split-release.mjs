@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
-// Splits a release bundle's app.wasm in two by what its first screen runs (opt-in: SWIFTUIWEB_WASM_SPLIT=1).
+// Splits a release bundle's app.wasm in two by what its first screen runs (the release default; SWIFTUIWEB_WASM_SPLIT=0
+// turns it off, Documentation/Architecture/WASM_SPLIT.md).
 //
 // The page then downloads, before the first screen, only the functions that screen needs (`app.wasm`); the rest
 // (`app-rest.wasm`) downloads right after it, in the background. Tools/wasm-split-loader.js loads the second module:
@@ -14,15 +15,24 @@
 //      over the wire (+0.9 KB brotli) for 5 KB less raw.
 //   4. Unless --no-verify, the split bundle is loaded once more and must reach a first screen with no page error.
 //
-// The profile is tied to the exact binary, so it is taken again on each build; it is kept in the build logs
+// The profile is tied to the exact binary. With --cache-dir, the split of a module is kept under a key of everything it
+// depends on (the module, the runtime scripts and the page, this script, Binaryen's version, the route and the viewports),
+// so a build whose inputs did not change reuses it and runs no browser. The profile is kept in the build logs
 // (`--log-dir`). Run it after every file of the bundle is in place and before Tools/hash-release-bundle.mjs, which
 // gives both modules their hashed names and rewrites the loader's reference to app-rest.wasm.
 //
+// --check exits 0 when this machine can split (a wasm-split that has the options used here, and a Chromium for the
+// profile run) and otherwise prints why and exits 1. --fallback turns any failure into a warning that leaves the bundle as
+// it was, with one app.wasm: the launcher's default, the way Tools/strip-wasm-release.sh goes on without wasm-opt.
+//
 // usage: wasm-split-release.mjs <bundle-directory> [--route /] [--viewports 1280x800,390x844] [--log-dir DIR] [--no-verify]
-// Run the tests with: bun Tools/test-wasm-split-browser.mjs
+//                               [--cache-dir DIR] [--fallback]
+//        wasm-split-release.mjs --check
+// Run the tests with: bun test ./Tools/test-wasm-split-release.mjs and bun Tools/test-wasm-split-browser.mjs
 
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -52,6 +62,53 @@ const READ_PROFILE = () => {
   const length = write(at, pages * 65536);
   return Array.from(new Uint8Array(memory.buffer, at, length));
 };
+
+// The wasm-split options this step uses; an older Binaryen without one of them cannot split (Ubuntu 24.04 ships 108).
+const NEEDED_OPTIONS = ["--instrument", "--merge-profiles", "--profile", "--placeholder-namespace", "--import-namespace"];
+// The files of the bundle the profile run's code paths depend on, besides the module.
+const PAGE_FILES = ["index.html", "index.js", "render-worker.js", "runtime-shared.js"];
+const SPLIT_SOURCE = fileURLToPath(import.meta.url);
+
+/** Why this machine cannot split, or null when it can. */
+export async function unavailable() {
+  const help = spawnSync("wasm-split", ["--help"], { encoding: "utf8" });
+  if (help.error?.code === "ENOENT") return "Binaryen's wasm-split is not installed (brew install binaryen, or a Binaryen release on Linux)";
+  const text = `${help.stdout ?? ""}${help.stderr ?? ""}`;
+  const missing = NEEDED_OPTIONS.filter((option) => !text.includes(option));
+  if (missing.length) return `this wasm-split (${binaryenVersion()}) has no ${missing.join(", ")}: a newer Binaryen is needed`;
+  try {
+    const { launch } = await import("./browser-test-support.mjs");
+    const browser = await launch({ engine: "chromium" });
+    await browser.close();
+  } catch (error) {
+    return `no headless Chromium for the profile run (bunx playwright install chromium): ${String(error?.message ?? error).split("\n")[0]}`;
+  }
+  return null;
+}
+
+function binaryenVersion() {
+  const result = spawnSync("wasm-split", ["--version"], { encoding: "utf8" });
+  return (result.stdout || result.stderr || "unknown").trim();
+}
+
+/** The cache key of a split: every input the profile run and the split depend on. */
+export function cacheKey(bundle, { route, viewports }) {
+  const hash = createHash("sha256");
+  const add = (label, bytes) => { hash.update(label); hash.update("\0"); hash.update(createHash("sha256").update(bytes).digest("hex")); hash.update("\n"); };
+  add(PRIMARY, readFileSync(join(bundle, PRIMARY)));
+  for (const name of PAGE_FILES) if (existsSync(join(bundle, name))) add(name, readFileSync(join(bundle, name)));
+  add("script", readFileSync(SPLIT_SOURCE));
+  add("binaryen", binaryenVersion());
+  add("settings", JSON.stringify({ route, viewports, namespaces: [PLACEHOLDER_NAMESPACE, PRIMARY_NAMESPACE] }));
+  return hash.digest("hex").slice(0, 32);
+}
+
+/** Keeps the eight most recent splits of a cache folder. */
+function pruneCache(cacheDir) {
+  const entries = readdirSync(cacheDir).filter((name) => name.endsWith(".rest.wasm")).map((name) => name.slice(0, -".rest.wasm".length));
+  const byAge = entries.map((key) => ({ key, time: statSync(join(cacheDir, `${key}.rest.wasm`)).mtimeMs })).sort((a, b) => b.time - a.time);
+  for (const { key } of byAge.slice(8)) for (const suffix of [".app.wasm", ".rest.wasm", ".prof"]) rmSync(join(cacheDir, key + suffix), { force: true });
+}
 
 function run(command, args) {
   const result = spawnSync(command, args, { encoding: "utf8" });
@@ -164,11 +221,33 @@ function servableCopy(bundle, to) {
 
 const brotliSize = (path) => brotliCompressSync(readFileSync(path), { params: { [constants.BROTLI_PARAM_QUALITY]: 11, [constants.BROTLI_PARAM_LGWIN]: 24 } }).length;
 
-export async function splitBundle(bundle, { route = "/", viewports = parseViewports("1280x800,390x844"), logDir = null, verify = true, log = console.log } = {}) {
-  const { launch, serveBundle } = await import("./browser-test-support.mjs");
+const kb = (bytes) => `${(bytes / 1024).toFixed(1)} KB`;
+const sizes = (input, primary, secondary) => ({
+  before: { raw: statSync(input).size, br: brotliSize(input) },
+  first: { raw: statSync(primary).size, br: brotliSize(primary) },
+  rest: { raw: statSync(secondary).size, br: brotliSize(secondary) },
+});
+const report = ({ before, first, rest }, log, how = "") =>
+  log(`wasm split${how}: ${PRIMARY} ${kb(first.raw)} (${kb(first.br)} br) before the first screen, ${SECONDARY} ${kb(rest.raw)} (${kb(rest.br)} br) after it; unsplit ${kb(before.raw)} (${kb(before.br)} br)`);
+
+export async function splitBundle(bundle, { route = "/", viewports = parseViewports("1280x800,390x844"), logDir = null, verify = true, cacheDir = null, log = console.log } = {}) {
   const input = join(bundle, PRIMARY);
   if (!existsSync(input)) throw new Error(`no ${PRIMARY} in ${bundle}`);
   if (existsSync(join(bundle, SECONDARY))) throw new Error(`${bundle} is split already`);
+  // A build whose inputs did not change takes the split an earlier build made, and runs no browser.
+  const key = cacheDir ? cacheKey(bundle, { route, viewports }) : null;
+  const cached = key ? { primary: join(cacheDir, `${key}.app.wasm`), secondary: join(cacheDir, `${key}.rest.wasm`), profile: join(cacheDir, `${key}.prof`) } : null;
+  if (cached && existsSync(cached.primary) && existsSync(cached.secondary)) {
+    const measured = sizes(input, cached.primary, cached.secondary);
+    cpSync(cached.primary, input);
+    cpSync(cached.secondary, join(bundle, SECONDARY));
+    const now = new Date();
+    utimesSync(cached.secondary, now, now);
+    if (logDir && existsSync(cached.profile)) { mkdirSync(logDir, { recursive: true }); cpSync(cached.profile, join(logDir, "first-screen.prof")); }
+    report(measured, log, " (the split of an earlier build from the same inputs)");
+    return measured;
+  }
+  const { launch, serveBundle } = await import("./browser-test-support.mjs");
   const work = mkdtempSync(join(tmpdir(), "swiftuiweb-wasm-split-"));
   try {
     // 1. The instrumented module, in a copy of the bundle whose scripts keep its instance reachable.
@@ -207,16 +286,13 @@ export async function splitBundle(bundle, { route = "/", viewports = parseViewpo
       }
       const moved = ownMutableGlobals(readFileSync(secondary));
       if (moved > 0) throw new Error(`wasm-split moved ${moved} mutable global(s) into ${SECONDARY}; a move from the Worker to the main thread would start them over, so this module cannot be split`);
-      const before = { raw: statSync(input).size, br: brotliSize(input) };
-      const first = { raw: statSync(primary).size, br: brotliSize(primary) };
-      const rest = { raw: statSync(secondary).size, br: brotliSize(secondary) };
-      cpSync(primary, join(bundle, PRIMARY));
-      cpSync(secondary, join(bundle, SECONDARY));
-      const kb = (bytes) => `${(bytes / 1024).toFixed(1)} KB`;
-      log(`wasm split: ${PRIMARY} ${kb(first.raw)} (${kb(first.br)} br) before the first screen, ${SECONDARY} ${kb(rest.raw)} (${kb(rest.br)} br) after it; unsplit ${kb(before.raw)} (${kb(before.br)} br)`);
-      // 4. The split bundle still starts.
+      const measured = sizes(input, primary, secondary);
+      // 4. The split bundle still starts. It is checked in a copy, so the bundle itself only ever holds a split that passed.
       if (verify) {
-        const server = await serveBundle({ bundle: servableCopy(bundle, join(work, "split")), logName: null });
+        const checked = servableCopy(bundle, join(work, "split"));
+        cpSync(primary, join(checked, PRIMARY));
+        cpSync(secondary, join(checked, SECONDARY));
+        const server = await serveBundle({ bundle: checked, logName: null });
         try {
           for (const viewport of viewports) {
             const { waited } = await verifyOnce(browser, server.base, route, viewport);
@@ -226,7 +302,20 @@ export async function splitBundle(bundle, { route = "/", viewports = parseViewpo
           await server.stop();
         }
       }
-      return { before, first, rest };
+      cpSync(primary, input);
+      cpSync(secondary, join(bundle, SECONDARY));
+      if (cached) {
+        mkdirSync(cacheDir, { recursive: true });
+        for (const [from, to] of [[profile, cached.profile], [primary, cached.primary], [secondary, cached.secondary]]) {
+          cpSync(from, `${to}.${process.pid}`);
+          // The rest goes last: a split is in the cache once its second module is.
+          cpSync(`${to}.${process.pid}`, to);
+          rmSync(`${to}.${process.pid}`, { force: true });
+        }
+        pruneCache(cacheDir);
+      }
+      report(measured, log);
+      return measured;
     } finally {
       await browser.close();
     }
@@ -238,13 +327,29 @@ export async function splitBundle(bundle, { route = "/", viewports = parseViewpo
 export async function main(argv) {
   const { values, positionals } = parseArgs({
     args: argv, allowPositionals: true,
-    options: { route: { type: "string", default: "/" }, viewports: { type: "string", default: "1280x800,390x844" }, "log-dir": { type: "string" }, "no-verify": { type: "boolean", default: false } },
+    options: {
+      route: { type: "string", default: "/" }, viewports: { type: "string", default: "1280x800,390x844" }, "log-dir": { type: "string" },
+      "no-verify": { type: "boolean", default: false }, "cache-dir": { type: "string" }, fallback: { type: "boolean", default: false },
+      check: { type: "boolean", default: false },
+    },
   });
+  if (values.check) {
+    const reason = await unavailable();
+    if (reason) console.error(reason);
+    return reason ? 1 : 0;
+  }
   if (positionals.length !== 1) {
-    console.error("usage: wasm-split-release.mjs <bundle-directory> [--route /] [--viewports 1280x800,390x844] [--log-dir DIR] [--no-verify]");
+    console.error("usage: wasm-split-release.mjs <bundle-directory> [--route /] [--viewports 1280x800,390x844] [--log-dir DIR] [--no-verify] [--cache-dir DIR] [--fallback]\n       wasm-split-release.mjs --check");
     return 2;
   }
-  await splitBundle(resolve(positionals[0]), { route: values.route, viewports: parseViewports(values.viewports), logDir: values["log-dir"] ?? null, verify: !values["no-verify"] });
+  const bundle = resolve(positionals[0]);
+  try {
+    await splitBundle(bundle, { route: values.route, viewports: parseViewports(values.viewports), logDir: values["log-dir"] ?? null, verify: !values["no-verify"], cacheDir: values["cache-dir"] ?? null });
+  } catch (error) {
+    if (!values.fallback) throw error;
+    // The bundle is only written once a split passed, so it still holds the one module it had.
+    console.error(`warning: this release app.wasm is NOT split (one module, downloaded whole before the first screen): ${String(error?.message ?? error).split("\n")[0]}. SWIFTUIWEB_WASM_SPLIT=0 builds without the split on purpose; SWIFTUIWEB_WASM_SPLIT=1 makes this an error.`);
+  }
   return 0;
 }
 
