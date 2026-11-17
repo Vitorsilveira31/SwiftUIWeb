@@ -130,6 +130,11 @@ export class SemanticLayoutHost {
   }
   update(){
     if(this.disposed)return;
+    // A prerendered first screen (Documentation/Architecture/FIRST_PAINT.md) is a picture its own rules lay out
+    // (`#first-paint-style`) until the first commit replaces it. A pass before that (one a font, a global attribute or the
+    // window asked for) would claim its elements and number their blocks again, and for a frame the picture would lose the
+    // rules it was captured with (a ViewThatFits showed every candidate). The first commit's own pass runs after the release.
+    if(this.root.hasAttribute?.('data-first-paint'))return;
     // Swift publication can schedule another DOM commit while the current frame is synchronizing layout: fold that request
     // into one follow-up animation frame.
     if(this.updating){this.updateRequested=true;return;}
