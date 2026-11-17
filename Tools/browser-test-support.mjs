@@ -80,8 +80,6 @@ const SYNC_GATES = process.env.SWIFTUIWEB_SYNC_GATES !== "0";
 // the DOM it built with a reference encoding of the same tree (`window.__binaryVerify`) and prints each difference it reports. SWIFTUIWEB_BINARY=full
 // does that for every publication: the page never acknowledges one (`window.__fullPublish`), so each is a full binary stream.
 const BINARY = process.env.SWIFTUIWEB_BINARY ?? "";
-// SWIFTUIWEB_BINARY_SHAPES=0 builds the subtrees of binary publications in full instead of as shapes.
-const BINARY_SHAPES = process.env.SWIFTUIWEB_BINARY_SHAPES !== "0";
 if (!["", "verify", "full"].includes(BINARY)) throw new Error("SWIFTUIWEB_BINARY must be verify or full (the HTML transport is gone)");
 
 // The servers serveBundle started and has not stopped, which a renderer crash stops before the suite exits.
@@ -96,7 +94,6 @@ function instrumentPage(page) {
     for (const server of runningServers) server.kill("SIGKILL");
     process.exit(1);
   });
-  if (!BINARY_SHAPES) page.addInitScript(() => { window.__binaryShapes = false; }).catch(() => {});
   if (BINARY !== "") {
     page.addInitScript((mode) => { window.__binaryVerify = true; if (mode === "full") window.__fullPublish = true; }, BINARY).catch(() => {});
     // `page.__binaryExpected` is set by a check that makes the verification report on purpose: its difference is labelled as such.
