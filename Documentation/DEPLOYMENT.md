@@ -75,8 +75,10 @@ Trim `Permissions-Policy` to what the app does not use.
 
 **Cloudflare Workers** serves the bundle as static assets with `notFoundHandling: "single-page-application"`, which answers
 unknown paths with `index.html`, and serves `.wasm` with the right type. It reads the same `_headers` file as Netlify, in the
-assets directory, which can also give the hashed files their long cache. `Tools/cloudflare-site` deploys the project site this way and
-can serve as a reference.
+assets directory, which can also give the hashed files their long cache. Static assets are compressed on the fly, at a lower
+quality than the build's `.br` copies (about a quarter more bytes on `app.wasm`), and an uploaded `.br` is not served
+in its place; a small Worker in front of the assets binding can send it (`encodeBody: "manual"`). `Tools/cloudflare-site`
+deploys the project site this way, `worker.js` included, and can serve as a reference.
 
 **nginx:**
 

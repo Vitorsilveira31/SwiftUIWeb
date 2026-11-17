@@ -14,19 +14,26 @@ function bundle(files) {
 }
 
 describe("Cloudflare site staging", () => {
-  test("copies the bundle without compressed copies, logs or dotfiles, and adds _headers", () => {
+  test("copies the bundle with the brotli copies worker.js serves, without other compressed copies, logs or dotfiles, and adds _headers", () => {
     const root = bundle({
       "index.html": "<!doctype html>",
+      "index.html.br": "br",
       "app.0123abcd.wasm": "wasm",
       "app.0123abcd.wasm.br": "br",
+      "app.0123abcd.wasm.gz": "gz",
+      "index.0123abcd.js": "js",
+      "index.0123abcd.js.br": "br",
       "index.0123abcd.js.gz": "gz",
+      "style.0123abcd.css.br": "a copy without its file",
       "swift-build.log": "log",
       ".bundle-inputs": "fingerprint",
       "fonts/icons.0123abcd.woff2": "font",
     });
     const copied = stage(join(root, "bundle"), join(root, "public"));
-    expect(copied).toEqual(["app.0123abcd.wasm", "fonts/icons.0123abcd.woff2", "index.html"]);
-    expect(existsSync(join(root, "public", "app.0123abcd.wasm.br"))).toBe(false);
+    expect(copied).toEqual(["app.0123abcd.wasm", "app.0123abcd.wasm.br", "fonts/icons.0123abcd.woff2", "index.0123abcd.js", "index.0123abcd.js.br", "index.html"]);
+    expect(readFileSync(join(root, "public", "app.0123abcd.wasm.br"), "utf8")).toBe("br");
+    expect(existsSync(join(root, "public", "index.html.br"))).toBe(false);
+    expect(existsSync(join(root, "public", "style.0123abcd.css.br"))).toBe(false);
     expect(existsSync(join(root, "public", "swift-build.log"))).toBe(false);
     expect(readFileSync(join(root, "public", "_headers"), "utf8")).toContain("frame-ancestors 'none'");
   });
