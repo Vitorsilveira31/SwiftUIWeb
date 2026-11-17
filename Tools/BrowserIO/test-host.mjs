@@ -288,6 +288,13 @@ try {
     tests++; }
   { const received=[];instance.exports.browser_io_receive=(id,status,p,n)=>pending.get(id)?.(status,new Uint8Array(memory.buffer,p,n).slice());instance.exports.browser_io_free=p=>received.push(p);events=await send(9,new Writer().f64(0).bytes());assert.equal(events.at(-1).status,0);assert.equal(received.length,1);delete instance.exports.browser_io_receive;delete instance.exports.browser_io_free;tests++; }
   { const i=next++; const packet=new Writer().text('a').bytes(); const p=alloc(packet.length); new Uint8Array(memory.buffer,p,packet.length).set(packet); const seen=[]; pending.set(i,(status,bytes)=>seen.push({status,bytes})); assert.equal(host.imports.request(i,4,p,packet.length),0); await new Promise(r=>setTimeout(r,0)); const fire=(key)=>{for(const fn of listeners.get('storage')??[]) fn({storageArea:environment.localStorage,key});}; fire('swui:1:a:key'); fire('swui:1:a:other'); assert.equal(seen.length,0,'held until the revision'); fire('swui:1:a:__revision'); assert.equal(seen.length,2); seen.splice(1); assert.equal(seen[0].status,100); r=new Reader(seen[0].bytes); assert.equal(r.u32(),0); assert.equal(r.u32(),1); assert.equal(r.text(),'key'); host.imports.cancel(i); pending.delete(i); tests++; }
+  { // A change whose revision never comes is still reported, by the timer that flushes what is held (100 ms).
+    const i=next++; const packet=new Writer().text('a').bytes(); const p=alloc(packet.length); new Uint8Array(memory.buffer,p,packet.length).set(packet); const seen=[]; pending.set(i,(status,bytes)=>seen.push({status,bytes})); assert.equal(host.imports.request(i,4,p,packet.length),0); await new Promise(r=>setTimeout(r,0));
+    for(const fn of listeners.get('storage')??[]) fn({storageArea:environment.localStorage,key:'swui:1:a:late'});
+    assert.equal(seen.length,0,'held for the timer');
+    await new Promise(r=>setTimeout(r,180));
+    assert.equal(seen.length,1); assert.equal(seen[0].status,100); const late=new Reader(seen[0].bytes); assert.equal(late.u32(),0); assert.equal(late.u32(),1); assert.equal(late.text(),'late');
+    host.imports.cancel(i); pending.delete(i); tests++; }
   { // cookies (sync 16): the page's own jar. A read reports document.cookie, the host and whether the page is
     // secure; a write assigns one Set-Cookie line; a page without a document is an error, never an empty jar.
     environment.document={cookie:'session=abc; theme=dark'};environment.location={hostname:'shop.example.test',protocol:'https:'};
@@ -345,6 +352,22 @@ try {
     assert.equal(await run(5, 'http://[bad/url'), -16);
     failureHost.dispose();
     tests++; }
+  { // A host made without `onCookieWrite` still writes the cookie (its default announces nothing).
+    const env = { navigator: { onLine: true }, document: { cookie: '' }, location: { hostname: 'plain.example.test', protocol: 'https:' } };
+    const plain = createBrowserIO({ getInstance: () => instance, environment: env, baseURL });
+    const packet = new Writer().u32(1).text('plain=1; Path=/').bytes();
+    const p = alloc(packet.length); new Uint8Array(memory.buffer, p, packet.length).set(packet);
+    const handle = plain.imports.sync(16, p, packet.length); const length = plain.imports.length(handle); const out = alloc(length);
+    assert.equal(plain.imports.copy(handle, out, length), length);
+    const reader = new Reader(new Uint8Array(memory.buffer, out, length).slice()); plain.imports.release(handle);
+    assert.equal(reader.u32(), 0); reader.finish();
+    assert.equal(env.document.cookie, 'plain=1; Path=/');
+    plain.dispose();
+    // The standard library's Unicode data writes into the instance's memory: U+00DF uppercases to two scalars, "SS".
+    const at = alloc(16);
+    assert.equal(host.imports.unicode_case_special(0xDF, 0, at, 16), 2);
+    assert.deepEqual([...new Uint8Array(memory.buffer, at, 2)], [0x53, 0x53]);
+    tests++; }
   { // Upload progress comes from XMLHttpRequest, the only browser API that reports request-body bytes.
     const memory = new WebAssembly.Memory({ initial: 2 });
     const events = [];
@@ -362,6 +385,8 @@ try {
         this.body = body;
         if (failTransfer) { queueMicrotask(() => this.onerror?.()); return; }
         if (holdTransfer) return;
+        // A response that grows past the limit: a progress event under it is ignored, the first one over it stops the transfer.
+        if (this.url.endsWith('/oversize')) { this.onprogress?.({ loaded: 10 }); this.onprogress?.({ loaded: 4096 }); return; }
         const total = body.length;
         this.upload.onprogress?.({ lengthComputable: true, loaded: 2, total });
         this.upload.onprogress?.({ lengthComputable: true, loaded: total, total });
@@ -424,6 +449,10 @@ try {
     await waitFor(() => statusOf(6) !== undefined);
     holdTransfer = false;
     assert.equal(statusOf(6), -4);
+    // A body that passes maximumResponseBytes (1024 here) while it downloads ends the call with -14 and aborts the request.
+    assert.equal(deliverAt(7, packetFor('/oversize')), 0);
+    await waitFor(() => statusOf(7) !== undefined);
+    assert.equal(statusOf(7), -14);
     xhrHost.dispose();
     tests++; }
   // Style 10 carries a Swift FormatStyle as `name=value;...`. Only allow-listed
