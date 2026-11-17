@@ -67,7 +67,7 @@ const READ_PROFILE = () => {
 // The wasm-split options this step uses; an older Binaryen without one of them cannot split (Ubuntu 24.04 ships 108).
 const NEEDED_OPTIONS = ["--instrument", "--merge-profiles", "--profile", "--placeholder-namespace", "--import-namespace"];
 // The files of the bundle the profile run's code paths depend on, besides the module.
-const PAGE_FILES = ["index.html", "index.js", "render-worker.js", "runtime-shared.js"];
+const PAGE_FILES = ["index.html", "index.js", "render-worker.js", "runtime-shared.js", "runtime-deferred.js"];
 const SPLIT_SOURCE = fileURLToPath(import.meta.url);
 /** The exit status of a --fallback run that left the bundle unsplit. */
 export const FELL_BACK = 3;

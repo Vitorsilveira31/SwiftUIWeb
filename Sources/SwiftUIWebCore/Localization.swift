@@ -97,6 +97,7 @@ public struct LocalizedStringKey: Hashable, Sendable, ExpressibleByStringLiteral
     public mutating func appendInterpolation(_ image: Image) {
       // The name loses any U+FFFC of its own: it would end the marker early and start another (with a forged mark).
       let name = String(image.source.unicodeScalars.filter { $0 != "\u{FFFC}" }.map(Character.init))
+      Text._installInlineImageSplitting()
       key += "%@"; arguments.append(.string("\u{FFFC}" + _ImageAssets.marked(name, allowsRemote: image.allowsRemoteSource) + "\u{FFFC}"))
     }
     /// `\(count, specifier: "%02d")`: the format specifier stays in the key, as Xcode extracts it.

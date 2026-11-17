@@ -266,8 +266,8 @@ host code). N = the element is the host's own (not rendered by Swift). None is "
 | `embedded-dom.js` head, probes, importers, share output, color probe | `<head>` elements, off-screen probes, `<input type=file>`, `<a download>` | N |
 | `layout-host.js` | `data-resizing` on the document element | N |
 | `css-layout.js` mapper | `data-cl`, `data-cl-*`, `data-fit-selected`, `data-layout-hidden`, `display` of a hidden candidate, `--sl-*`, `--cl-*`; `data-fit-probe` and a saved/restored `style` during a fit pass | H (`ownsLayoutAttribute`, `ownsLayoutStyle`); the probe restores what it saved |
-| `host-interactions.js` presentations | `data-presentation-id`, `data-presentation-phase`, `role`, `aria-modal`, `tabindex`, sheet detent attributes and `--presentation-detent-height` on a presentation; `inert` and `aria-hidden` on the siblings of its ancestors | R (`sync()` restores the saved state of the siblings and applies it again after every commit; the id is written every time); H in the verification mode |
-| `host-interactions.js` file exporter | an `<a download>` | N |
+| `presentation-host.js` presentations | `data-presentation-id`, `data-presentation-phase`, `role`, `aria-modal`, `tabindex`, sheet detent attributes and `--presentation-detent-height` on a presentation; `inert` and `aria-hidden` on the siblings of its ancestors | R (`sync()` restores the saved state of the siblings and applies it again after every commit; the id is written every time); H in the verification mode |
+| `transfer-host.js` file mover | an `<a download>` | N |
 | `media-host.js` controls | `aria-valuenow`, `aria-valuetext`, `aria-disabled`, `title`, `aria-label`, widths of `.avkit-played`/`.avkit-loaded`, `left` of the thumb, texts of the time labels, `tabindex` of menu items | H (`data-host-managed` names and `*children`); menu item `tabindex` is O (set when the menu opens) |
 | `media-host.js` players | `src` of an adaptive element, `data-media-start` of a view | H (`mediaHostOwns`); `data-media-start` is O |
 | `media-host.js` headless players | their own elements and container | N |

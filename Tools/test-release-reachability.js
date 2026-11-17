@@ -319,6 +319,42 @@ function main() {
     const labelImage = planFor("LabelImage", "import SwiftUIWeb\nstruct V: View { var body: some View { Label(\"Logo\", image: \"logo\") } }\n");
     assert(labelImage.features.images === true, "`Label(_, image:)` did not enable the image loader");
     assert(labelImage.swiftDefines.includes("SWIFTUIWEB_RELEASE_HAS_IMAGES"), "`Label(_, image:)` did not keep image support compiled in");
+    // The browser capabilities the launcher installs (BrowserApp.swift) compile into a release only for an application
+    // that uses them; each construct below must keep its own.
+    const launcherDefines = ["STORAGE", "NETWORKING", "NAVIGATION", "WEBMOUNT", "IMAGES", "CANVAS", "HOVER"].map((name) => `SWIFTUIWEB_RELEASE_HAS_${name}`);
+    const plainText = planFor("PlainText", "import SwiftUIWeb\nstruct V: View { @State var query = \"\"\n var body: some View { VStack { Text(\"\\(3) works\"); TextField(\"Search\", text: $query); Button(\"Add\") {} } } }\n");
+    for (const define of launcherDefines) assert(!plainText.swiftDefines.includes(define), `a text-only application compiled in ${define}`);
+    const launcherCases = [
+      ["ButtonImage", "struct V: View { var body: some View { Button(\"Share\", image: \"share\") {} } }", "IMAGES"],
+      ["TabImage", "struct V: View { var body: some View { TabView { Tab(\"Home\", image: \"home\") { Text(\"a\") } } } }", "IMAGES"],
+      ["AppStorage", "struct V: View { @AppStorage(\"count\") var count = 0\n var body: some View { Text(\"a\") } }", "STORAGE"],
+      ["SceneStorage", "struct V: View { @SceneStorage(\"tab\") var tab = 0\n var body: some View { Text(\"a\") } }", "STORAGE"],
+      ["Defaults", "func read() -> Int { UserDefaults.standard.integer(forKey: \"n\") }", "STORAGE"],
+      ["Session", "func load() async throws { _ = try await URLSession.shared.data(from: url) }", "NETWORKING"],
+      ["Cookies", "func cookies() -> [HTTPCookie] { HTTPCookieStorage.shared.cookies ?? [] }", "NETWORKING"],
+      ["Stack", "struct V: View { var body: some View { NavigationStack { Text(\"a\") } } }", "NAVIGATION"],
+      ["Split", "struct V: View { var body: some View { NavigationSplitView { Text(\"a\") } detail: { Text(\"b\") } } }", "NAVIGATION"],
+      ["Destination", "struct V: View { var body: some View { List {}.navigationDestination(for: Int.self) { Text(\"\\($0)\") } } }", "NAVIGATION"],
+      ["Tabs", "struct V: View { var body: some View { TabView { Tab(\"A\", systemImage: \"a\") { Text(\"a\") } } } }", "NAVIGATION"],
+      ["DOMView", "struct R: DOMViewRepresentable { func makeDOMView(context: Context) -> DOMView { DOMView() } }", "WEBMOUNT"],
+      ["Mount", "struct V: View { var body: some View { WebMount(\"chart\") } }", "WEBMOUNT"],
+      ["Video", "import AVKit\nstruct V: View { var body: some View { VideoPlayer(player: AVPlayer(url: url)) } }", "WEBMOUNT"],
+      ["Map", "import MapKit\nstruct V: View { var body: some View { Map() } }", "WEBMOUNT"],
+      ["WebContent", "struct V: View { var body: some View { WebContentView(url: url) } }", "WEBMOUNT"],
+      // A `TextRenderer` draws on a canvas (`GraphicsContext`), which the canvas binding paints.
+      ["Renderer", "struct R: TextRenderer { func draw(layout: Text.Layout, in context: inout GraphicsContext) {} }", "CANVAS"]
+    ];
+    // A product of this repository is judged with the local targets it depends on: Lumio reaches URLSession through
+    // Examples/CloneKit, and a release without networking does not even link.
+    const lumioPath = path.join(temporary, "lumio.json");
+    run(process.execPath, [PLANNER, "--root", ROOT, "--product", "Lumio", "--configuration", "release", "--output", lumioPath]);
+    const lumio = JSON.parse(fs.readFileSync(lumioPath, "utf8"));
+    assert(lumio.sourceRoots.includes("Examples/CloneKit"), "the local CloneKit target Lumio depends on was not read as application code");
+    assert(lumio.swiftDefines.includes("SWIFTUIWEB_RELEASE_HAS_NETWORKING"), "Lumio's networking through CloneKit was not kept");
+    for (const [name, source, define] of launcherCases) {
+      const manifest = planFor(`Launcher${name}`, `import SwiftUIWeb\n${source}\n`);
+      assert(manifest.swiftDefines.includes(`SWIFTUIWEB_RELEASE_HAS_${define}`), `${name} did not keep SWIFTUIWEB_RELEASE_HAS_${define} compiled in`);
+    }
     const labelSystem = planFor("LabelSystem", "import SwiftUIWeb\nstruct V: View { var body: some View { Label(\"Home\", systemImage: \"house\") } }\n");
     assert(labelSystem.features.images === false, "`Label(_, systemImage:)` pulled in the image loader");
     const chrome = ["checkmark", "xmark", "chevron.left", "magnifyingglass"];

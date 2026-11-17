@@ -18,7 +18,7 @@ The bundle is written to `.build/browser/<Product>` (the command prints the path
 | `index.html` | The page: the stylesheet, the loader and the Content-Security-Policy as a `<meta>` tag |
 | `app.<hash>.wasm` | Your app and the framework, compiled with Embedded Swift |
 | `app-rest.<hash>.wasm` | In a split build (the release default; not with `SWIFTUIWEB_WASM_SPLIT=0`): the functions the first screen does not run, loaded right after it. Serve it like `app.<hash>.wasm` |
-| `index.<hash>.js`, `render-worker.<hash>.js`, `runtime-shared.<hash>.js`, `feature-loader.<hash>.js` | The JavaScript host that runs the WebAssembly in a Web Worker and applies its updates to the DOM (`runtime-shared` holds the modules the page and the worker both use) |
+| `index.<hash>.js`, `render-worker.<hash>.js`, `runtime-shared.<hash>.js`, `runtime-deferred.<hash>.js`, `feature-loader.<hash>.js` | The JavaScript host that runs the WebAssembly in a Web Worker and applies its updates to the DOM (`runtime-shared` holds the modules the page and the worker both use; `runtime-deferred` the page hosts the first screen does not run, loaded right after it) |
 | `styles.<hash>.css` | The framework's stylesheet, with your `Resources/app.css` |
 | `*.br`, `*.gz` | Brotli and gzip copies of every file, for hosts that serve precompressed files |
 

@@ -73,6 +73,7 @@ describe("seal-csp", () => {
     const files = [
       "Tools/BrowserIO/dom-view-host.mjs", "Tools/BrowserIO/browser-io.mjs", "Tools/remote-dom-host.js",
       "Tools/embedded-dom.js", "Tools/embedded-worker-client.js", "Tools/embedded-host-core.js", "Tools/embedded-runtime.js",
+      "Tools/deferred-hosts.js", "Tools/presentation-host.js", "Tools/transfer-host.js", "Tools/text-layout-host.js",
       ...readdirSync(join(ROOT, "Tools/BrowserIO")).filter((name) => name.endsWith(".mjs") && !name.startsWith("test-")).map((name) => `Tools/BrowserIO/${name}`),
     ];
     const forbidden = /(?<![\w.$])(?:new\s+)?(?:Function|AsyncFunction)\s*\(|(?<![\w.$])eval\s*\(|\b(?:setTimeout|setInterval)\s*\(\s*["'`]|\bimport\s*\(\s*["'`]data:/;

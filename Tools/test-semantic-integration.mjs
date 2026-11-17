@@ -56,7 +56,7 @@ await runCases({
     const source = read("Tools/embedded-dom.js");
     includes(source, "new SemanticLayoutHost(root,{");
     includes(source, "layout.update()");
-    includes(source, "new NativeDragDropCoordinator(root,dispatchNamed)");
+    includes(source, "new hosts.NativeDragDropCoordinator(root,dispatchNamed)");
   },
   "mount marker is the documented attribute"() {
     const source = read("Tools/embedded-dom.js");

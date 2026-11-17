@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { gzipSync } from 'node:zlib';
-import { moveFiles, reopenMovedFile } from '../host-interactions.js';
+import { moveFiles, reopenMovedFile } from '../transfer-host.js';
 import { createBrowserIO, Writer, Reader, safeErrorMessage } from './browser-io.mjs';
 import { createDOMViewHost, installDOMComponentRegistry } from './dom-view-host.mjs';
 import { BrowserIOOperation } from './protocol.generated.mjs';

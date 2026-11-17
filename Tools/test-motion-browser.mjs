@@ -1049,15 +1049,23 @@ async function symbolTransitionOptions(appPage, label, hostSource) {
   assert.deepEqual(result.tuned, { duration: 500, iterations: 3 }, `${label}: at twice the speed and three times with the options (${JSON.stringify(result)})`);
 }
 
+/** The sources a text layout measurement needs in a blank page: geometry-host.js (its axis functions, `GEOMETRY_AXES`) and
+ * text-layout-host.js, which embedded-dom.js loads after the first screen. */
+async function textLayoutSources() {
+  const source = (name) => fs.promises.readFile(new URL(name, import.meta.url), "utf8");
+  return { geometry: await source("./geometry-host.js"), text: await source("./text-layout-host.js") };
+}
+
 /** The gradient of a text under a scale: in the text's own coordinates, like the glyphs. */
 async function gradientUnderScale(appPage, label) {
   const page = await appPage.context().newPage();
   await page.setContent("<!doctype html><body style='margin:0'></body>");
-  const hostSource = await fs.promises.readFile(new URL("./geometry-host.js", import.meta.url), "utf8");
+  const hostSource = await textLayoutSources();
   const result = await page.evaluate(async (source) => {
-    const url = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
-    const { textLayoutPayload } = await import(url);
-    URL.revokeObjectURL(url);
+    // text-layout-host.js measures with the axis functions of geometry-host.js.
+    const load = (code) => import(URL.createObjectURL(new Blob([code], { type: "text/javascript" })));
+    const [geometryModule, layoutModule] = await Promise.all([load(source.geometry), load(source.text)]);
+    const textLayoutPayload = (element) => layoutModule.textLayoutPayload(element, geometryModule.GEOMETRY_AXES);
     const wrapper = document.createElement("div");
     wrapper.style.cssText = "transform:scale(2);transform-origin:0 0;width:100px;";
     const text = document.createElement("span");
@@ -1382,11 +1390,12 @@ async function leavingCopiesUnderTransform(appPage, label, hostSource) {
 async function loneEllipsis(appPage, label) {
   const page = await appPage.context().newPage();
   await page.setContent("<!doctype html><body style='margin:0'></body>");
-  const hostSource = await fs.promises.readFile(new URL("./geometry-host.js", import.meta.url), "utf8");
+  const hostSource = await textLayoutSources();
   const result = await page.evaluate(async (source) => {
-    const url = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
-    const { textLayoutPayload } = await import(url);
-    URL.revokeObjectURL(url);
+    // text-layout-host.js measures with the axis functions of geometry-host.js.
+    const load = (code) => import(URL.createObjectURL(new Blob([code], { type: "text/javascript" })));
+    const [geometryModule, layoutModule] = await Promise.all([load(source.geometry), load(source.text)]);
+    const textLayoutPayload = (element) => layoutModule.textLayoutPayload(element, geometryModule.GEOMETRY_AXES);
     const measure = (direction, width, content) => {
       const element = document.createElement("div");
       element.style.cssText = "font:20px monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:" + direction + ";width:" + width + "px;";
@@ -1458,11 +1467,10 @@ async function readersUnderScale(page, label) {
 async function payloadUnderScale(appPage, label) {
   const page = await appPage.context().newPage();
   await page.setContent("<!doctype html><body style='margin:0'></body>");
-  const hostSource = await fs.promises.readFile(new URL("./geometry-host.js", import.meta.url), "utf8");
+  const hostSource = await textLayoutSources();
   const result = await page.evaluate(async (source) => {
-    const url = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
-    const { measurementPayload } = await import(url);
-    URL.revokeObjectURL(url);
+    const load = (code) => import(URL.createObjectURL(new Blob([code], { type: "text/javascript" })));
+    const [{ measurementPayload, GEOMETRY_AXES }, layoutModule] = await Promise.all([load(source.geometry), load(source.text)]);
     const make = (transform) => {
       const wrapper = document.createElement("div");
       wrapper.style.cssText = "margin:10px;" + (transform ? "transform:scale(2);transform-origin:0 0;" : "");
@@ -1517,7 +1525,7 @@ async function payloadUnderScale(appPage, label) {
       return { numbers: record[2].split(",").map(Number), expected: [expected.left, expected.top, expected.width, expected.height] };
     };
     // The glyphs of a text under a transform, in the text's own coordinates: the same as without one.
-    const { textLayoutPayload } = await import(URL.createObjectURL(new Blob([source], { type: "text/javascript" })));
+    const textLayoutPayload = (element) => layoutModule.textLayoutPayload(element, GEOMETRY_AXES);
     const glyphs = (transform) => {
       const wrapper = document.createElement("div");
       wrapper.style.cssText = "position:absolute;left:300px;top:300px;" + (transform ? "transform:" + transform + ";" : "");
