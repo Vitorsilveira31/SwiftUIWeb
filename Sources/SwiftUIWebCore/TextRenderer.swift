@@ -418,6 +418,7 @@ nonisolated struct _TextRendererModifier<Renderer: TextRenderer>: ViewModifier, 
   static var _swiftUIWebAnimates: Bool { Renderer._swiftUIWebAnimates }
 
   @MainActor func _modifyContext(_ context: inout _RenderContext) {
+    Text._installMeasuredRendering()
     context.environment._textRenderer = _TextRendererBox(renderer)
   }
 }
@@ -427,11 +428,17 @@ final class _TextRendererBox {
   let draw: (Text.Layout, inout GraphicsContext) -> Void
   let size: (ProposedViewSize, TextProxy) -> CGSize
   let padding: EdgeInsets
+  /// Draws a measured text with this renderer (`Text._drawRendered`). Only `textRenderer(_:)` makes a box, so the canvas
+  /// a renderer draws on is part of a release only when the application draws text with a renderer.
+  let render: @MainActor (_TextRendererBox, Text, _RenderNode, _MeasuredTextLayout, Text.Layout, _RenderContext) -> _RenderNode
 
   init<Renderer: TextRenderer>(_ renderer: Renderer) {
     draw = { layout, context in renderer.draw(layout: layout, in: &context) }
     size = { proposal, text in renderer.sizeThatFits(proposal: proposal, text: text) }
     padding = renderer.displayPadding
+    render = { box, text, node, measured, layout, context in
+      text._drawRendered(by: box, node: node, measured: measured, layout: layout, context: context)
+    }
   }
 }
 
@@ -459,6 +466,16 @@ extension EnvironmentValues {
 }
 
 extension Text {
+  /// `_renderMeasured`, which `_render` calls through this value rather than by name: the views that need a measured text
+  /// (`textRenderer(_:)`, a reader of `Text.LayoutKey`) install it before they set the environment that asks for it, so
+  /// an application that uses neither does not carry the measurement (and the canvas behind a renderer) in a release.
+  @MainActor static var _measuredRendering: ((Text, _TextRendererBox?, _RenderContext) -> _RenderNode)?
+
+  @MainActor static func _installMeasuredRendering() {
+    guard _measuredRendering == nil else { return }
+    _measuredRendering = { text, renderer, context in text._renderMeasured(drawnBy: renderer, in: context) }
+  }
+
   /// The text measured by the page: as it renders by itself, with the drawing of `renderer` over it once the page
   /// reported its layout, and that layout given to the views above as `Text.LayoutKey` when a reader there asked.
   @MainActor func _renderMeasured(drawnBy renderer: _TextRendererBox?, in context: _RenderContext) -> _RenderNode {
@@ -506,6 +523,11 @@ extension Text {
       context.preferenceStore.write([Text.LayoutKey.AnchoredLayout(origin: Anchor<CGPoint>.Source.topLeading._make(frame), layout: layout)], for: Text.LayoutKey.self)
     }
     guard let renderer else { return node }
+    return renderer.render(renderer, self, node, measured, layout, context)
+  }
+
+  /// The measured text `node` with `renderer`'s drawing over it, on a canvas of the laid-out text's size.
+  @MainActor func _drawRendered(by renderer: _TextRendererBox, node: _RenderNode, measured: _MeasuredTextLayout, layout: Text.Layout, context: _RenderContext) -> _RenderNode {
     let proxy = TextProxy(_size: measured.contentSize, _lineCount: measured.lines.count, _flow: measured.flow, _lineLimit: context.environment.lineLimit)
     let proposal = context._layoutProposal ?? .unspecified
     let natural = proxy.sizeThatFits(proposal)

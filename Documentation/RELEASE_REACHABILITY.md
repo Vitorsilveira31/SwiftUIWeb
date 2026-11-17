@@ -8,8 +8,9 @@ compile gates, runtime helper scripts, the icon catalog and optional CSS.
 ## Evidence rule
 
 - **Application evidence** (`--source`) is the consumer's own code: for an
-  external package its `Sources` and `Web`; for the framework's examples and test apps
-  only `Examples/<product>` or `Tests/Apps/<product>`. Only this text switches a feature on (`MeshGradient`,
+  external package its `Sources` and `Web` (and its local package dependencies); for the framework's examples and test
+  apps `Examples/<product>` or `Tests/Apps/<product>` and the local targets outside `Sources/` the product depends on in
+  `Package.swift` (`Examples/CloneKit`). Only this text switches a feature on (`MeshGradient`,
   `Canvas`, `onDrop`, `onHover`, `PhotosPicker`, `URLSession`, `@AppStorage`, ...).
 - **Framework roots** (`--framework-source`, plus `SwiftUIWebCore` and
   `SwiftUIWebBrowser`) supply vocabulary only: CSS class names, the icon
@@ -67,6 +68,29 @@ pipeline may prune, and `proof` records the evidence behind each decision. Other
   Like every feature here, the evidence is the application's own sources and its local packages: a feature used
   only inside a remote Swift package dependency is not seen. Such an application names it in a JSON file passed as
   `SWIFTUIWEB_RELEASE_ASSETS` (`{"features": {"motion": true}}`), which turns the feature on.
+
+The compile gates, and the application evidence that keeps each one:
+
+| Define | Kept by | What a release without it drops |
+| --- | --- | --- |
+| `SWIFTUIWEB_RELEASE_HAS_CANVAS` | `Canvas`, `GraphicsContext` (a `TextRenderer`), `ResolvedText` | the browser canvas binding |
+| `SWIFTUIWEB_RELEASE_HAS_MESH_GRADIENT` | `MeshGradient` | the mesh gradient binding |
+| `SWIFTUIWEB_RELEASE_HAS_HOVER` | `onHover` | the hover rules the renderer learns and publishes as CSS |
+| `SWIFTUIWEB_RELEASE_HAS_DRAGDROP` | `onDrag`, `onDrop`, `dropDestination`, `.draggable`, `Transferable` | drag and drop |
+| `SWIFTUIWEB_RELEASE_HAS_PHOTOS` | `PhotosPicker`, `.photosPicker` | the photo picker |
+| `SWIFTUIWEB_RELEASE_HAS_IMAGES` | `Image("name")`, `AsyncImage`, any `image:` argument, `ImageResource` | the asset-catalog table install |
+| `SWIFTUIWEB_RELEASE_HAS_STORAGE` | `@AppStorage`, `@SceneStorage`, `UserDefaults` | the Web Storage adapters and their change observer |
+| `SWIFTUIWEB_RELEASE_HAS_NETWORKING` | `URLSession`, `URLRequest`, `HTTPCookie`, `URLCache`, `WebSocket`, ... | the fetch, streaming, connectivity and cookie-jar hosts |
+| `SWIFTUIWEB_RELEASE_HAS_NAVIGATION` | any `Navigation…` type, `navigationDestination`, `TabView`, `Tab`, `toolbar`, `sheet` | the browser history adapter |
+| `SWIFTUIWEB_RELEASE_HAS_WEBMOUNT` | `WebMount`, `DOMViewRepresentable`, web content, maps, video | the WebMount registry and DOM view mounts |
+
+The entry points the page calls by name (`embedded_browser_history_*`, `embedded_browser_webmount_reconcile`,
+`embedded_browser_cookies_changed`) stay in every release; without the feature they do nothing.
+
+Some framework code is not gated at all but referenced only from the API that needs it, so the linker drops it when
+the application never calls that API: the measured text and the canvas a `TextRenderer` draws on are installed by
+`textRenderer(_:)` and by a reader of `Text.LayoutKey` (`Text._installMeasuredRendering`), and the split of a string into
+inline image runs by `appendInterpolation(_: Image)` (`Text._installInlineImageSplitting`).
 
 Debug builds compile every feature in and skip the defines, so a feature can
 work in debug yet be absent from release. Check release with a release build of the consuming app (`make browser-release

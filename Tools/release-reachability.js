@@ -75,6 +75,59 @@ if (sourceArgument) {
 } else {
   const productRoot = productDirectory(product);
   if (productRoot) sourceRoots.push(productRoot);
+  // The local targets a product of this repository depends on outside `Sources/` (Examples/CloneKit under Lumio, Mailo,
+  // ...) are the application's code too: a URLSession client there is the application using networking.
+  if (productRoot) for (const dependency of localDependencyDirectories(productRoot)) sourceRoots.push(dependency);
+}
+
+/// The directories of the targets `Package.swift` lists, by name: `{ path, dependencies }`. A target without `path:` is
+/// `Sources/<name>`, a framework target.
+function packageTargets() {
+  const manifest = readText(path.join(root, "Package.swift"));
+  const targets = new Map();
+  for (const chunk of manifest.split(/\.(?:executableTarget|target|testTarget|plugin|macro|binaryTarget|systemLibrary)\s*\(/).slice(1)) {
+    const name = chunk.match(/^\s*name:\s*"([^"]+)"/)?.[1];
+    if (!name) continue;
+    const declared = chunk.match(/\bpath:\s*"([^"]+)"/)?.[1];
+    const dependencies = [];
+    const start = chunk.search(/\bdependencies:\s*\[/);
+    if (start >= 0) {
+      let depth = 0;
+      let index = chunk.indexOf("[", start);
+      const begin = index;
+      for (; index < chunk.length; index += 1) {
+        if (chunk[index] === "[") depth += 1;
+        else if (chunk[index] === "]" && --depth === 0) break;
+      }
+      const list = chunk.slice(begin, index);
+      // A product of another package (`.product(name:package:)`) is not a target of this manifest.
+      const withoutProducts = list.replace(/\.product\s*\([^)]*\)/g, "");
+      for (const match of withoutProducts.matchAll(/"([^"]+)"/g)) dependencies.push(match[1]);
+    }
+    if (!targets.has(name)) targets.set(name, { path: declared ?? path.join("Sources", name), dependencies });
+  }
+  return targets;
+}
+
+function localDependencyDirectories(productRoot) {
+  const targets = packageTargets();
+  const relative = path.relative(root, productRoot).split(path.sep).join("/");
+  const owner = [...targets.entries()].find(([, target]) => target.path.replace(/\/$/, "") === relative);
+  if (!owner) return [];
+  const result = [];
+  const seen = new Set([owner[0]]);
+  const queue = [...owner[1].dependencies];
+  while (queue.length > 0) {
+    const name = queue.shift();
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const target = targets.get(name);
+    if (!target || target.path.split("/")[0] === "Sources") continue;
+    const directory = path.join(root, target.path);
+    if (fs.existsSync(directory) && !result.includes(directory)) result.push(directory);
+    queue.push(...target.dependencies);
+  }
+  return result;
 }
 // Core source is included for CSS vocabulary and feature wrappers, but the
 // product source remains the authority for optional reachability decisions.
@@ -204,9 +257,10 @@ const rules = {
   // `Image(systemName:)` is rendered by the icon adapter and must not pull
   // the image loader. The negative lookahead still keeps all source/asset and
   // AsyncImage initializers reachable.
-  // `Label(_, image:)` loads an asset image exactly like `Image(_)`; the lookbehind keeps
-  // `systemImage:` (an icon-adapter symbol) out of the rule.
-  images: /(?:\bAsyncImage\s*\(|\bImage\s*\(\s*(?!systemName\s*:|systemImage\s*:)|\bLabel\s*\([^\n]*(?<![A-Za-z])image\s*:)/.test(applicationText),
+  // `Label(_, image:)`, and every other initializer with an `image:` argument (`Button`, `Tab`, `Toggle`, `Menu`,
+  // `ContentUnavailableView`, ...), loads an asset image exactly like `Image(_)`; the lookbehind keeps `systemImage:` (an
+  // icon-adapter symbol) out of the rule. An `ImageResource` names an asset too.
+  images: /(?:\bAsyncImage\s*\(|\bImage\s*\(\s*(?!systemName\s*:|systemImage\s*:)|(?<![A-Za-z])image\s*:|\bImageResource\b)/.test(applicationText),
   adaptiveMedia: /\b(?:AVPlayer|AVAsset|AVURLAsset|VideoPlayer)\b/.test(applicationText),
   maps: /(?:MapLibre|\bMap\s*\(|MapProvider|Marker\s*\(|MapCameraPosition)/.test(applicationText),
   charts: /(?:\bChart\s*\(|BarMark|LineMark|PointMark|AreaMark|RuleMark)/.test(applicationText),
@@ -218,19 +272,23 @@ const rules = {
   photos: /(?:PhotosPicker|PhotosPickerItem|\.photosPicker\s*\()/.test(applicationText),
   notifications: /(?:WebPush|WebNotification|requestAuthorization\s*\()/.test(applicationText),
   location: /(?:CLLocation|CLLocationCoordinate2D|LocationManager|LocationAccuracy)/.test(applicationText),
-  webMount: /(?:WebMount|WebElementHandle|webMount|data-web-mount)/.test(applicationText),
+  // `DOMViewRepresentable` mounts its DOM through the same registry as a WebMount.
+  webMount: /(?:WebMount|WebElementHandle|webMount|data-web-mount|DOMView)/.test(applicationText),
   paste: /\bPasteButton\s*\(/.test(applicationText),
   canvas: /\b(?:Canvas|GraphicsContext|ResolvedText)\b/.test(applicationText),
   meshGradient: /\bMeshGradient\b/.test(applicationText),
   lazyCollections: /\b(?:LazyVStack|LazyHStack|LazyVGrid|LazyHGrid|ForEach|List|OutlineGroup)\b/.test(applicationText),
   geometry: /\b(?:GeometryReader|ScrollView|Layout|AnyLayout)\b/.test(applicationText),
-  navigation: /\b(?:NavigationStack|NavigationView|NavigationLink|TabView|toolbar|sheet|fullScreenCover)\b/.test(applicationText),
+  // A release without navigation drops the browser history adapter (`SWIFTUIWEB_RELEASE_HAS_NAVIGATION`) that
+  // `NavigationStack` and `TabView` keep their state in, so any navigation type, tab or destination counts.
+  navigation: /\b(?:Navigation[A-Z]\w*|navigationDestination|TabView|Tab|TabSection|toolbar|sheet|fullScreenCover)\b/.test(applicationText),
   // `.draggable(_)` is `onDrag` for a Transferable value (DragDrop.swift).
   dragDrop: /(?:onDrag|onDrop|dropDestination|\.draggable\s*\(|Transferable)/.test(applicationText),
   // `.onHover { hovered = $0 }` is lowered to `onHover(_assigning:)`, whose hovered look the renderer learns and publishes as
   // CSS rules (FiberTree's hover rules). Without it a release leaves that machinery out (`SWIFTUIWEB_RELEASE_HAS_HOVER`).
   hover: /\bonHover\b/.test(applicationText),
-  networking: /(?:\bURLSession\b|\bURLRequest\b|\bURLComponents\b|\bWebSocket\b|NetworkRuntime|NetworkError|data\s*\(from:)/.test(applicationText),
+  // The networking runtime also backs the cookie jar (`HTTPCookieStorage`) and the URL cache.
+  networking: /(?:\bURLSession\b|\bHTTPCookie\w*|\bURLCache\b|\bURLProtocol\b|\bURLRequest\b|\bURLComponents\b|\bWebSocket\b|NetworkRuntime|NetworkError|data\s*\(from:)/.test(applicationText),
   storage: /(?:@AppStorage|@SceneStorage|WebIndexedDB|StorageRuntime|UserDefaults|IndexedDB)/.test(applicationText),
   // The browser hosts below leave a release's JavaScript when these are false (`bun build --define`, see
   // Tools/build-runtime-bundle.mjs); `navigation` and `dragDrop` above gate the tab shell and the native drag coordinator.
@@ -431,11 +489,14 @@ const compileFeatureFlags = {
   canvas: "SWIFTUIWEB_RELEASE_HAS_CANVAS",
   meshGradient: "SWIFTUIWEB_RELEASE_HAS_MESH_GRADIENT",
   networking: "SWIFTUIWEB_RELEASE_HAS_NETWORKING",
-  storage: "SWIFTUIWEB_RELEASE_HAS_STORAGE"
+  storage: "SWIFTUIWEB_RELEASE_HAS_STORAGE",
+  navigation: "SWIFTUIWEB_RELEASE_HAS_NAVIGATION"
 };
 for (const [feature, flag] of Object.entries(compileFeatureFlags)) {
   if (rules[feature]) swiftDefines.push(flag);
 }
+// The WebMount registry is the browser side of `WebMount`, `DOMViewRepresentable`, web content, maps and video.
+if (rules.webMount || rules.webView || rules.adaptiveMedia || rules.maps) swiftDefines.push("SWIFTUIWEB_RELEASE_HAS_WEBMOUNT");
 
 const browserBindings = [];
 if (rules.geometry || rules.lazyCollections) browserBindings.push("geometry", "intersection-observer");

@@ -293,7 +293,10 @@ nonisolated struct _PreferenceValueLayer<K: PreferenceKey, Layer: View>: ViewMod
 
 /// A reader of `Text.LayoutKey` asks the texts below it to publish their layout: they are measured only then.
 @MainActor func _notePreferenceReader<K: PreferenceKey>(_ key: K.Type, in context: inout _RenderContext) {
-  if _storedTypeID(K.self) == _storedTypeID(Text.LayoutKey.self) { context.environment._publishesTextLayout = true }
+  if _storedTypeID(K.self) == _storedTypeID(Text.LayoutKey.self) {
+    Text._installMeasuredRendering()
+    context.environment._publishesTextLayout = true
+  }
 }
 
 /// Measures `node`'s frame in the window: the host sends it as `geometryChange` after commits, on resize and as an
