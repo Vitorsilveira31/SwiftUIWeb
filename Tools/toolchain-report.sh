@@ -75,6 +75,12 @@ swiftuiweb_toolchain_report() {
   # --- Optional.
   if command -v wasm-opt >/dev/null 2>&1; then found "wasm-opt   " "Binaryen $(wasm-opt --version 2>/dev/null | head -n 1)"
   else absent_optional "wasm-opt   " "Binaryen shrinks release app.wasm (about a third); debug builds do not need it" "brew install binaryen   (or: sudo apt-get install binaryen)"; fi
+  # The release split (Documentation/Architecture/WASM_SPLIT.md) needs a recent wasm-split and a headless Chromium.
+  if command -v bun >/dev/null 2>&1; then
+    local split_reason
+    if split_reason="$(bun "$root/Tools/wasm-split-release.mjs" --check 2>&1)"; then found "wasm-split " "release app.wasm is split by the first screen"
+    else absent_optional "wasm-split " "without it a release downloads its whole app.wasm before the first screen: ${split_reason}" "brew install binaryen, then: bunx --bun playwright install chromium"; fi
+  fi
 
   if (( missing > 0 )); then
     {

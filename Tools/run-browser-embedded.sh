@@ -312,6 +312,18 @@ case "$release_profile" in size|balanced|fast) ;; *) echo "SWIFTUIWEB_RELEASE_PR
 wasm_optimization="${SWIFTUIWEB_WASM_OPTIMIZATION:-}"
 if [[ -z "$wasm_optimization" ]]; then if [[ "$release_profile" == fast ]]; then wasm_optimization=-Onone; else wasm_optimization=-Osize; fi; fi
 if [[ "$configuration" == release && "$release_profile" != size ]]; then echo "Release profile: $release_profile (not a shipping build)" >&2; fi
+# Split app.wasm by what the first screen runs (Documentation/Architecture/WASM_SPLIT.md), the release default. Unset, a
+# machine without what the split needs (Binaryen's wasm-split, a headless Chromium) builds one app.wasm with a warning, as a
+# release without wasm-opt does; SWIFTUIWEB_WASM_SPLIT=0 builds one app.wasm on purpose, =1 makes a split that cannot be
+# made an error. Debug, the development loop (SWIFTUIWEB_DEV_CACHE) and the fast profile (previews, CI) build no split unless
+# asked: the profile run costs a browser start and a few seconds per build.
+wasm_split=off
+case "${SWIFTUIWEB_WASM_SPLIT:-}" in
+  1) [[ "$configuration" == release ]] || { echo "SWIFTUIWEB_WASM_SPLIT=1 needs CONFIGURATION=release" >&2; exit 2; }; wasm_split=required ;;
+  0) ;;
+  "") [[ "$configuration" != release || "$release_profile" == fast || -n "${SWIFTUIWEB_DEV_CACHE:-}" ]] || wasm_split=auto ;;
+  *) echo "SWIFTUIWEB_WASM_SPLIT is 0 or 1, not ${SWIFTUIWEB_WASM_SPLIT}" >&2; exit 2 ;;
+esac
 # Package.swift reads this while SwiftPM evaluates the manifest; it only affects the framework's own library targets.
 if [[ "$configuration" == release && "$release_profile" == balanced ]]; then export SWIFTUIWEB_LIBRARY_OPTIMIZATION=none; else unset SWIFTUIWEB_LIBRARY_OPTIMIZATION; fi
 if [[ "$configuration" == release ]]; then flags+=(-Xswiftc "$wasm_optimization" -Xlinker --strip-debug -Xswiftc -D -Xswiftc SWIFTUIWEB_RELEASE); while IFS= read -r d; do [[ -z "$d" || "$d" == SWIFTUIWEB_RELEASE ]] || flags+=(-Xswiftc -D -Xswiftc "$d"); done < <(bun -e 'const m=await Bun.file(process.argv[1]).json(); for(const d of m.swiftDefines||[]) console.log(d)' "$manifest"); fi
@@ -488,8 +500,14 @@ else
 fi
 # index.js, render-worker.js and the chunk both import (runtime-shared.js), built together. A release leaves out the browser
 # hosts the manifest proves unused; debug keeps every host (Tools/build-runtime-bundle.mjs).
-# The loader of a split module (Tools/wasm-split-loader.js) is in the scripts only when the module will be split.
-runtime_flags=(); [[ "${SWIFTUIWEB_WASM_SPLIT:-0}" != 1 ]] || runtime_flags=(--wasm-split)
+# The loader of a split module (Tools/wasm-split-loader.js) is in the scripts only when the module will be split, so whether
+# this machine can split is settled first.
+if [[ "$wasm_split" != off ]] && ! split_unavailable="$(bun Tools/wasm-split-release.mjs --check 2>&1)"; then
+  if [[ "$wasm_split" == required ]]; then echo "error: SWIFTUIWEB_WASM_SPLIT=1, but $split_unavailable" >&2; exit 1; fi
+  echo "warning: this release app.wasm is NOT split (one module, downloaded whole before the first screen): $split_unavailable. SWIFTUIWEB_WASM_SPLIT=0 builds without the split on purpose." >&2
+  wasm_split=off
+fi
+runtime_flags=(); [[ "$wasm_split" == off ]] || runtime_flags=(--wasm-split)
 if [[ "$configuration" == release ]]; then bun Tools/build-runtime-bundle.mjs --outdir "$tmp" --manifest "$manifest" ${runtime_flags[@]+"${runtime_flags[@]}"}; else bun Tools/build-runtime-bundle.mjs --outdir "$tmp" ${runtime_flags[@]+"${runtime_flags[@]}"}; fi
 # Copy only the browser helpers the reachability manifest lists (initial and
 # lazy); an unreachable helper is neither shipped nor referenced by index.html.
@@ -569,13 +587,20 @@ fi
 # The resize rule names the elements whose stylesheets declare a transition, so it is written once every stylesheet of the
 # bundle (the framework's and the application's) is in place, and before a release renames the files.
 bun "$ROOT/Tools/scope-resize-transitions.mjs" "$final"
-# Split app.wasm (opt-in, release): the functions the first screen runs stay in app.wasm, the rest go to app-rest.wasm,
+# Split app.wasm (see wasm_split above): the functions the first screen runs stay in app.wasm, the rest go to app-rest.wasm,
 # which downloads behind the first screen (Tools/wasm-split-release.mjs, Tools/wasm-split-loader.js). It runs the bundle in
-# headless Chromium, so it comes once every file is in place, and before the files get their hashed names.
-# SWIFTUIWEB_WASM_SPLIT_ROUTE (default /), SWIFTUIWEB_WASM_SPLIT_VIEWPORTS (default 1280x800,390x844).
-if [[ "${SWIFTUIWEB_WASM_SPLIT:-0}" == 1 ]]; then
-  [[ "$configuration" == release ]] || { echo "SWIFTUIWEB_WASM_SPLIT=1 needs CONFIGURATION=release" >&2; exit 2; }
-  bun "$ROOT/Tools/wasm-split-release.mjs" "$final" --route "${SWIFTUIWEB_WASM_SPLIT_ROUTE:-/}" --viewports "${SWIFTUIWEB_WASM_SPLIT_VIEWPORTS:-1280x800,390x844}" --log-dir "$build_logs"
+# headless Chromium, so it comes once every file is in place, and before the files get their hashed names. A split whose
+# inputs did not change is reused from the cache (SWIFTUIWEB_WASM_SPLIT_CACHE=0 turns it off) and runs no browser.
+# By default a split that fails leaves one app.wasm with a warning. SWIFTUIWEB_WASM_SPLIT_ROUTE (default /),
+# SWIFTUIWEB_WASM_SPLIT_VIEWPORTS (default 1280x800,390x844).
+if [[ "$wasm_split" != off ]]; then
+  split_args=(--route "${SWIFTUIWEB_WASM_SPLIT_ROUTE:-/}" --viewports "${SWIFTUIWEB_WASM_SPLIT_VIEWPORTS:-1280x800,390x844}" --log-dir "$build_logs")
+  [[ "$wasm_split" != auto ]] || split_args+=(--fallback)
+  [[ "${SWIFTUIWEB_WASM_SPLIT_CACHE:-1}" != 1 ]] || split_args+=(--cache-dir "$BUILD_ROOT/wasm-split-cache")
+  split_status=0; bun "$ROOT/Tools/wasm-split-release.mjs" "$final" "${split_args[@]}" || split_status=$?
+  # 3: the split fell back to one app.wasm. The runtime scripts were built with the split loader, which on the main thread
+  # requests app-rest.wasm before it knows the module is not split, so they are built again without it.
+  if [[ "$split_status" == 3 ]]; then bun "$ROOT/Tools/build-runtime-bundle.mjs" --outdir "$final" --manifest "$manifest"; elif [[ "$split_status" != 0 ]]; then exit "$split_status"; fi
 fi
 # A release names each framework file by its content (`app.3f9a1c2e.wasm`), so the server can cache it for a year;
 # index.html keeps its name and is revalidated. Every reference is rewritten (Tools/hash-release-bundle.mjs). It runs

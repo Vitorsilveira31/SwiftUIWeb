@@ -17,7 +17,7 @@ The bundle is written to `.build/browser/<Product>` (the command prints the path
 |---|---|
 | `index.html` | The page: the stylesheet, the loader and the Content-Security-Policy as a `<meta>` tag |
 | `app.<hash>.wasm` | Your app and the framework, compiled with Embedded Swift |
-| `app-rest.<hash>.wasm` | Only in a split build (`SWIFTUIWEB_WASM_SPLIT=1`): the functions the first screen does not run, loaded right after it |
+| `app-rest.<hash>.wasm` | In a split build (the release default; not with `SWIFTUIWEB_WASM_SPLIT=0`): the functions the first screen does not run, loaded right after it. Serve it like `app.<hash>.wasm` |
 | `index.<hash>.js`, `render-worker.<hash>.js`, `runtime-shared.<hash>.js`, `runtime-deferred.<hash>.js`, `feature-loader.<hash>.js` | The JavaScript host that runs the WebAssembly in a Web Worker and applies its updates to the DOM (`runtime-shared` holds the modules the page and the worker both use; `runtime-deferred` the page hosts the first screen does not run, loaded right after it) |
 | `styles.<hash>.css` | The framework's stylesheet, with your `Resources/app.css` |
 | `*.br`, `*.gz` | Brotli and gzip copies of every file, for hosts that serve precompressed files |
@@ -119,7 +119,8 @@ domain or a user site (`<user>.github.io`), since a project site lives under a s
 - Send the security headers above, and check them in the browser's network panel on the deployed page.
 - Put the first screen into `index.html` with `SWIFTUIWEB_FIRST_PAINT=1` if a fast first paint matters: see
   [`Architecture/FIRST_PAINT.md`](Architecture/FIRST_PAINT.md).
-- Download only what the first screen runs before it shows, and the rest behind it, with `SWIFTUIWEB_WASM_SPLIT=1`
-  (experimental): see [`Architecture/WASM_SPLIT.md`](Architecture/WASM_SPLIT.md).
+- A release downloads only what the first screen runs before it shows, and the rest behind it. Check that the build log
+  has no "app.wasm is NOT split" warning (it needs Binaryen and a headless Chromium on the build machine): see
+  [`Architecture/WASM_SPLIT.md`](Architecture/WASM_SPLIT.md).
 - Check what the bundle weighs with `make bundle-sizes BUNDLE=<folder>` from a SwiftUIWeb checkout, and what the
   WebAssembly is made of in [`Performance/WASM_SIZE.md`](Performance/WASM_SIZE.md).
