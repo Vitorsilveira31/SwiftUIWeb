@@ -4,7 +4,8 @@ import SwiftUIWeb
 /// the test checks against Apple's frames of the same tree:
 /// - a user-defined Layout that asks its subview for its size at one proposal and places it at another, around a title and two
 ///   scroll views that fill the height left (a page with a list beside a detail): the title stays at the top and the panes
-///   take the rest; alone and in a frame;
+///   take the rest; alone, in a frame, and as the page of a TabView below a header in a Layout of its own (each Layout is
+///   offered what it is offered with the other laid out as it is);
 /// - LazyVGrid cells whose content fills the height with `.frame(maxHeight: .infinity)`: a background outside the frame is
 ///   as tall as the row, one inside it as tall as its content;
 /// - a segmented Picker with `.fixedSize()` beside a label: each segment's label stays on one line.
@@ -20,6 +21,18 @@ struct EmbeddedLayoutParityFixture: View {
       .frame(width: 400, height: 240)
       .accessibilityIdentifier("parity-layout-split")
       splitPage.frame(width: 360, height: 240).accessibilityIdentifier("parity-split")
+      VStack(spacing: 0) {
+        ParityGutterLayout(gutter: 20) { Text("Header") }
+          .padding(.vertical, 10)
+        TabView(selection: .constant(0)) {
+          ParityGutterLayout(gutter: 20) { splitPage }
+            .padding(.top, 8)
+            .tag(0)
+            .toolbar(.hidden, for: .tabBar)
+        }
+      }
+      .frame(width: 400, height: 300)
+      .accessibilityIdentifier("parity-layout-tab")
       LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible())], spacing: 10) {
         VStack { Text("Short") }.padding(8).frame(maxHeight: .infinity, alignment: .top).background(Color.gray.opacity(0.3))
         VStack { Text("A much longer text that wraps onto several lines in this narrow column of the grid") }

@@ -657,35 +657,40 @@ export class CssLayout {
       live.push({ fit: box, node, probe: ['x', 'y'].filter(a => node.prop[a]), offered: { x: Infinity, y: Infinity } });
     }
     const probing = live.filter(entry => entry.probe.length);
-    // A view that is offered a size and takes less (a stack, a padding, the root) passes it on to its child, which the browser
-    // gives no percentage of unless the view's own size is definite: while a Layout is probed, such a view takes its offer.
-    const raised = new Map();
-    for (const { fit, probe } of probing) {
-      for (let e = fit.parentElement, node; e && (node = this.cache.get(e)); e = this.islands.has(e) ? null : e.parentElement) {
-        const root = this.roots.get(e), proposed = root?.item ? childProposal(e) : null;
-        for (const a of probe) {
-          // (A size that follows from a rigid Layout below is not an offer; an aspect ratio gives its height from its width.)
-          const s = node.axis?.[a], framed = node.kind === 'frame' && node.attr(a === 'x' ? 'data-frame-w' : 'data-frame-h') != null;
-          if (framed || node.kind === 'aspect' || (s?.fill && node.def?.[a])) continue;
-          if (!raised.has(e)) raised.set(e, e.getAttribute('style'));
-          // The root takes its container's length (the window: `100dvh`), a subview of a Layout the proposal it was placed with.
-          e.style.setProperty(a === 'x' ? 'width' : 'height', proposed ? px(proposed[a === 'x' ? 0 : 1] ?? 0) : a === 'y' && root && root.height !== 'cell' ? root.height : '100%', 'important');
+    // Each Layout is probed on its own, the rest of the page as it is laid out: the views raised for one take what they are
+    // offered, which can take it from a view beside them (a header raised in the window's VStack leaves a TabView below it no
+    // height), and a Layout probed in the same layout would read that.
+    for (const batch of probing.map(entry => [entry])) {
+      // A view that is offered a size and takes less (a stack, a padding, the root) passes it on to its child, which the browser
+      // gives no percentage of unless the view's own size is definite: while a Layout is probed, such a view takes its offer.
+      const raised = new Map();
+      for (const { fit, probe } of batch) {
+        for (let e = fit.parentElement, node; e && (node = this.cache.get(e)); e = this.islands.has(e) ? null : e.parentElement) {
+          const root = this.roots.get(e), proposed = root?.item ? childProposal(e) : null;
+          for (const a of probe) {
+            // (A size that follows from a rigid Layout below is not an offer; an aspect ratio gives its height from its width.)
+            const s = node.axis?.[a], framed = node.kind === 'frame' && node.attr(a === 'x' ? 'data-frame-w' : 'data-frame-h') != null;
+            if (framed || node.kind === 'aspect' || (s?.fill && node.def?.[a])) continue;
+            if (!raised.has(e)) raised.set(e, e.getAttribute('style'));
+            // The root takes its container's length (the window: `100dvh`), a subview of a Layout the proposal it was placed with.
+            e.style.setProperty(a === 'x' ? 'width' : 'height', proposed ? px(proposed[a === 'x' ? 0 : 1] ?? 0) : a === 'y' && root && root.height !== 'cell' ? root.height : '100%', 'important');
+          }
         }
       }
-    }
-    // The wrapper holds nothing in the flow, so as a view that takes what it is given it contributes nothing to what holds it: its
-    // share of the stack along the stack's axis, the whole cell or track elsewhere.
-    const saved = probing.map(({ fit }) => [fit, fit.getAttribute('style')]);
-    for (const { fit, node, probe } of probing) {
-      for (const a of probe) {
-        const [W, MIN, MAX] = a === 'x' ? ['width', 'min-width', 'max-width'] : ['height', 'min-height', 'max-height'];
-        const main = (node.parentKind === 'hstack' && a === 'x') || (node.parentKind === 'vstack' && a === 'y');
-        fit.style.cssText += `;${main ? `flex:${weight(node.priority)} 1 0% !important` : 'align-self:stretch !important;justify-self:stretch !important'};${W}:auto !important;${MIN}:0 !important;${MAX}:none !important`;
+      // The wrapper holds nothing in the flow, so as a view that takes what it is given it contributes nothing to what holds it: its
+      // share of the stack along the stack's axis, the whole cell or track elsewhere.
+      const saved = batch.map(({ fit }) => [fit, fit.getAttribute('style')]);
+      for (const { fit, node, probe } of batch) {
+        for (const a of probe) {
+          const [W, MIN, MAX] = a === 'x' ? ['width', 'min-width', 'max-width'] : ['height', 'min-height', 'max-height'];
+          const main = (node.parentKind === 'hstack' && a === 'x') || (node.parentKind === 'vstack' && a === 'y');
+          fit.style.cssText += `;${main ? `flex:${weight(node.priority)} 1 0% !important` : 'align-self:stretch !important;justify-self:stretch !important'};${W}:auto !important;${MIN}:0 !important;${MAX}:none !important`;
+        }
       }
+      for (const entry of batch) { const r = entry.fit.getBoundingClientRect(); for (const a of entry.probe) entry.offered[a] = a === 'x' ? r.width : r.height; }
+      for (const [fit, style] of saved) { if (style == null) fit.removeAttribute('style'); else fit.setAttribute('style', style); }
+      for (const [e, style] of raised) { if (style == null) e.removeAttribute('style'); else e.setAttribute('style', style); }
     }
-    for (const entry of probing) { const r = entry.fit.getBoundingClientRect(); for (const a of entry.probe) entry.offered[a] = a === 'x' ? r.width : r.height; }
-    for (const [fit, style] of saved) { if (style == null) fit.removeAttribute('style'); else fit.setAttribute('style', style); }
-    for (const [e, style] of raised) { if (style == null) e.removeAttribute('style'); else e.setAttribute('style', style); }
     for (const { fit, offered } of live) onProposal?.(fit, offered.x === Infinity ? null : round(offered.x), offered.y === Infinity ? null : round(offered.y));
     for (const box of this.layouts) {
       const items = [...box.children].filter(child => child.hasAttribute('data-layout-child-proposal'));
