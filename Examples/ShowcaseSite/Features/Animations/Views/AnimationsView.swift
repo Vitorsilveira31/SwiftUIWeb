@@ -7,10 +7,9 @@ struct AnimationsView: View {
   @State private var codeDemo: AnimationDemoVO?
 
   var body: some View {
-    SitePageScaffold(width: SiteLayout.wideWidth) {
-      SiteHeading(text: AnimationsStrings.title(language), isPageTitle: true)
-      SiteParagraph(text: AnimationsStrings.lead(language), isLead: true)
-      AdaptiveColumnsLayout(minimumWidth: 322, spacing: 14, rowHeight: AnimationDemoCard<EmptyView>.height) {
+    SitePageScaffold {
+      SitePageHeader(title: AnimationsStrings.title(language), lead: AnimationsStrings.lead(language))
+      AdaptiveColumnsLayout(minimumWidth: SiteLayout.demoCardMinWidth, spacing: SiteLayout.gridSpacing, rowHeight: AnimationDemoCard<EmptyView>.height) {
         ForEach(AnimationsStrings.all(language), id: \.id) { demo in
           AnimationDemoCard(demo: demo, codeLabel: AnimationsStrings.codeLabel(language), shownCode: $codeDemo) {
             demoView(demo.id)

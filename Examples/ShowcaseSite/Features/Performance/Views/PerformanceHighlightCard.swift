@@ -17,6 +17,8 @@ struct PerformanceHighlightCard: View {
         .foregroundStyle(.secondary)
       PerformanceStandingBadge(standing: standing)
     }
+    // Top-aligned in its row, as every card of a grid is (`SiteIconRow`), whatever the length of its title.
+    .frame(maxHeight: .infinity, alignment: .top)
   }
 
   /// The number that stands for SwiftUIWeb at the CPU rate shown: its worker's, or the main-thread bundle's where the

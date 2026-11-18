@@ -24,6 +24,5 @@ struct HeroView: View {
       HeroActions()
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(.top, 8)
   }
 }

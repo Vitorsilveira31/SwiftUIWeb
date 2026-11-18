@@ -6,10 +6,9 @@ struct PerformanceHighlightsView: View {
   @Environment(\.siteLanguage) private var language
 
   var body: some View {
-    VStack(alignment: .leading, spacing: SiteLayout.blockSpacing) {
-      SiteHeading(text: PerformanceStrings.highlightsHeading(language))
+    SiteSection(heading: PerformanceStrings.highlightsHeading(language)) {
       SiteParagraph(text: PerformanceStrings.highlightsLead(language))
-      LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), spacing: 14)], spacing: 14) {
+      SiteCardGrid(minimumWidth: SiteLayout.statCardMinWidth) {
         ForEach(viewModel.highlights, id: \.metric.id) { row in
           PerformanceHighlightCard(title: PerformanceStrings.metric(row.metric.id, language), row: row)
         }

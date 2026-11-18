@@ -8,7 +8,7 @@ struct SiteCard<Content: View>: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: SiteLayout.blockSpacing) { content }
-      .padding(16)
+      .padding(SiteLayout.cardPadding)
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(Color.primary.opacity(0.04))
       .clipShape(RoundedRectangle(cornerRadius: SiteLayout.cornerRadius))

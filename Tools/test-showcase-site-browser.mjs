@@ -28,7 +28,9 @@
 //   * the catalog's controls behave: a Toggle's knob is centred in its track, a DisclosureGroup keeps its width open or closed, a
 //     Menu opens in the top layer over what follows it, a List with more rows than its height scrolls without overlapping its rows,
 //     and on a wide screen the component list and the entry scroll on their own while the page stays still;
-//   * every catalog entry opens, beside the list on a wide screen, and the Stepper draws its label and buttons but not its value.
+//   * every catalog entry opens, beside the list on a wide screen, and the Stepper draws its label and buttons but not its value;
+//   * every page shares one frame: at 1440, 1024, 768 and 390 px each page's title starts at the left edge of one centered column
+//     (1040 px at most, 20 px from the screen's edge below that), where the header's brand starts too.
 // Engine: SWIFTUIWEB_BROWSER_ENGINE. Bundle: SHOWCASE_SITE_BUNDLE (default .build/browser/ShowcaseSite).
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
@@ -258,6 +260,49 @@ async function settledAddress(page) {
     last = now;
   }
   return last;
+}
+
+// The page frame (SitePageFrame): one centered column, at most 1040 px wide with 20 px margins, for the header and every page.
+async function checkFrame(browser, base, query) {
+  for (const width of [1440, 1024, 768, 390]) {
+    const left = Math.round((width - Math.min(1040, width - 40)) / 2);
+    const { context, page, errors } = await open(browser, base, { query, path: "/en/purpose", width });
+    for (const slug of ["purpose", "start", "benefits", "performance", "components", "animations"]) {
+      if (slug !== "purpose") {
+        await page.goto(`${base}/en/${slug}${query}`, { waitUntil: "domcontentloaded" });
+        await page.waitForSelector('html[data-embedded-mounted="true"]', { timeout: 60_000 });
+      }
+      // The first heading under the header (the header ends at its divider) and the brand's name in the header.
+      const frame = () =>
+        page.evaluate(() => {
+          const divider = [...document.querySelectorAll("body *")].find((line) => {
+            const box = line.getBoundingClientRect();
+            return box.height > 0 && box.height <= 2 && box.width >= innerWidth - 2 && box.top < 200;
+          });
+          const top = divider ? divider.getBoundingClientRect().bottom : 0;
+          const heading = [...document.querySelectorAll("h1, h2, [role=heading]")].find((element) => {
+            const box = element.getBoundingClientRect();
+            return box.width > 0 && box.top > top && box.top < innerHeight && getComputedStyle(element).visibility !== "hidden";
+          });
+          const brand = [...document.querySelectorAll("*")].find((element) => element.childElementCount === 0 && element.textContent.trim() === "SwiftUIWeb" && element.getBoundingClientRect().width > 0 && element.getBoundingClientRect().top < top &&
+            // The header draws both of its arrangements (a ViewThatFits); only the chosen one is visible.
+            element.checkVisibility({ opacityProperty: true, visibilityProperty: true }));
+          return heading ? { title: Math.round(heading.getBoundingClientRect().left), brand: brand ? Math.round(brand.getBoundingClientRect().left) : null } : null;
+        });
+      await page.waitForFunction(() => document.querySelector("h1, h2, [role=heading]") !== null, null, { timeout: 15_000 });
+      await page.waitForTimeout(400);
+      const seen = await frame();
+      assert.ok(seen, `${slug} at ${width}px: no heading under the header`);
+      assert.ok(Math.abs(seen.title - left) <= 1, `${slug} at ${width}px: the title starts at ${seen.title}px, not at the column's edge (${left}px)`);
+      // The brand's name sits after its 30 px mark and a 10 px gap.
+      assert.ok(seen.brand !== null && Math.abs(seen.brand - 40 - left) <= 1, `${slug} at ${width}px: the header's brand starts at ${seen.brand}px, not at the column's edge (${left}px)`);
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+      assert.ok(overflow <= 1, `${slug} at ${width}px: the page scrolls ${overflow}px sideways`);
+    }
+    assert.deepEqual(errors, [], `frame at ${width}px: page errors`);
+    await context.close();
+  }
+  return "frame";
 }
 
 async function checkPages(browser, base, query) {
@@ -875,6 +920,7 @@ async function main() {
         checkHome,
         checkStart,
         checkPages,
+        checkFrame,
         checkComponents,
         checkPhone,
         checkHeader,

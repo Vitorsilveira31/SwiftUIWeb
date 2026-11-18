@@ -51,6 +51,14 @@ or one column, each card a fixed height. It uses neither of the usual choices. A
 its own changed. A `ViewThatFits` of stacks put the page back at the top whenever a card's content changed size (the star swapping
 for another glyph, the ring's number gaining a digit), because it measures its choices again.
 
+## The page frame
+
+Every page, and the header above them, sits in one column (`SitePageFrame`): the screen less a 20-point margin on each side, at
+most 1040 points wide, centered. A page is a `SitePageScaffold` that opens with a `SitePageHeader` (its title and lead) and
+continues in `SiteSection`s (a heading and what it introduces, 12 points apart; sections 40 points apart), with cards in a
+`SiteCardGrid` (16 points apart). Running text stops at 720 points so it stays readable in the full column. The numbers live
+in `Core/DesignSystem/SiteLayout.swift`; a page does not set a width or a margin of its own.
+
 ## How the code is organized
 
 The site follows the layout of the Lumio example, so the same habits apply:

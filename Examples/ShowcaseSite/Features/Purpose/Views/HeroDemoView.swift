@@ -6,11 +6,11 @@ struct HeroDemoView: View {
 
   var body: some View {
     ViewThatFits(in: .horizontal) {
-      HStack(alignment: .top, spacing: 14) {
+      HStack(alignment: .top, spacing: SiteLayout.gridSpacing) {
         code
         live
       }
-      VStack(alignment: .leading, spacing: 14) {
+      VStack(alignment: .leading, spacing: SiteLayout.gridSpacing) {
         code
         live
       }
