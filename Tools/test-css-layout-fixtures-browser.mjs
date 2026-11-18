@@ -63,6 +63,10 @@
 // - EmbeddedHostRootsFixture: the layout trees a browser-owned widget hosts, each a semantic root of its own: an alert with a
 //   message and actions and a confirmation dialog (`click`: the presentation), the cells of a Table, the views a Chart draws in
 //   its foreignObjects (annotations, custom axis labels) and Grids inside a Form row and a disclosure.
+// - EmbeddedLayoutParityFixture: layouts where the page once differed from Apple's SwiftUI (`apart`, against the frames of the same
+//   trees): a user-defined Layout that asks a subview's size at one proposal and places it at another, around a title and panes
+//   that fill the height (alone, in a frame and as a TabView's page), LazyVGrid cells framed `maxHeight: .infinity` under and over
+//   their background, and a segmented Picker with `.fixedSize()`.
 // - The start page holds every fixture's button and a Table.
 //
 // The fit and relative fixtures are taller than the default 800 px window (a root taller than its window is centred), so they
@@ -92,6 +96,20 @@ const FIXTURES = [{ button: null, name: "start", onlyCss: true }, { button: "Ope
   { button: "Open chart fixture", name: "chart", onlyCss: true },
   { button: "Open form fixture", name: "form", onlyCss: true },
   { button: "Open split fixture", name: "split", click: "Count", resize: 520, onlyCss: true, height: 1400 },
+  { button: "Open layout parity fixture", name: "layout-parity", click: "Count", onlyCss: true, height: 1400, apart: [
+    { id: "parity-split", select: ".vstack > span", y: 0,
+      reason: "A title above two panes that take the height left sits at the top (Apple: title at 0 of the 240 frame)" },
+    { id: "parity-split", select: ".hstack", bottom: 240,
+      reason: "and the panes reach the bottom of the frame (Apple: list and detail 202 tall under a 26 pt title, to 240)" },
+    { id: "parity-layout-split", select: ".layout-item span", y: 0,
+      reason: "The same page in a user-defined Layout that asks its subview's size at the height it is offered and places it at the size that answers: the title stays at the top (Apple: 0)" },
+    { id: "parity-layout-split", select: ".layout-item .hstack", bottom: 240,
+      reason: "and the panes still reach the bottom (Apple: to 240)" },
+    { id: "parity-grid-fill", select: ".grid-layout > .frame-box", sameH: ".grid-layout > .frame-box ~ .frame-box",
+      reason: "A LazyVGrid cell framed maxHeight .infinity under its background is as tall as its row, as the taller cell beside it (Apple: 96 and 96)" },
+    { id: "parity-grid-inner", select: ".grid-layout > .frame-box .padding", shorterH: ".grid-layout > .frame-box ~ .frame-box .padding",
+      reason: "A background inside the frame stays as tall as its content, shorter than its row (Apple: 32 in a row of 96)" },
+  ] },
   { button: "Open controls fixture", name: "controls", onlyCss: true, still: true, height: 1700, apart: [
     { id: "controls-divider-row", select: "hr", w: 1, h: 40,
       reason: "A Divider in an HStack is a vertical rule as tall as the row (Apple: x-divider-hstack, 1 x 40)" },
@@ -112,18 +130,27 @@ const FIXTURES = [{ button: null, name: "start", onlyCss: true }, { button: "Ope
   ] }];
 
 // What `apart` checks: the box of the first element `select` matches in the group, relative to the group's top left. `w`/`h`: its size
-// (1.5 px off at most), `wMax`: at most that wide.
+// (1.5 px off at most), `wMax`/`hMax`: at most that wide or tall, `y`: its top, `yMax`: at most that far down, `bottom`: its bottom edge; `sameW`/`sameH`: as wide
+// or as tall as the first element that selector matches in the group, `shorterH`: less than half as tall as it.
 const APART = `(parts) => parts.map(part => {
   const group = document.querySelector('[data-testid="' + part.id + '"]'), base = group.getBoundingClientRect();
   const box = e => { const r = e.getBoundingClientRect(); return { x: r.x - base.x, y: r.y - base.y, w: r.width, h: r.height }; };
-  const found = group.querySelector(part.select);
-  return { id: part.id, box: found && box(found) };
+  const found = group.querySelector(part.select), other = group.querySelector(part.sameW ?? part.sameH ?? part.shorterH ?? ':not(*)');
+  return { id: part.id, box: found && box(found), other: other && box(other) };
 })`;
 const matches = (part, got) => {
   if (!got.box) return false;
   if (part.w !== undefined && Math.abs(got.box.w - part.w) > 1.5) return false;
   if (part.h !== undefined && Math.abs(got.box.h - part.h) > 1.5) return false;
   if (part.wMax !== undefined && got.box.w > part.wMax) return false;
+  if (part.hMax !== undefined && got.box.h > part.hMax) return false;
+  if (part.y !== undefined && Math.abs(got.box.y - part.y) > 1.5) return false;
+  if (part.yMax !== undefined && got.box.y > part.yMax) return false;
+  if (part.bottom !== undefined && Math.abs(got.box.y + got.box.h - part.bottom) > 1.5) return false;
+  if ((part.sameW ?? part.sameH ?? part.shorterH) !== undefined && !got.other) return false;
+  if (part.sameW !== undefined && Math.abs(got.box.w - got.other.w) > 1.5) return false;
+  if (part.sameH !== undefined && Math.abs(got.box.h - got.other.h) > 1.5) return false;
+  if (part.shorterH !== undefined && !(got.box.h * 2 < got.other.h)) return false;
   return true;
 };
 
