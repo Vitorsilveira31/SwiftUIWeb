@@ -109,6 +109,10 @@ const FIXTURES = [{ button: null, name: "start", onlyCss: true }, { button: "Ope
       reason: "A LazyVGrid cell framed maxHeight .infinity under its background is as tall as its row, as the taller cell beside it (Apple: 96 and 96)" },
     { id: "parity-grid-inner", select: ".grid-layout > .frame-box .padding", shorterH: ".grid-layout > .frame-box ~ .frame-box .padding",
       reason: "A background inside the frame stays as tall as its content, shorter than its row (Apple: 32 in a row of 96)" },
+    { id: "parity-segmented", select: ".segment-item:last-child > span", hMax: 24,
+      reason: "A segmented Picker with .fixedSize() keeps each label on one line (Apple: the control 24 tall, its longest label on one line)" },
+    { id: "parity-segmented", select: ".segment-item", sameW: ".segment-item:last-child",
+      reason: "and its segments are as wide as each other, the widest label's width (UISegmentedControl)" },
   ] },
   { button: "Open controls fixture", name: "controls", onlyCss: true, still: true, height: 1700, apart: [
     { id: "controls-divider-row", select: "hr", w: 1, h: 40,

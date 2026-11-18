@@ -6,7 +6,8 @@ import SwiftUIWeb
 ///   scroll views that fill the height left (a page with a list beside a detail): the title stays at the top and the panes
 ///   take the rest; alone and in a frame;
 /// - LazyVGrid cells whose content fills the height with `.frame(maxHeight: .infinity)`: a background outside the frame is
-///   as tall as the row, one inside it as tall as its content.
+///   as tall as the row, one inside it as tall as its content;
+/// - a segmented Picker with `.fixedSize()` beside a label: each segment's label stays on one line.
 struct EmbeddedLayoutParityFixture: View {
   let onDone: () -> Void
   @State private var count = 0
@@ -33,6 +34,18 @@ struct EmbeddedLayoutParityFixture: View {
       }
       .frame(width: 300)
       .accessibilityIdentifier("parity-grid-inner")
+      HStack(spacing: 10) {
+        Text("CPU")
+        Picker("CPU", selection: .constant(1)) {
+          Text("1x").tag(1)
+          Text("4x slower").tag(4)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .fixedSize()
+      }
+      .frame(width: 240, alignment: .leading)
+      .accessibilityIdentifier("parity-segmented")
     }
     .padding(16)
   }
