@@ -23,7 +23,8 @@ enum StartStrings {
         detail: language.pick(
           pt: "A toolchain do swift.org, com o Swift SDK para WebAssembly da mesma versão. O compilador do Xcode não gera WebAssembly.",
           en: "The swift.org toolchain, with the Swift SDK for WebAssembly of the same release. Xcode's compiler does not build WebAssembly."
-        )
+        ),
+        symbol: "chevron.left.forwardslash.chevron.right"
       ),
       PurposeItemVO(
         id: "bun",
@@ -31,7 +32,8 @@ enum StartStrings {
         detail: language.pick(
           pt: "Roda os scripts de build e o servidor de desenvolvimento.",
           en: "Runs the build scripts and the development server."
-        )
+        ),
+        symbol: "shippingbox"
       ),
       PurposeItemVO(
         id: "os",
@@ -39,7 +41,8 @@ enum StartStrings {
         detail: language.pick(
           pt: "./swiftweb doctor lista tudo o que falta, com o comando que instala cada item.",
           en: "./swiftweb doctor lists everything missing, each with the command that installs it."
-        )
+        ),
+        symbol: "cpu"
       ),
     ]
   }
@@ -109,7 +112,7 @@ enum StartStrings {
     let package = Package(
       name: "MyApp",
       dependencies: [
-        .package(url: "https://github.com/Vitorsilveira31/SwiftUIWeb.git", from: "0.1.0")
+        .package(url: "https://github.com/Vitorsilveira31/SwiftUIWeb.git", from: "\(SiteLinks.release)")
       ],
       targets: [
         .executableTarget(

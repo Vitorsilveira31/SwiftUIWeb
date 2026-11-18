@@ -1,25 +1,23 @@
 import SwiftUIWeb
 
 /// The app the README opens with, as code beside the same code running: the page is itself a SwiftUIWeb app.
+///
+/// The two are a grid of two columns where they fit and one where they do not. Side by side, the running app's card is as
+/// tall as the code beside it (a grid row is as tall as its tallest cell, and the card fills its cell), so the boxes end
+/// together.
 struct HeroDemoView: View {
   @Environment(\.siteLanguage) private var language
 
   var body: some View {
-    ViewThatFits(in: .horizontal) {
-      HStack(alignment: .top, spacing: SiteLayout.gridSpacing) {
-        code
-        live
-      }
-      VStack(alignment: .leading, spacing: SiteLayout.gridSpacing) {
-        code
-        live
-      }
+    SiteCardGrid(minimumWidth: SiteLayout.wideCardMinWidth) {
+      code
+      live
     }
   }
 
   private var code: some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text(PurposeStrings.demoCode(language)).font(.caption).fontWeight(.semibold).foregroundStyle(.secondary)
+      caption(PurposeStrings.demoCode(language))
       SiteCodeBlock(code: HeroDemoView.source)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
@@ -27,10 +25,16 @@ struct HeroDemoView: View {
 
   private var live: some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text(PurposeStrings.demoLive(language)).font(.caption).fontWeight(.semibold).foregroundStyle(.secondary)
-      SiteCard { HeroCounterView() }
+      caption(PurposeStrings.demoLive(language))
+      SiteCard(fillsHeight: true) {
+        HeroCounterView().frame(maxHeight: .infinity)
+      }
     }
-    .frame(maxWidth: .infinity, alignment: .leading)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+  }
+
+  private func caption(_ text: String) -> some View {
+    Text(text).font(.caption).fontWeight(.semibold).foregroundStyle(.secondary)
   }
 
   static let source = """

@@ -19,8 +19,18 @@ struct PerformanceView: View {
         PerformanceAllMeasurements(viewModel: viewModel)
         Text(PerformanceStrings.conditions(viewModel.results, language)).font(.caption).foregroundStyle(.secondary)
       }
-      PurposeSection(heading: PerformanceStrings.methodHeading(language), items: PerformanceStrings.method(language), symbol: "checkmark.circle")
-      PurposeSection(heading: PerformanceStrings.caveatsHeading(language), items: PerformanceStrings.caveats(language), symbol: "info.circle", tint: SiteTheme.negative)
+      PurposeSection(
+        heading: PerformanceStrings.methodHeading(language),
+        items: PerformanceStrings.method(language),
+        minimumWidth: SiteLayout.wideCardMinWidth
+      )
+      PurposeSection(
+        heading: PerformanceStrings.caveatsHeading(language),
+        items: PerformanceStrings.caveats(language),
+        symbol: "info.circle",
+        tint: SiteTheme.negative,
+        minimumWidth: SiteLayout.wideCardMinWidth
+      )
     }
   }
 

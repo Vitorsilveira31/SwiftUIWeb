@@ -801,9 +801,9 @@ async function checkHeader(browser, base, query) {
 // SwiftUI's Stepper draws its label and two buttons, never its value; the value stays for assistive technology.
 // The hero's actions on a phone: each keeps its label on one line (a squeezed button wraps it and grows a second line), none passes the
 // edge of the screen, and the row takes the arrangement that fits: stacked when narrow, the two buttons side by side from 390 px,
-// all three in a row from 430 px. The page draws each arrangement once to measure it, so the actions are looked for among the visible ones.
+// all three in a row from 470 px (the source is a button as wide as its label, like the other two). The page draws each arrangement once to measure it, so the actions are looked for among the visible ones.
 async function checkHeroActions(browser, base, query) {
-  for (const width of [320, 360, 390, 430, 600]) {
+  for (const width of [320, 360, 390, 430, 470, 600]) {
     const { context, page, errors } = await open(browser, base, { query, path: "/en/purpose", width });
     await text(page, "Browse components", `the hero's actions at ${width}`);
     const action = (name) => page.getByRole("link", { name, exact: true }).locator("visible=true").last();
@@ -811,14 +811,14 @@ async function checkHeroActions(browser, base, query) {
     for (const name of ["Get started", "Browse components", "GitHub"]) boxes[name] = await action(name).boundingBox();
     for (const [name, box] of Object.entries(boxes)) {
       assert.ok(box, `${name} is not on the page at ${width}`);
-      assert.ok(box.height <= (name === "GitHub" ? 30 : 48), `${name} wraps onto a second line at ${width} (${box.height} tall)`);
+      assert.ok(box.height <= 48, `${name} wraps onto a second line at ${width} (${box.height} tall)`);
       assert.ok(box.x >= 0 && box.x + box.width <= width + 0.5, `${name} passes the edge of a ${width} px screen (${box.x + box.width})`);
     }
     const [start, components, source] = [boxes["Get started"], boxes["Browse components"], boxes["GitHub"]];
     const sameRow = (a, b) => Math.abs(a.y + a.height / 2 - (b.y + b.height / 2)) < 4;
     if (width < 390) {
       assert.ok(components.y > start.y + start.height - 1 && source.y > components.y + components.height - 1, `the actions are not stacked at ${width}`);
-    } else if (width < 430) {
+    } else if (width < 470) {
       assert.ok(sameRow(start, components) && source.y > start.y + start.height - 1, `the buttons are not side by side with the source under them at ${width}`);
     } else {
       assert.ok(sameRow(start, components) && sameRow(components, source), `the actions are not in one row at ${width}`);

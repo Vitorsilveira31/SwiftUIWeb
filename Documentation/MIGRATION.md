@@ -85,6 +85,16 @@ before/after comparison.
 
 ### Looks that changed
 
+- **One typeface for all text.** The base gave `<html>` the stack `Inter, ui-sans-serif, system-ui, -apple-system, …`, while
+  the text styles (`.font(.title)`, `.headline` and the rest) use the system stack (`-apple-system, BlinkMacSystemFont,
+  system-ui, …`). On a machine with Inter installed, text without a `.font` was drawn in Inter beside titles in San
+  Francisco, in the same card. Every text now uses the system stack, as SwiftUI draws it. An application that wants Inter
+  sets it through `--default-font-family`.
+
+- **A `Link` with a custom label is not underlined under the pointer.** Every `Link` underlined its label on hover, so a
+  link drawn as a pill, a button or a card grew a line under its text. Only a link whose label is plain text
+  (`Link("Docs", destination:)`) is underlined now; one with a custom label keeps its look, as in SwiftUI.
+
 - **A segmented `Picker`'s segments are as wide as the widest label.** The segments were a flex row that shared the track
   in equal parts of the sum of the labels, so with `.fixedSize()` (or anywhere the picker hugs its content) the longest label
   had less than its width and wrapped onto two lines: "4x slower" beside "Normal" was a segment 48 px tall. The track is now a
