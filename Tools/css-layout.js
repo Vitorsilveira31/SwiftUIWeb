@@ -692,15 +692,46 @@ export class CssLayout {
       for (const [e, style] of raised) { if (style == null) e.removeAttribute('style'); else e.setAttribute('style', style); }
     }
     for (const { fit, offered } of live) onProposal?.(fit, offered.x === Infinity ? null : round(offered.x), offered.y === Infinity ? null : round(offered.y));
+    const asked = onLayoutSizes ? this.measureAsks() : new Map();
     for (const box of this.layouts) {
       const items = [...box.children].filter(child => child.hasAttribute('data-layout-child-proposal'));
       if (!items.length || !onLayoutSizes || !items.every(child => this.roots.has(child)) || !box.getClientRects().length) continue;
       onLayoutSizes(box, [...box.children].map(child => {
         if (!items.includes(child)) return '';
         const r = child.getBoundingClientRect();
-        return child.getAttribute('data-layout-child-proposal') + ':' + round(r.width) + ',' + round(r.height);
+        return child.getAttribute('data-layout-child-proposal') + ':' + round(r.width) + ',' + round(r.height) + (asked.get(child) ?? []).map(size => '|' + size).join('');
       }).join(';'));
     }
+  }
+  /** The size each subview of a user-defined Layout takes at the other proposals the Layout asked it about (`data-layout-asks`,
+   * `width,height;…`: SwiftUI's `sizeThatFits` of a subview at a proposal it is not placed with), by subview, as
+   * `width,height:width,height` per proposal. A subview is laid out at each one as `rootPlacement` lays it out at the proposal it
+   * was placed with (it is out of the flow: nothing else moves), all subviews at their first proposal in one layout, then their
+   * second, and put back. */
+  measureAsks() {
+    const round = v => Math.round(v * 64) / 64, found = new Map(), pending = [];
+    for (const box of this.layouts) for (const child of box.children) {
+      const raw = child.getAttribute('data-layout-asks'), node = this.cache.get(child);
+      if (raw && node?.axis && this.roots.get(child)?.item && child.getClientRects().length) pending.push({ child, ax: node.axis, asks: raw.split(';').filter(Boolean) });
+    }
+    for (let k = 0; pending.some(entry => entry.asks.length > k); k++) {
+      const batch = pending.filter(entry => entry.asks.length > k);
+      const saved = batch.map(({ child }) => [child, child.getAttribute('style')]), offsets = scrollOffsets(batch.map(({ child }) => child));
+      for (const { child, ax, asks } of batch) {
+        const [w, h] = asks[k].split(',').map(v => v === '' ? null : Math.max(0, Number(v))), wraps = w != null && ax.x.fixed == null && !ax.x.fill;
+        const width = ax.x.fixed != null ? px(ax.x.fixed) : w != null && ax.x.fill ? px(w) : 'max-content';
+        const height = ax.y.fixed != null ? px(ax.y.fixed) : h != null && ax.y.fill ? px(h) : 'auto';
+        child.style.cssText += `;width:${width} !important;min-width:${wraps ? 'min-content' : '0'} !important;max-width:${wraps ? px(w) : 'none'} !important;height:${height} !important`;
+      }
+      for (const { child, asks } of batch) {
+        const r = child.getBoundingClientRect();
+        if (!found.has(child)) found.set(child, []);
+        found.get(child).push(asks[k] + ':' + round(r.width) + ',' + round(r.height));
+      }
+      for (const [child, style] of saved) { if (style == null) child.removeAttribute('style'); else child.setAttribute('style', style); }
+      restoreScrollOffsets(offsets);
+    }
+    return found;
   }
   /** Writes the length of each container a `containerRelativeFrame` below reads (`--sl-cw`, `--sl-ch`) as a container-size query takes it: a container's proposal on an axis where it has one (it fills it, so its box says it),
    * else the outer container's (the variable is inherited from there). A semantic root's is what it is proposed: the

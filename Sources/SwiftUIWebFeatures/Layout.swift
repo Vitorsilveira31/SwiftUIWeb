@@ -225,7 +225,7 @@ fileprivate struct _LayoutPass {
     let storage = _LayoutSubviewStorage(node: node, id: index, initialSize: _LayoutNodeMeasurer.measure(node, proposal: .unspecified))
     #if hasFeature(Embedded)
     if let store {
-      storage.hostSize = store.measured[index]
+      storage.hostSizes = store.measured[index] ?? []
       store.renderedMeasured[index] = store.measured[index]
     }
     #endif
@@ -274,24 +274,32 @@ fileprivate struct _LayoutPass {
       if next != store.rendered, let ownerToken { invalidationStore._ownerObservationDidChange(ownerToken) }
     })
     wrapper.events["layoutsizes"] = _EventHandler(name: "layoutsizes", action: { rawValue in
-      // "proposal:size;proposal:size..." in subview order, each pair as "width,height".
-      var next: [Int: (proposal: ProposedViewSize, size: CGSize)] = .init()
+      // "proposal:size|proposal:size;proposal:size..." in subview order: the size at the proposal the subview was placed with,
+      // then at each other proposal the layout asked it about (`data-layout-asks`), each pair as "width,height".
+      var next: [Int: [(proposal: ProposedViewSize, size: CGSize)]] = .init()
       var index = 0
       for entry in rawValue.split(separator: ";", omittingEmptySubsequences: false) {
-        let parts = entry.split(separator: ":", omittingEmptySubsequences: false)
-        if parts.count == 2 {
+        var sizes: [(proposal: ProposedViewSize, size: CGSize)] = []
+        for measurement in entry.split(separator: "|") {
+          let parts = measurement.split(separator: ":", omittingEmptySubsequences: false)
+          guard parts.count == 2 else { continue }
           let size = _parseProposal(String(parts[1]))
           if let width = size.width, let height = size.height {
-            next[index] = (_parseProposal(String(parts[0])), CGSize(width: width, height: height))
+            sizes.append((_parseProposal(String(parts[0])), CGSize(width: width, height: height)))
           }
         }
+        if !sizes.isEmpty { next[index] = sizes }
         index += 1
       }
-      func same(_ a: [Int: (proposal: ProposedViewSize, size: CGSize)], _ b: [Int: (proposal: ProposedViewSize, size: CGSize)]) -> Bool {
+      typealias Sizes = [Int: [(proposal: ProposedViewSize, size: CGSize)]]
+      func same(_ a: Sizes, _ b: Sizes) -> Bool {
         guard a.count == b.count else { return false }
-        for (key, value) in a {
-          guard let other = b[key], other.proposal == value.proposal,
-                abs(other.size.width - value.size.width) < 0.25, abs(other.size.height - value.size.height) < 0.25 else { return false }
+        for (key, values) in a {
+          guard let others = b[key], others.count == values.count else { return false }
+          for (value, other) in zip(values, others) {
+            guard other.proposal == value.proposal,
+                  abs(other.size.width - value.size.width) < 0.25, abs(other.size.height - value.size.height) < 0.25 else { return false }
+          }
         }
         return true
       }
@@ -388,6 +396,10 @@ fileprivate struct _LayoutPass {
       item.classes = ["layout-item"]
       item.key = copy.key
       item.attributes["data-layout-child-proposal"] = axis(placement.proposal.width) + "," + axis(placement.proposal.height)
+      // The other proposals the layout asked this subview's size at (`sizeThatFits`): the page measures it at each one too, as
+      // it measures it at the proposal it was placed with, so the layout reads the subview's real size there (the first few).
+      let asks = subviews[index]._askedProposals.prefix(4).map { axis($0.width) + "," + axis($0.height) }
+      if !asks.isEmpty { item.attributes["data-layout-asks"] = asks.joined(separator: ";") }
       item.attributes["data-layout-anchor"] = [placement.point.x, placement.point.y].map(_layoutNumber).joined(separator: ",") + "," + [Double(placement.anchor.x), Double(placement.anchor.y)].map { String($0) }.joined(separator: ",")
       item.styles["position"] = "absolute"
       item.styles["box-sizing"] = "border-box"
