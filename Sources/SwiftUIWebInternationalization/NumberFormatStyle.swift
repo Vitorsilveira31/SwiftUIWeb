@@ -1,10 +1,10 @@
-// Embedded/WASI counterpart of Foundation's number format styles:
+// SwiftUIWeb's counterpart of Foundation's number format styles:
 // `FloatingPointFormatStyle`, `IntegerFormatStyle` and their `Currency` and
 // `Percent` variants, with `grouping`, `precision`, `sign` and `locale`, so
 // application code such as `value.formatted(.currency(code: "BRL"))` or
-// `Text(ratio, format: .percent)` compiles everywhere. Native builds use
-// Foundation's own types. Formatting is the browser's `Intl.NumberFormat`
-// (`Tools/BrowserIO/text-format.mjs`), which knows every locale.
+// `Text(ratio, format: .percent)` compiles everywhere. The browser formats with
+// `Intl.NumberFormat` (`Tools/BrowserIO/text-format.mjs`), every locale; natively
+// Swift writes Foundation's output for the locales NativeNumberFormatting lists.
 
 /// 1,234 -> "1.2K", 12,345 -> "12K", 1,500,000 -> "1.5M" (the short English names, as Foundation's
 /// `.notation(.compactName)` prints in an English locale). Kept outside the gate below so the native

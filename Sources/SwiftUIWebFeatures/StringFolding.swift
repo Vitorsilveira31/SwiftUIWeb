@@ -1,13 +1,13 @@
 @_spi(Browser) @_spi(Generated) @_spi(Renderer) import SwiftUIWebCore
-// Foundation's `String.folding(options:locale:)` for Embedded and WASI
-// builds, so search and filter code written against Foundation compiles
-// unchanged in the browser. ASCII is folded here; any other text goes to the
-// browser (`text-format.mjs`: canonical decomposition without the combining
-// marks, then lowercase), which knows every script.
+// Foundation's `String.folding(options:locale:)`, so search and filter code
+// written against Foundation compiles unchanged. ASCII is folded here; any
+// other text goes to the browser (`text-format.mjs`: canonical decomposition
+// without the combining marks, then lowercase), which knows every script, or,
+// in a native build that has no browser, to NativeStringFolding.swift.
 
 /// Host-neutral folding shared by the Foundation-shaped API below and by
-/// renderer code. Without a browser (a native build) non-ASCII text comes back
-/// unchanged; natively `folding(options:locale:)` is Foundation's own.
+/// renderer code. Without a browser (a native build) Swift folds the text as
+/// Foundation does on Apple platforms (NativeStringFolding.swift).
 @_spi(Renderer) public func _swiftUIWebFoldText(_ value: String, diacritics: Bool, case foldsCase: Bool) -> String {
   guard diacritics || foldsCase else { return value }
   var bytes = Array(value.utf8)
@@ -38,8 +38,8 @@ public extension String {
 // Foundation declares `folding` on StringProtocol.
 public extension StringProtocol {
   /// Foundation's `folding(options:locale:)`: `.diacriticInsensitive` strips
-  /// Latin accents and `.caseInsensitive` lowercases. The locale is accepted
-  /// for source compatibility; folding is locale-independent here.
+  /// Latin, Greek and Cyrillic accents and `.caseInsensitive` folds case. The locale
+  /// is accepted for source compatibility; folding is locale-independent here.
   func folding(options: String.CompareOptions = [], locale: Locale?) -> String {
     _swiftUIWebFoldText(String(self), diacritics: options.contains(.diacriticInsensitive), case: options.contains(.caseInsensitive))
   }

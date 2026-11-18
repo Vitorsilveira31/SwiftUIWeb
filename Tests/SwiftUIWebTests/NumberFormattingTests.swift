@@ -25,28 +25,34 @@ struct NumberFormattingTests {
   @Test
   func theBrowserFormatsAndAnAnswerlessOneLeavesThePlainText() {
     #expect(_swiftUIWebFormatNumber("1.5", options: "style=hex") == "1.5")
+    let swiftFormatter = _TextHost.formatNumber
+    // The fake browser is global while it is installed: it answers and records only this test's values, so the
+    // suites that format numbers at the same time on other threads still get the Swift answer.
     var asked: [String] = []
     _TextHost.formatNumber = { text, options in
+      guard text == "424242" || text == "abc" else { return swiftFormatter?(text, options) }
       asked.append("\(text) \(options)")
-      return text == "1" ? "um" : nil
+      return text == "424242" ? "quatrocentos" : nil
     }
-    defer { _TextHost.formatNumber = nil }
-    #expect(_swiftUIWebFormatNumber("1", options: "locale=pt_BR") == "um")
+    defer { _TextHost.formatNumber = swiftFormatter }
+    #expect(_swiftUIWebFormatNumber("424242", options: "locale=pt_BR") == "quatrocentos")
     #expect(_swiftUIWebFormatNumber("abc", options: "") == "abc")
-    #expect(asked == ["1 locale=pt_BR", "abc "])
+    #expect(asked == ["424242 locale=pt_BR", "abc "])
   }
 
   @Test
   func theCurrentLocaleIsTheVisitorsAndANamedOneIsKept() {
+    let swiftFormatter = _TextHost.formatNumber
     var asked: [String] = []
-    _TextHost.formatNumber = { _, options in
+    _TextHost.formatNumber = { text, options in
+      guard text == "3000000007" else { return swiftFormatter?(text, options) }
       asked.append(options)
       return nil
     }
-    defer { _TextHost.formatNumber = nil }
-    _ = IntegerFormatStyle<Int>().format(3_000_000_000)
-    _ = IntegerFormatStyle<Int>(locale: Locale(identifier: "en_US_POSIX")).format(3_000_000_000)
-    _ = IntegerFormatStyle<Int>().locale(Locale(identifier: "pt_BR")).format(3)
+    defer { _TextHost.formatNumber = swiftFormatter }
+    _ = IntegerFormatStyle<Int>().format(3_000_000_007)
+    _ = IntegerFormatStyle<Int>(locale: Locale(identifier: "en_US_POSIX")).format(3_000_000_007)
+    _ = IntegerFormatStyle<Int>().locale(Locale(identifier: "pt_BR")).format(3_000_000_007)
     // Locale.current hands the browser its own locale (the visitor's); a locale named by the app is passed as named.
     #expect(asked.count == 3)
     #expect(asked[0].contains("locale=;") || asked[0].hasSuffix("locale="))

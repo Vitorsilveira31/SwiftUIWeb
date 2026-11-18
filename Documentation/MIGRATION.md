@@ -83,6 +83,24 @@ before/after comparison.
 - In-place lowering (`SWIFTUIWEB_LOWER_IN_PLACE=1`) skips symbolic links, and its restore keeps a file edited since the
   lowering (and the state, until it is settled by hand).
 
+### Native builds format numbers and fold text as Foundation does
+
+A native build (`swift test`, tools) has no browser, and the number format styles and `folding(options:locale:)` used
+to hand back the raw value there: `28_300.formatted(.number.locale(Locale(identifier: "pt_BR")))` was `28300` and
+`"Maré".folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)` was `Maré`. They now give Apple's
+Foundation output: `28.300`, `R$ 1.027,00` (with a no-break space) for `1027.formatted(.currency(code: "BRL"))` in
+pt_BR, `74%` for `0.736.formatted(.percent.precision(.fractionLength(0)))`, and `mare`. The browser build is unchanged
+(`Intl.NumberFormat` and the browser's folding) and none of this code reaches `app.wasm`.
+
+- **Locales.** The native tables hold en_US, en_GB, pt_BR, pt_PT, de, fr, es, it, ja and en_US_POSIX, with Apple's
+  currency symbols and fraction digits. Another region of those languages writes as the language's main one (es_MX
+  as es); another language as Foundation's root locale (`1234.5`, `INF`). `Locale.current` has no visitor outside a
+  browser and formats as en_US.
+- **Folding** follows Foundation's rules on macOS, checked against it for every Unicode scalar: `.caseInsensitive`
+  is Unicode case folding (`Straße` is `strasse`, `ﬁ` is `fi`), and `.diacriticInsensitive` drops the marks of Latin,
+  Greek and Cyrillic letters while other scripts keep theirs (kana voicing, Hebrew points). Tests that expected the
+  raw value natively expect Foundation's text now.
+
 ### Looks that changed
 
 - **One typeface for all text.** The base gave `<html>` the stack `Inter, ui-sans-serif, system-ui, -apple-system, …`, while
