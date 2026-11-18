@@ -738,6 +738,11 @@ export function mountEmbeddedBrowser(instance, options = {}) {
     if (inherited && inherited !== 'none') return armedTimingOf(old?.parentElement, scoped) || inherited;
     return inherited;
   }
+  // A Menu's panel is placed by the page under its summary (`placeMenuPanel`): its `left` and `top` are the page's. A
+  // publication does not carry them, so a commit while the menu is open removed them, and the panel, a fixed popover in the
+  // top layer, jumped to the corner of the window until something placed it again.
+  const MENU_PANEL = '.menu-popup > [role="menu"]';
+  const ownsPageStyle = (element, name) => ownsLayoutStyle(element, name) || ((name === 'left' || name === 'top') && element.matches?.(MENU_PANEL) === true);
   function patchStyle(old, next, armed = null) {
     const iterations = next.getAttribute('data-animation-iterations');
     const repeats = iterations === 'infinite' || Number(iterations) > 1;
@@ -752,7 +757,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
       ? motionTiming(repeats ? own : !own ? (scopedTiming === 'none' ? null : scopedTiming || svgAncestorTransition(old)) : null) : null;
     // The styles Swift draws frame by frame are left to it (`data-timeline-driven`); the others of that node ease with the transaction.
     const driven = next.getAttribute('data-timeline-view') === 'animation' ? new Set((next.getAttribute('data-timeline-driven') || '').split(',')) : null;
-    const changed = timing ? [...new Set([...old.style,...next.style])].filter(key=>!ownsLayoutStyle(old,key) && !driven?.has(key) && animatable.test(key) && old.style.getPropertyValue(key)!==next.style.getPropertyValue(key)) : [];
+    const changed = timing ? [...new Set([...old.style,...next.style])].filter(key=>!ownsPageStyle(old,key) && !driven?.has(key) && animatable.test(key) && old.style.getPropertyValue(key)!==next.style.getPropertyValue(key)) : [];
     // A commit that does not animate gives a property its new value at once, as in SwiftUI: an animation of that property
     // still running from an earlier commit would draw over the value until it ended, and then jump to it.
     if (!timing) {
@@ -775,11 +780,11 @@ export function mountEmbeddedBrowser(instance, options = {}) {
       // Change only declarations that differ; an in-flight transition can retarget.
       for (let i=old.style.length-1; i>=0; i--) {
         const key=old.style[i];
-        if (ownsLayoutStyle(old,key) || (held && isTransitionDeclaration(key))) continue;
+        if (ownsPageStyle(old,key) || (held && isTransitionDeclaration(key))) continue;
         if (!next.style.getPropertyValue(key)) { old.style.removeProperty(key); metrics.attributes++; }
       }
       for (const key of next.style) {
-        if (ownsLayoutStyle(old,key)) continue;
+        if (ownsPageStyle(old,key)) continue;
         // Hold the transition back until the WAAPI target is read: restoring it in the same style
         // flush as the new value would start a CSS transition that pins the target at the old value.
         if ((changed.length && repeats || held) && isTransitionDeclaration(key)) continue;
@@ -3403,7 +3408,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
     if(reportedSizes.get(element)===key)return;
     reportedSizes.set(element,key);
     dispatchNamed(element,'layoutsizes',value);
-  },commitPending:()=>frame!==0&&!committing,cssLayout:(document,reports)=>new CssLayout(document,reports),onSettled:()=>{if(!committing){syncGeometryReaders();scrolls?.sync();syncMeshes();}},performanceDiagnostics});
+  },commitPending:()=>frame!==0&&!committing,cssLayout:(document,reports)=>new CssLayout(document,reports),onSettled:()=>{if(!committing){syncGeometryReaders();scrolls?.sync();syncMeshes();repositionMenus();}},performanceDiagnostics});
   focusCoordinator = new FocusCoordinator(root,{awaiting: awaitingFocus});
   scrolls = new ScrollCoordinator(root,{dispatch:dispatchNamed,ack:seq=>api.scroll_ack?.(seq),prepare:id=>{sendValue(id);const found=api.scroll_prepare?.();if(found)schedule();return !!found;},reducedMotion:()=>motion.media.matches,onError:report});
   // Diagnostic handle used by the embedded conformance gates to force a

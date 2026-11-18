@@ -539,6 +539,27 @@ async function checkAnimations(browser, base, query) {
   assert.ok(Math.abs(hideAgain.x - hideBox.x) <= 0.5 && Math.abs(hideAgain.width - hideBox.width) <= 0.5, "the button moved or changed size");
   const showWidth = await (async () => { await press("Hide"); await text(page, "Show", "the Hide button after hiding"); const box = await page.getByRole("button", { name: "Show", exact: true }).locator("visible=true").first().boundingBox(); await press("Show"); await text(page, "Hide", "the Show button after showing"); return box.width; })();
   assert.ok(Math.abs(showWidth - hideBox.width) <= 0.5, `Show is ${showWidth} wide and Hide ${hideBox.width}`);
+  // The open menu stays under its label when the card commits behind it: the page places the panel (a fixed popover in the
+  // top layer), and a publication that does not carry that place must not take it away (the panel jumped to the window's
+  // corner). The view is hidden through the DOM, without a press, so the menu stays open.
+  await page.locator(".menu-popup > summary:visible", { hasText: "Scale" }).first().click();
+  await page.locator('.menu-popup [role="menu"]:popover-open').first().waitFor();
+  await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Hide" && b.getBoundingClientRect().width > 0).click());
+  await text(page, "Show", "the Hide button after hiding with the menu open");
+  await page.waitForTimeout(400);
+  const menuPlace = await page.evaluate(() => {
+    const menu = [...document.querySelectorAll(".menu-popup")].find((m) => m.open);
+    const panel = menu?.querySelector(':scope > [role="menu"]'), summary = menu?.querySelector(":scope > summary");
+    if (!panel || !summary) return null;
+    const [p, s] = [panel.getBoundingClientRect(), summary.getBoundingClientRect()];
+    return { left: p.left, top: p.top, summaryLeft: s.left, summaryBottom: s.bottom };
+  });
+  assert.ok(menuPlace, "the menu closed when the card committed");
+  assert.ok(menuPlace.top >= menuPlace.summaryBottom - 1 && Math.abs(menuPlace.left - menuPlace.summaryLeft) <= 8, `after a commit the open menu's panel is at ${menuPlace.left},${menuPlace.top}, not under its label (${menuPlace.summaryLeft},${menuPlace.summaryBottom})`);
+  await page.keyboard.press("Escape");
+  await page.evaluate(() => { for (const m of document.querySelectorAll(".menu-popup")) m.open = false; });
+  await press("Show");
+  await text(page, "Hide", "the Show button after showing");
 
   // Symbol effects: Listen starts the pulse and offers to stop it. Progress ring: the value is the number beside it.
   await press("Listen");
