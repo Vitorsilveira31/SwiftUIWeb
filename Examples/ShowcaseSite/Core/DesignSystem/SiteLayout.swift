@@ -25,8 +25,8 @@ enum SiteLayout {
   static let gridSpacing: CGFloat = 16
   /// The narrowest card of a grid of statements (three columns in the full column).
   static let cardMinWidth: CGFloat = 280
-  /// The narrowest card of a grid of numbers (four columns in the full column).
-  static let statCardMinWidth: CGFloat = 200
+  /// The narrowest card of a grid of four longer statements (two columns in the full column, so four make two full rows).
+  static let wideCardMinWidth: CGFloat = 400
   /// The narrowest animation card: its live demo needs the room.
   static let demoCardMinWidth: CGFloat = 322
 

@@ -18,9 +18,9 @@ struct StartView: View {
         }
       }
       SiteSection(heading: StartStrings.nextHeading(language)) {
-        VStack(alignment: .leading, spacing: 8) {
+        SiteCardGrid(minimumWidth: SiteLayout.wideCardMinWidth) {
           ForEach(StartStrings.docLinks(language), id: \.path) { item in
-            if let url = SiteLinks.documentation(item.path) { Link(item.title, destination: url) }
+            if let url = SiteLinks.documentation(item.path) { SiteLinkCard(title: item.title, destination: url) }
           }
         }
       }

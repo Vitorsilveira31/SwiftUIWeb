@@ -210,7 +210,8 @@ enum PerformanceStrings {
         detail: language.pick(
           pt: "Os dois quadros mostram as mesmas 2.000 obras, geradas pelo mesmo algoritmo, e um teste confere que respondem igual a cada busca antes de qualquer medição.",
           en: "Both boards show the same 2,000 works, made by the same algorithm, and a test checks that they answer every search alike before anything is measured."
-        )
+        ),
+        symbol: "doc.on.doc"
       ),
       PurposeItemVO(
         id: "rounds",
@@ -218,7 +219,8 @@ enum PerformanceStrings {
         detail: language.pick(
           pt: "Cada rodada roda o roteiro uma vez de cada lado, variando quem vai primeiro, em um navegador novo. O que a máquina estava fazendo naquele instante vale para os dois lados.",
           en: "Each round runs the script once on each side, varying who goes first, in a fresh browser. What the machine was doing at that moment is shared by both sides."
-        )
+        ),
+        symbol: "arrow.triangle.2.circlepath"
       ),
       PurposeItemVO(
         id: "number",
@@ -226,7 +228,8 @@ enum PerformanceStrings {
         detail: language.pick(
           pt: "Um vai do evento de entrada até o quadro que mostra o resultado na tela. O outro, \"até o DOM estar pronto\", vai até o DOM e o layout terem a mudança, antes desse quadro. Os dois são lidos da própria página, do mesmo jeito nos dois lados.",
           en: "One runs from the input event to the frame that shows the result on screen. The other, \"until the DOM is ready\", runs until the DOM and its layout hold the change, before that frame. Both are read from the page itself, the same way on both sides."
-        )
+        ),
+        symbol: "clock"
       ),
       PurposeItemVO(
         id: "stats",
@@ -234,7 +237,8 @@ enum PerformanceStrings {
         detail: language.pick(
           pt: "Uma diferença só é dita quando o intervalo de confiança exclui zero, p é menor que 0,01 e a mudança é de pelo menos 5%. O resto é \"sem diferença relevante\".",
           en: "A difference is reported only when the confidence interval excludes zero, p is below 0.01 and the change is at least 5 percent. Everything else reads \"no significant difference\"."
-        )
+        ),
+        symbol: "waveform.path.ecg"
       ),
     ]
   }

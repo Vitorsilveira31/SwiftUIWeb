@@ -41,6 +41,8 @@ struct TransitionsDemo: View {
           Text(shown ? "Hide" : "Show").frame(width: 40, height: 18)
         }
         .buttonStyle(.borderedProminent)
+        // The site's accent, as the hero's button: a prominent button without a tint is black.
+        .tint(SiteTheme.accent)
       }
     }
   }

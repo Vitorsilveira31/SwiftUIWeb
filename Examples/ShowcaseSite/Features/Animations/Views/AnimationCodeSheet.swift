@@ -18,7 +18,7 @@ struct AnimationCodeSheet: View {
       HStack {
         Text(demo.title).font(.title3).fontWeight(.bold)
         Spacer()
-        Button(doneLabel) { shown = nil }.buttonStyle(.borderedProminent)
+        Button(doneLabel) { shown = nil }.buttonStyle(.borderedProminent).tint(SiteTheme.accent)
       }
       SiteCodeBlock(code: demo.code)
     }
