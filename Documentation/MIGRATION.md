@@ -85,6 +85,14 @@ before/after comparison.
 
 ### Looks that changed
 
+- **A segmented `Picker`'s segments are as wide as the widest label.** The segments were a flex row that shared the track
+  in equal parts of the sum of the labels, so with `.fixedSize()` (or anywhere the picker hugs its content) the longest label
+  had less than its width and wrapped onto two lines: "4x slower" beside "Normal" was a segment 48 px tall. The track is now a
+  grid of equal columns, each the widest label's width where the picker hugs its content and an equal share of the track
+  where it fills, as `UISegmentedControl` sizes them; the control is 32 px tall again, one line per label (Apple: 24 pt).
+  Checked on the site's Performance page and the lowering app's layout parity fixture before and after, in Chromium and
+  WebKit; nothing in an application needs to change.
+
 - **`TabView(.sidebarAdaptable)` on a phone: the floating bottom bar follows the color scheme.** It was always the light
   glass (`rgb(250 250 250 / 0.72)`) with black labels, so in a dark scheme it was a light capsule on a dark page and the
   selected tab (the near-white primary color) could not be read on it. It is now the same glass as the automatic bar, dark in a dark

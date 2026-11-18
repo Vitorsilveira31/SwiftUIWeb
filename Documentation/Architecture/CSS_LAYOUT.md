@@ -231,17 +231,24 @@ can pin a centre without knowing it. After each layout pass (`reportLayouts`) th
   its box is read; nothing on the others. That is nothing along the axes a hugging view above asks for an ideal size along, as
   a `fixedSize`, a ScrollView along its axis, and a Grid that is itself proposed nothing do (a Grid asks its cells with the
   proposal it has, then places them in the row it found), and it does not count a frame's minimum as a proposal (a frame passes
-  a missing proposal on; the GeometryReader in it is only placed at the minimum, which `def` counts);
+  a missing proposal on; the GeometryReader in it is only placed at the minimum, which `def` counts). Each Layout is probed on
+  its own, the rest of the page as it is laid out: the views raised for one take what they are offered, which can take it from
+  a view beside them (a header's Layout raised in the window's VStack left the TabView below it no height, and the Layout of
+  the TabView's page, probed in the same layout, was offered none);
 - the size each subview took at the proposal it was placed with, once every subview is a root of the mapper (else the host
-  reports what it laid out).
-Swift re-renders when either changes, as before: one render for a new proposal, one for the sizes it brings. A query the
-Layout makes of a subview at another proposal than the one it places it with (`sizeThatFits(.unspecified)` for an ideal
-size, a minimum or a maximum) was never measured by the host either: Swift answers it from its estimate, and the
-measurement at the placed proposal replaces the estimate (a Layout that places at the proposal it asked with, as a flow does
-with `.unspecified`, gets the page's size).
+  reports what it laid out), then its size at each other proposal the Layout asked it about. Swift writes those on the item
+  (`data-layout-asks`, the first four: SwiftUI's `sizeThatFits` of a subview at a proposal it does not place it with, such as
+  `.unspecified` for an ideal size, or the height it is offered before it places the subview at the height that answers), and
+  the mapper lays the item out at each one as it lays it out at the placed proposal (`measureAsks`: the item is out of the
+  flow, so nothing else moves), reads it, and puts it back.
+Swift re-renders when either changes, as before: one render for a new proposal, one for the sizes it brings. Until the page has
+measured a proposal, Swift answers it from its estimate; a proposal the Layout asks about first after a render is measured
+after the next one.
 `Tools/test-css-layout-fixtures-browser.mjs` lays
 `EmbeddedLayoutFixture` out (a wrapping flow, a radial layout, ideal-width columns, Layouts inside one another and in
-a ScrollView, a publication and a resize) on Chromium and WebKit, and requires that the mapper
+a ScrollView, a publication and a resize) and `EmbeddedLayoutParityFixture` (Layouts that ask a subview about
+another proposal than the one they place it with, and two Layouts in one VStack, against Apple's frames) on Chromium and
+WebKit, and requires that the mapper
 refuses nothing in it.
 
 A Layout that is offered no height grows its row, its card and its frame to the size it answers: Food Truck's donut lattice in a

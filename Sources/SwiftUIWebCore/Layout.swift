@@ -225,8 +225,11 @@ package final class _LayoutSubviewStorage {
   var lastProposal: ProposedViewSize?
   var placement: _LayoutPlacement?
   var renderedNode: _RenderNode?
-  /// What the host measured for this subview and the proposal it measured it under.
-  package var hostSize: (proposal: ProposedViewSize, size: CGSize)?
+  /// What the host measured for this subview, with the proposal it measured each size under: the one the subview was placed
+  /// with and the others the layout asked its size at.
+  package var hostSizes: [(proposal: ProposedViewSize, size: CGSize)] = []
+  /// The proposals the layout asked this subview's size at, in the order it first asked them (the host measures them).
+  package var asked: [ProposedViewSize] = []
 
   package init(node: _RenderNode, id: Int, initialSize: CGSize) {
     self.node = node; self.id = id; lastSize = initialSize; lastProposal = nil; renderedNode = nil
@@ -257,9 +260,10 @@ public struct LayoutSubview: Equatable {
   }
 
   public func sizeThatFits(_ proposal: ProposedViewSize) -> CGSize {
+    if !storage.asked.contains(proposal) { storage.asked.append(proposal) }
     if storage.lastProposal == proposal { return storage.lastSize }
     // The host measured this subview's real content for exactly this proposal.
-    if let host = storage.hostSize, host.proposal == proposal {
+    if let host = storage.hostSizes.first(where: { $0.proposal == proposal }) {
       storage.lastSize = host.size
       storage.lastProposal = proposal
       return host.size
@@ -322,6 +326,8 @@ public struct LayoutSubview: Equatable {
   package var _size: CGSize { storage.lastSize }
   package var _placement: _LayoutPlacement? { storage.placement }
   package var _renderedNode: _RenderNode? { storage.renderedNode }
+  /// The proposals the layout asked this subview's size at besides the one it placed it with, which the host measures too.
+  package var _askedProposals: [ProposedViewSize] { storage.asked.filter { $0 != storage.placement?.proposal } }
   /// Renderer-facing source node used by internal layouts that need semantic
   /// metadata (for example split divider markers) without exposing storage to
   /// application code.
@@ -852,9 +858,9 @@ final package class _LayoutProposalStore {
   package init() {}
   package var reported = ProposedViewSize.unspecified
   package var rendered = ProposedViewSize.unspecified
-  /// The size the host measured each subview at, with the proposal it was measured for (by subview index).
-  package var measured: [Int: (proposal: ProposedViewSize, size: CGSize)] = .init()
-  package var renderedMeasured: [Int: (proposal: ProposedViewSize, size: CGSize)] = .init()
+  /// The sizes the host measured each subview at, with the proposal each was measured for (by subview index).
+  package var measured: [Int: [(proposal: ProposedViewSize, size: CGSize)]] = .init()
+  package var renderedMeasured: [Int: [(proposal: ProposedViewSize, size: CGSize)]] = .init()
 }
 
 #if hasFeature(Embedded)

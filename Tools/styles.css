@@ -1320,12 +1320,15 @@
   }
 
   /* `.pickerStyle(.segmented)`: segments in a rounded track; the selected
-     segment is raised like UISegmentedControl. */
+     segment is raised like UISegmentedControl. The segments are columns of one
+     width, the widest label's where the picker hugs its content (`.fixedSize()`),
+     an equal share of the track otherwise, as UISegmentedControl sizes them. */
   .segmented-picker {
-    display: flex;
+    display: grid;
     width: 100%;
     max-width: none;
-    flex-direction: row;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
     align-items: stretch;
     gap: calc(var(--spacing) * 0.5);
     border-radius: var(--radius-lg);
@@ -1337,7 +1340,6 @@
     display: inline-flex;
     min-height: calc(var(--spacing) * 7);
     min-width: 0px;
-    flex: 1;
     cursor: pointer;
     align-items: center;
     justify-content: center;

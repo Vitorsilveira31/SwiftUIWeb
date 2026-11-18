@@ -94,6 +94,7 @@ private struct LoweringRoot: View {
   @State private var showsControlsFixture = false
   @State private var hostRootsFixture: EmbeddedHostRootsKind?
   @State private var showsSplitFixture = false
+  @State private var showsLayoutParityFixture = false
 
   var body: some View {
     if showsDeepReviewFixture {
@@ -128,6 +129,8 @@ private struct LoweringRoot: View {
       EmbeddedLazyShelfFixture { showsLazyShelfFixture = false }
     } else if showsLayoutFixture {
       EmbeddedLayoutFixture { showsLayoutFixture = false }
+    } else if showsLayoutParityFixture {
+      EmbeddedLayoutParityFixture { showsLayoutParityFixture = false }
     } else if showsControlsFixture {
       EmbeddedControlsFixture { showsControlsFixture = false }
     } else if let kind = hostRootsFixture {
@@ -234,6 +237,7 @@ private struct LoweringRoot: View {
           Button("Open chart fixture") { hostRootsFixture = .chart }
           Button("Open form fixture") { hostRootsFixture = .form }
           Button("Open split fixture") { showsSplitFixture = true }
+          Button("Open layout parity fixture") { showsLayoutParityFixture = true }
           // OSLog's Logger in the browser: one line per level (`Tools/test-oslog-browser.mjs` reads the console).
           Button("Write log lines") {
             let logger = Logger(subsystem: "conformance", category: "oslog")

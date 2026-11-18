@@ -304,12 +304,12 @@ await runSuite(async () => {
     // page tells Swift the proposal the Layout is offered and the sizes its subviews took (`reportLayouts`).
     const custom = await page.evaluate(() => {
       const label = (id, value, style = "") => `<span id="${id}" data-layout-kind="intrinsic" data-layout-leaf="text" style="font:14px sans-serif">${value}</span>`;
-      const item = (id, proposal, point, anchor, content) => `<div id="${id}" class="layout-item" data-layout-child-proposal="${proposal}" style="position:absolute;left:${point[0]}px;top:${point[1]}px;--layout-anchor-x:${anchor[0]}%;--layout-anchor-y:${anchor[1]}%;width:1px;height:1px">${content}</div>`;
+      const item = (id, proposal, point, anchor, content, asks) => `<div id="${id}" class="layout-item" data-layout-child-proposal="${proposal}"${asks ? ` data-layout-asks="${asks}"` : ""} style="position:absolute;left:${point[0]}px;top:${point[1]}px;--layout-anchor-x:${anchor[0]}%;--layout-anchor-y:${anchor[1]}%;width:1px;height:1px">${content}</div>`;
       document.body.innerHTML = `<div id="lay-app" data-layout-kind="frame" data-frame-max-w="inf" data-frame-max-h="inf" data-align-x="0" data-align-y="0"><div class="vstack" data-layout-kind="vstack" data-layout-gap="8" data-align-x="0">
         <div id="box" class="layout-box" data-layout-proposal="true" data-layout-content-width="200" data-layout-content-height="80" style="position:relative;width:200px;height:80px">
           ${item("ideal", ",", [100, 10], [-50, 0], label("t1", "Ideal"))}
-          ${item("wrap", "60,", [0, 30], [0, 0], label("t2", "Wraps at sixty points"))}
-          ${item("fill", "120,40", [200, 80], [-100, -100], `<div id="filled" data-layout-kind="frame" data-frame-max-w="inf" data-frame-max-h="inf" data-align-x="0.5" data-align-y="0.5"></div>`)}
+          ${item("wrap", "60,", [0, 30], [0, 0], label("t2", "Wraps at sixty points"), ",")}
+          ${item("fill", "120,40", [200, 80], [-100, -100], `<div id="filled" data-layout-kind="frame" data-frame-max-w="inf" data-frame-max-h="inf" data-align-x="0.5" data-align-y="0.5"></div>`, "200,60;90,")}
         </div></div></div>`;
       document.adoptedStyleSheets = [];
       const reports = [], css = new CssLayout(document, { onProposal: (e, w, h) => reports.push(["proposal", e.id, w, h]), onLayoutSizes: (e, v) => reports.push(["sizes", e.id, v]) });
@@ -328,12 +328,32 @@ await runSuite(async () => {
     assert.deepEqual([custom.box[2], custom.box[3]], [200, 80], "the Layout is the size Swift gave it");
     assert.equal(custom.ideal[0], 100 - custom.ideal[2] / 2, "a subview anchored at its centre is pinned by the size it takes");
     assert.ok(custom.ideal[2] > 20 && custom.ideal[3] > 8, "offered nothing, a subview is as large as its content");
-    assert.ok(custom.wrap[2] <= 60 && custom.wrap[3] > custom.ideal[3] * 1.5, "offered a width, a subview wraps at it");
+    assert.ok(custom.wrap[2] <= 60 && custom.wrap[3] > custom.ideal[3] * 1.5, "offered a width, a subview wraps at it (and is laid out so again once measured at the other proposals)");
     assert.deepEqual(custom.fill, [80, 40, 120, 40], "a subview that fills takes its proposal, pinned by its bottom trailing corner");
     assert.equal(custom.moved, 150, "a Layout whose size changed while it was detached is laid out again");
     assert.deepEqual(custom.reports.find((r) => r[0] === "proposal")?.slice(1), ["box", 1000, 700], "the Layout is told what it is offered: the window, through the stack that hugs its content");
     const sizes = custom.reports.find((r) => r[0] === "sizes")?.[2].split(";");
-    assert.deepEqual([sizes.length, sizes[2]], [3, "120,40:120,40"], "and the size each subview took at its proposal");
+    assert.deepEqual([sizes.length, sizes[2]], [3, "120,40:120,40|200,60:200,60|90,:90,0"], "and the size each subview took at its proposal, then at each other proposal the Layout asked it about");
+    const [placed, ideal] = sizes[1].split("|").map((entry) => Number(entry.split(":")[1].split(",")[0]));
+    assert.ok(placed <= 60 && ideal > 60, `asked for its ideal size, a subview that wraps at its proposal is as wide as its text (${sizes[1]})`);
+    // Two Layouts in the window's VStack: one in a header (a padding that hugs it), one in a padding below in a view that takes the
+    // height left (a TabView's page). Each is offered what it is offered with the other laid out as it is: the header raised to
+    // take its offer while the page's Layout is probed would leave the page no height (the site's Components page was offered 0).
+    const pair = await page.evaluate(() => {
+      const box = (id) => `<div id="${id}" class="layout-box" data-layout-proposal="true" data-layout-content-width="200" data-layout-content-height="30" style="position:relative;width:200px;height:30px"></div>`;
+      document.body.innerHTML = `<div id="pair-app" data-layout-kind="frame" data-frame-max-w="inf" data-frame-max-h="inf" data-align-x="0.5" data-align-y="0.5"><div class="vstack" data-layout-kind="vstack" data-layout-gap="0" data-align-x="0.5">
+        <div data-layout-kind="padding" data-padding-top="10" data-padding-bottom="10">${box("header")}</div>
+        <div data-layout-kind="frame" data-frame-max-w="inf" data-frame-max-h="inf" data-align-x="0.5" data-align-y="0.5"><div data-layout-kind="padding" data-padding-top="32">${box("body")}</div></div>
+        </div></div>`;
+      document.adoptedStyleSheets = [];
+      const reports = [], css = new CssLayout(document, { onProposal: (e, w, h) => reports.push([e.id, w, h]) });
+      const ok = css.claimRoot(document.getElementById("pair-app"), { def: { x: true, y: true }, ax: 0.5, height: "700px", key: "window-pair" });
+      css.flush();
+      return { ok, header: reports.find((r) => r[0] === "header"), body: reports.find((r) => r[0] === "body") };
+    });
+    assert.equal(pair.ok, true, "two Layouts in a VStack are CSS's");
+    assert.ok(pair.body[2] > 600, `the Layout below the header is offered the height left under it, not what the header's probe left (${JSON.stringify(pair)})`);
+    assert.ok(pair.header[2] > 0, "and the header's Layout is offered a height of its own");
     // A Layout is offered no height where SwiftUI asks for an ideal size along it: below a fixedSize, a Grid row that hugs its cells
     // and a frame with a minimum height pass that on (Food Truck's lattice). Where the Grid is proposed a height it passes that on.
     const asked = await page.evaluate(() => {
