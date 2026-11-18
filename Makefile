@@ -184,6 +184,7 @@ csp-bundles-test:
 	BUILD_ONLY=1 CONFIGURATION=release Tools/run-browser.sh notifications
 	BUILD_ONLY=1 CONFIGURATION=release Tools/run-browser.sh motion
 	BUILD_ONLY=1 CONFIGURATION=release Tools/run-browser.sh view-transition
+	BUILD_ONLY=1 CONFIGURATION=release Tools/run-browser.sh lazy-cells
 	bun Tools/test-csp-bundles.mjs
 
 # An application-shaped package compiled against this checkout: lowered sources, generated strings, aliased SwiftUI.
