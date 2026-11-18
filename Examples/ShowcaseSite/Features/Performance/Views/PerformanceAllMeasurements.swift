@@ -18,8 +18,7 @@ struct PerformanceAllMeasurements: View {
           Spacer(minLength: 8)
           Image(systemName: isExpanded ? "chevron.up" : "chevron.down").foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(SiteLayout.cardPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.primary.opacity(0.04))
         .clipShape(RoundedRectangle(cornerRadius: SiteLayout.cornerRadius))

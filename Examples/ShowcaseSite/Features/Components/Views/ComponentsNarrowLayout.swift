@@ -6,8 +6,8 @@ struct ComponentsNarrowLayout: View {
   @Environment(\.siteLanguage) private var language
 
   var body: some View {
-    SitePageScaffold(width: SiteLayout.wideWidth) {
-      SiteHeading(text: ComponentsStrings.title(language), isPageTitle: true)
+    SitePageScaffold {
+      SitePageHeader(title: ComponentsStrings.title(language), lead: ComponentsStrings.lead(language))
       ComponentsCompactPicker(viewModel: viewModel)
       ComponentDetailView(viewModel: viewModel)
     }

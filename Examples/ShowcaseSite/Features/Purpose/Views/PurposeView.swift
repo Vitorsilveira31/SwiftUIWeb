@@ -5,7 +5,7 @@ struct PurposeView: View {
   @Environment(\.siteLanguage) private var language
 
   var body: some View {
-    SitePageScaffold(width: SiteLayout.wideWidth) {
+    SitePageScaffold {
       HeroView()
       HeroDemoView()
       PurposeSection(

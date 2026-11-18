@@ -8,15 +8,17 @@ struct PerformanceView: View {
 
   var body: some View {
     SitePageScaffold {
-      SiteHeading(text: PerformanceStrings.title(language), isPageTitle: true)
-      SiteParagraph(text: PerformanceStrings.lead(language), isLead: true)
-      PerformanceCpuPicker(viewModel: viewModel)
-      SiteParagraph(text: summary)
+      SitePageHeader(title: PerformanceStrings.title(language), lead: PerformanceStrings.lead(language))
+      VStack(alignment: .leading, spacing: SiteLayout.blockSpacing) {
+        PerformanceCpuPicker(viewModel: viewModel)
+        SiteParagraph(text: summary)
+      }
       PerformanceHighlightsView(viewModel: viewModel)
-      SiteHeading(text: PerformanceStrings.appHeading(language))
-      SiteParagraph(text: PerformanceStrings.app(language))
-      PerformanceAllMeasurements(viewModel: viewModel)
-      Text(PerformanceStrings.conditions(viewModel.results, language)).font(.caption).foregroundStyle(.secondary)
+      SiteSection(heading: PerformanceStrings.appHeading(language)) {
+        SiteParagraph(text: PerformanceStrings.app(language))
+        PerformanceAllMeasurements(viewModel: viewModel)
+        Text(PerformanceStrings.conditions(viewModel.results, language)).font(.caption).foregroundStyle(.secondary)
+      }
       PurposeSection(heading: PerformanceStrings.methodHeading(language), items: PerformanceStrings.method(language), symbol: "checkmark.circle")
       PurposeSection(heading: PerformanceStrings.caveatsHeading(language), items: PerformanceStrings.caveats(language), symbol: "info.circle", tint: SiteTheme.negative)
     }

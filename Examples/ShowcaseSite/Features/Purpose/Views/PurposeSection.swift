@@ -8,9 +8,8 @@ struct PurposeSection: View {
   var tint: Color = SiteTheme.accent
 
   var body: some View {
-    VStack(alignment: .leading, spacing: SiteLayout.blockSpacing) {
-      SiteHeading(text: heading)
-      LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 14)], spacing: 14) {
+    SiteSection(heading: heading) {
+      SiteCardGrid {
         ForEach(items, id: \.id) { item in
           SiteIconRow(symbol: symbol, tint: tint, title: item.title, detail: item.detail)
         }

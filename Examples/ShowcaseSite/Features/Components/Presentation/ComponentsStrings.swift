@@ -4,6 +4,13 @@ enum ComponentsStrings {
     language.pick(pt: "Componentes", en: "Components")
   }
 
+  static func lead(_ language: SiteLanguage) -> String {
+    language.pick(
+      pt: "Cada componente, ao vivo: mude os ajustes e a prévia e o código acompanham.",
+      en: "Every component, live: change its settings and the preview and the code follow."
+    )
+  }
+
   static func searchPrompt(_ language: SiteLanguage) -> String {
     language.pick(pt: "Buscar componente", en: "Search components")
   }

@@ -6,19 +6,22 @@ struct StartView: View {
 
   var body: some View {
     SitePageScaffold {
-      SiteHeading(text: StartStrings.title(language), isPageTitle: true)
-      SiteParagraph(text: StartStrings.lead(language), isLead: true)
+      SitePageHeader(title: StartStrings.title(language), lead: StartStrings.lead(language))
       PurposeSection(
         heading: StartStrings.requirementsHeading(language),
         items: StartStrings.requirements(language),
         symbol: "shippingbox"
       )
-      SiteHeading(text: StartStrings.stepsHeading(language))
-      ForEach(StartStrings.steps(language), id: \.id) { step in StartStepCard(step: step) }
-      SiteHeading(text: StartStrings.nextHeading(language))
-      VStack(alignment: .leading, spacing: 8) {
-        ForEach(StartStrings.docLinks(language), id: \.path) { item in
-          if let url = SiteLinks.documentation(item.path) { Link(item.title, destination: url) }
+      SiteSection(heading: StartStrings.stepsHeading(language)) {
+        VStack(alignment: .leading, spacing: SiteLayout.gridSpacing) {
+          ForEach(StartStrings.steps(language), id: \.id) { step in StartStepCard(step: step) }
+        }
+      }
+      SiteSection(heading: StartStrings.nextHeading(language)) {
+        VStack(alignment: .leading, spacing: 8) {
+          ForEach(StartStrings.docLinks(language), id: \.path) { item in
+            if let url = SiteLinks.documentation(item.path) { Link(item.title, destination: url) }
+          }
         }
       }
     }
