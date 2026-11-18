@@ -9,10 +9,9 @@ struct SiteIconRow: View {
   let detail: String
 
   var body: some View {
-    SiteCard {
+    SiteCard(fillsHeight: true) {
       SiteIconBadge(symbol: symbol, tint: tint)
       SiteBulletRow(title: title, detail: detail)
     }
-    .frame(maxHeight: .infinity, alignment: .top)
   }
 }

@@ -7,7 +7,8 @@ struct PerformanceHighlightCard: View {
   @Environment(\.siteLanguage) private var language
 
   var body: some View {
-    SiteCard {
+    // As tall as its row, as every card of a grid is (`SiteIconRow`), whatever the length of its title.
+    SiteCard(fillsHeight: true) {
       Text(title).font(.subheadline).foregroundStyle(.secondary)
       Text(PerformanceStrings.value(swiftUIWebValue, unit: row.metric.unit))
         .font(.system(size: 28, weight: .bold, design: .rounded))
@@ -17,8 +18,6 @@ struct PerformanceHighlightCard: View {
         .foregroundStyle(.secondary)
       PerformanceStandingBadge(standing: standing)
     }
-    // Top-aligned in its row, as every card of a grid is (`SiteIconRow`), whatever the length of its title.
-    .frame(maxHeight: .infinity, alignment: .top)
   }
 
   /// The number that stands for SwiftUIWeb at the CPU rate shown: its worker's, or the main-thread bundle's where the

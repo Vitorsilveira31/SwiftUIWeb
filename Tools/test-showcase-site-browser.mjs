@@ -30,7 +30,9 @@
 //     and on a wide screen the component list and the entry scroll on their own while the page stays still;
 //   * every catalog entry opens, beside the list on a wide screen, and the Stepper draws its label and buttons but not its value;
 //   * every page shares one frame: at 1440, 1024, 768 and 390 px each page's title starts at the left edge of one centered column
-//     (1040 px at most, 20 px from the screen's edge below that), where the header's brand starts too.
+//     (1040 px at most, 20 px from the screen's edge below that), where the header's brand starts too;
+//   * the cards of a grid row end together: on Benefits, Get started and Performance at 1440 px, the cards that share a row are as tall
+//     as each other, whatever their text.
 // Engine: SWIFTUIWEB_BROWSER_ENGINE. Bundle: SHOWCASE_SITE_BUNDLE (default .build/browser/ShowcaseSite).
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
@@ -303,6 +305,38 @@ async function checkFrame(browser, base, query) {
     await context.close();
   }
   return "frame";
+}
+
+// The cards of a row of a grid (SiteCard with fillsHeight) are as tall as the row: a card with less text is not shorter.
+async function checkCardRows(browser, base, query) {
+  const { context, page, errors } = await open(browser, base, { query, path: "/en/benefits", width: 1440 });
+  for (const slug of ["benefits", "start", "performance"]) {
+    if (slug !== "benefits") {
+      await page.goto(`${base}/en/${slug}${query}`, { waitUntil: "domcontentloaded" });
+      await page.waitForSelector('html[data-embedded-mounted="true"]', { timeout: 60_000 });
+    }
+    await page.waitForTimeout(600);
+    // A card: a surface with a background and a border, a grid cell wide (180 to 400 px) and taller than a badge.
+    const rows = await page.evaluate(() => {
+      const byTop = new Map();
+      for (const element of document.querySelectorAll("body *")) {
+        const box = element.getBoundingClientRect(), style = getComputedStyle(element);
+        if (box.width < 180 || box.width > 400 || box.height < 100 || box.top > innerHeight || box.bottom < 0) continue;
+        const background = style.backgroundColor !== "rgba(0, 0, 0, 0)" && style.backgroundColor !== "transparent";
+        if (!background || style.visibility === "hidden") continue;
+        const top = Math.round(box.top);
+        byTop.set(top, [...(byTop.get(top) ?? []), Math.round(box.height)]);
+      }
+      return [...byTop.entries()].filter(([, heights]) => heights.length > 1);
+    });
+    assert.ok(rows.length > 0, `${slug}: no row of cards on the first screen`);
+    for (const [top, heights] of rows) {
+      assert.ok(Math.max(...heights) - Math.min(...heights) <= 1, `${slug}: the cards of the row at ${top}px end at different heights (${heights})`);
+    }
+  }
+  assert.deepEqual(errors, [], "card rows: page errors");
+  await context.close();
+  return "card rows";
 }
 
 async function checkPages(browser, base, query) {
@@ -921,6 +955,7 @@ async function main() {
         checkStart,
         checkPages,
         checkFrame,
+        checkCardRows,
         checkComponents,
         checkPhone,
         checkHeader,
