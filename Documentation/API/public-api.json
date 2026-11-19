@@ -20630,7 +20630,7 @@
     {
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/Views.swift",
-      "signature": "public init( url: URL?, scale: Double = 1, @ViewBuilder content: @escaping (AsyncImagePhase) -> Content )",
+      "signature": "public init( url: URL?, scale: Double = 1, transaction: Transaction = Transaction(), @ViewBuilder content: @escaping (AsyncImagePhase) -> Content )",
       "availability": []
     },
     {
@@ -21944,7 +21944,7 @@
     {
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/Views.swift",
-      "signature": "public typealias Body = Never package let url: URL? package let scale: Double private let content: (AsyncImagePhase) -> Content @State(memberID: 3649057272) private var phase: AsyncImagePhase",
+      "signature": "public typealias Body = Never package let url: URL? package let scale: Double",
       "availability": []
     },
     {
