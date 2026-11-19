@@ -189,6 +189,52 @@ struct ControlStyleParityTests {
   }
 
   @Test
+  func pickerInAMenuListsItsOptionsAsCheckableItems() {
+    final class Box { var value = "b" }
+    let box = Box()
+    let binding = Binding(get: { box.value }, set: { box.value = $0 })
+    let tree = FiberTree(Menu {
+      Picker("Sort", selection: binding) {
+        Text("Name").tag("a")
+        Text("Date").tag("b")
+      }
+      .pickerStyle(.inline)
+    } label: { Text("Sort") })
+    #expect(all(tree.renderNode) { $0.kind == .element("select") }.isEmpty)
+    let items = all(tree.renderNode) { $0.attributes["role"] == "menuitemradio" }
+    #expect(items.map { $0.children.last.map(text) } == ["Name", "Date"])
+    #expect(items.map { $0.attributes["aria-checked"] } == ["false", "true"])
+    tree.dispatch(event: "click", on: items[0])
+    #expect(box.value == "a")
+  }
+
+  @Test
+  func navigationLinkDrawsItsLabelThroughACustomButtonStyle() {
+    let log = PressLog()
+    struct Screen: View {
+      let log: PressLog
+      var body: some View {
+        NavigationStack {
+          NavigationLink("Sign in") { Text("Next") }.buttonStyle(RecordingPressStyle(log: log))
+        }
+      }
+    }
+    let tree = FiberTree(Screen(log: log))
+    let link = all(tree.renderNode) { $0.classes.contains("navigation-link") }.first
+    #expect(link?.attributes["data-button-style-custom"] == "true")
+    #expect(link?.attributes["data-press-tracking"] == "true")
+    // The style drew the label (with `isPressed` false until the host reports a press).
+    #expect(log.values == [false])
+    #expect(tree.renderNode.htmlDescription.contains("opacity: 1"))
+
+    // A built-in style leaves the link's label as it is.
+    let plain = FiberTree(NavigationStack { NavigationLink("Sign in") { Text("Next") }.buttonStyle(.plain) })
+    let plainLink = all(plain.renderNode) { $0.classes.contains("navigation-link") }.first
+    #expect(plainLink?.attributes["data-button-style-custom"] == nil)
+    #expect(plainLink?.attributes["data-press-tracking"] == nil)
+  }
+
+  @Test
   func primitiveStyleTriggerDrivesTheNativeButtonWithoutNestedButtons() {
     var count = 0
     let tree = FiberTree(Button("Run") { count += 1 }.buttonStyle(DoubleTapStyle()))

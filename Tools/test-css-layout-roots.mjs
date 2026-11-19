@@ -63,6 +63,12 @@ await runSuite(async () => {
     });
     assert.deepEqual(switched, { hiddenDisplay: "none", shown: true, writes: 0, secondDisplay: "none" }, "a hidden tab is not displayed, and showing it again writes nothing below it");
     assert.deepEqual(await rect("body"), body, "back on the first tab");
+    // A screen that hides the tab bar (`toolbar(.hidden, for: .tabBar)`, a pushed destination) takes the whole window: Swift
+    // leaves the sidebar out of the page, and its room goes with it.
+    await page.evaluate(() => document.getElementById("tabs").setAttribute("data-tab-bar-hidden", "true"));
+    assert.deepEqual(await rect("body"), [0, 0, 1000, 700], "with the tab bar hidden the tab takes the whole window");
+    await page.evaluate(() => document.getElementById("tabs").removeAttribute("data-tab-bar-hidden"));
+    assert.deepEqual(await rect("body"), body, "and the sidebar's room comes back with the bar");
     // The sidebar collapses to a rail: the stylesheet's width, without the mapper analysing anything.
     await page.evaluate(() => document.getElementById("tabs").setAttribute("data-tab-sidebar-expanded", "false"));
     assert.deepEqual(await rect("body"), [72, 0, 928, 700], "the tab follows the rail's width");

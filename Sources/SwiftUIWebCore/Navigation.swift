@@ -2270,7 +2270,16 @@ public nonisolated struct NavigationLink<Label: View, Destination: View>: View {
       node.events["click"] = _EventHandler(name: "click", action: {})
     }
     if let navigationContext = context.navigationContext { activeRegistration?(navigationContext) }
-    let child = label._render(in: context)
+    let child: _RenderNode
+    if context.environment.buttonStyleIsCustom, !context.environment._buttonStyleIsPrimitive {
+      // A link is a button to SwiftUI: an app-defined `ButtonStyle` draws its label, with a live `isPressed`.
+      let click = node.events["click"]
+      node.attributes["data-button-style-custom"] = "true"
+      child = _renderButtonLabel(label, role: nil, action: { click?.action() }, node: node, context: context)
+      _applyButtonVisibleShape(child, to: node)
+    } else {
+      child = label._render(in: context)
+    }
     _markFlexibleWidthControl(child, control: node)
     if context.environment[_GroupedListKey.self], !child.isEmpty, context.environment[_ListSelectionKey.self] == nil {
       // A link in a form reads as a disclosure row: label, flexible space, chevron.

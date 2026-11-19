@@ -2233,9 +2233,17 @@ export function mountEmbeddedBrowser(instance, options = {}) {
     const cancelTimers=state=>{for(const timer of state.timers)clearTimeout(timer);state.timers=[];};
     const beginLeaf=(state,d,index,leafIndex)=>{if(d.kind!=='longpress')return;const timer=setTimeout(()=>{if(active!==state||state.moved)return;state.longPress.add(`${index}:${leafIndex}`);emit(state,index,'changed',tagged(state.ds[index],d,'true'));},Math.max(0,Number(d.minDuration||.5))*1000);state.timers.push(timer);};
     const chooseExclusive=(state,index,leaf,kind)=>{const key=String(index);let winner=state.winners.get(key);if(winner==null){winner=leaf;state.winners.set(key,winner);}return winner===leaf;};
+    // A press on a control (a Button, a link, a field) inside a view with a gesture belongs to the control until the
+    // pointer moves: capturing it at once would send the release and the click to the gesture's view, and the button
+    // would never act, which SwiftUI does not do. The pointer is captured once it moves past a tap, so a drag still follows it.
+    const controlInside=(el,target)=>{const control=elementOf(target)?.closest('button,a[href],input,select,textarea,summary,[role="button"],[role="link"],[role="slider"],[role="switch"],[role="checkbox"],[role="tab"],[role="menuitem"],[role="menuitemradio"]');return !!control&&control!==el&&el.contains(control);};
+    const capturePointer=state=>{if(state.captured)return;state.captured=true;try{state.el.setPointerCapture?.(state.pointerId)}catch{}};
     const processMove=(state,e)=>{
       const dx=e.clientX-state.x,dy=e.clientY-state.y;
-      if(Math.hypot(dx,dy)>3)state.moved=true;
+      const distance=Math.hypot(dx,dy);
+      if(distance>3)state.moved=true;
+      // A press on a control keeps the slack a tap has (10 points) before the gesture takes the pointer.
+      if(distance>(state.onControl?10:3))capturePointer(state);
       for(let i=0;i<state.ds.length;i++){
         const outer=state.ds[i],children=leaves(outer);
         for(let j=0;j<children.length;j++){
@@ -2263,7 +2271,10 @@ export function mountEmbeddedBrowser(instance, options = {}) {
       }
       state.lastX=e.clientX;state.lastY=e.clientY;state.lastTime=e.timeStamp;
     };
-    listen(root,'pointerdown',e=>{const el=registration(e.target);if(!el||e.button!==0)return;pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,id:e.pointerId});if(active&&active.el===el){beginTransform(active);return;}if(active)return;const ds=descriptors(el);active={el,ds,x:e.clientX,y:e.clientY,lastX:e.clientX,lastY:e.clientY,lastTime:e.timeStamp,initialRect:el.getBoundingClientRect(),pointerId:e.pointerId,moved:false,timers:[],longPress:new Set(),winners:new Map(),sequenceReady:new Set(sequencePhases.get(el)||[]),transform:null,transientDelta:null,transientApplied:false,transientAvailable:false};beginTransient(active);try{el.setPointerCapture?.(e.pointerId)}catch{};for(let i=0;i<ds.length;i++)leaves(ds[i]).forEach((d,j)=>beginLeaf(active,d,i,j));},true);
+    listen(root,'pointerdown',e=>{const el=registration(e.target);if(!el||e.button!==0)return;pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,id:e.pointerId});if(active&&active.el===el){beginTransform(active);return;}if(active)return;const ds=descriptors(el);active={el,ds,x:e.clientX,y:e.clientY,lastX:e.clientX,lastY:e.clientY,lastTime:e.timeStamp,initialRect:el.getBoundingClientRect(),pointerId:e.pointerId,moved:false,timers:[],longPress:new Set(),winners:new Map(),sequenceReady:new Set(sequencePhases.get(el)||[]),transform:null,transientDelta:null,transientApplied:false,transientAvailable:false};beginTransient(active);active.onControl=controlInside(el,e.target);if(!active.onControl)capturePointer(active);for(let i=0;i<ds.length;i++)leaves(ds[i]).forEach((d,j)=>beginLeaf(active,d,i,j));},true);
+    // A mouse drag over a view that a DragGesture moves (a carousel) selects nothing, as on iOS and Android: the browser
+    // would otherwise select the text the pointer crosses. Text without a drag gesture stays selectable.
+    listen(root,'selectstart',e=>{if(active&&active.ds.some(outer=>leaves(outer).some(d=>d.kind==='drag')))e.preventDefault();},true);
     listen(root,'pointermove',e=>{
       if(!pointers.has(e.pointerId))return;
       const started=performanceDiagnostics?performance.now():0;

@@ -125,6 +125,11 @@ export function kindOf(element) {
   // What holds the selected tab's or a pushed screen: it takes the proposal and layers what it holds (a navigation without chrome).
   if (c.contains('tab-body') || c.contains('tab-panel') || c.contains('navigation-destination')) return 'panel';
   if (element.localName === 'button' && (c.contains('button-plain') || c.contains('button-borderless') || c.contains('button-custom'))) return 'zstack';
+  // A NavigationLink or a Link without a bordered style is a plain button as SwiftUI lays it out: its label takes the
+  // proposal, so a label that fills its row (`.frame(maxWidth: .infinity)`) fills it here too instead of hugging its text.
+  if (element.localName === 'a' && (c.contains('navigation-link') || c.contains('anchor-link')) &&
+      (element.hasAttribute('data-button-style-custom') ||
+       ['plain', 'borderless', null].includes(element.getAttribute('data-button-style')))) return 'zstack';
   if (element.localName === 'input' && element.getAttribute('data-field-chrome') === 'plain') return 'field';
   // A linear Gauge takes the width it is offered (the host's flexible-width frame around its track) and is as tall as its
   // track, which the stylesheet stretches across it.

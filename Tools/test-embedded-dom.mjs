@@ -503,6 +503,33 @@ await runSuite(async () => {
       before = (await pressed()).length; await button.focus(); await page.keyboard.down(" "); await page.keyboard.up(" ");
       assert.deepEqual((await pressed()).slice(before), [["pressed", "true"], ["pressed", "false"]]);
     });
+    await check("a mouse drag over a DragGesture view selects no text, and other text stays selectable", async () => {
+      const drag = async (selector) => {
+        const element = page.locator(selector);
+        await element.scrollIntoViewIfNeeded();
+        await page.evaluate(() => getSelection().removeAllRanges());
+        const box = await element.boundingBox();
+        await page.mouse.move(box.x + 4, box.y + box.height / 2); await page.mouse.down();
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 4 });
+        await page.mouse.move(box.x + box.width - 4, box.y + box.height / 2, { steps: 4 }); await page.mouse.up();
+        return page.evaluate(() => getSelection().toString());
+      };
+      assert.equal(await drag("#drag-card"), "", "the carousel card's title is not selected");
+      assert.notEqual(await drag("#plain-text"), "", "text without a drag gesture is selected as before");
+      await page.evaluate(() => getSelection().removeAllRanges());
+    });
+    await check("a click on a Button inside a view with a DragGesture reaches the button, and a drag still reaches the gesture", async () => {
+      const clicks = () => page.evaluate(() => fixture.stats.dispatches.filter((d) => d.id === 96).length);
+      const button = page.locator("#drag-chrome-button");
+      await button.scrollIntoViewIfNeeded();
+      const before = await clicks();
+      await button.click();
+      assert.equal(await clicks(), before + 1, "the button acts, as it does under a SwiftUI drag gesture");
+      const box = await page.locator("#drag-chrome").boundingBox();
+      await page.mouse.move(box.x + 20, box.y + box.height / 2); await page.mouse.down();
+      await page.mouse.move(box.x + 20, box.y + box.height / 2 + 120, { steps: 6 }); await page.mouse.up();
+      assert.ok(await page.evaluate(() => fixture.stats.namedDispatches.some((d) => d.id === 95 && d.name === "drag-ended")), "the drag reaches the gesture");
+    });
     await check("onHover pointer enter/leave, grouped activation, and touch has no hover phase", async () => {
       const row = page.locator("#hover-row");
       await row.scrollIntoViewIfNeeded();

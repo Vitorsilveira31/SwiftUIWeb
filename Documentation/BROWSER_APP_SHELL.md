@@ -366,7 +366,7 @@ field with ordinary modifiers (`.padding`, `.frame`, `.background(_:in:)`,
 | --- | --- |
 | `TextField` / `SecureField` + `.textFieldStyle(.plain)` | plain `<input>`; horizontally greedy in stacks like SwiftUI's `TextField`, as a field with the default look is too |
 | `TextEditor` + `.scrollContentBackground(.hidden)` | plain `<textarea>` |
-| `Picker` + `.pickerStyle(.menu)` + `.labelsHidden()` | plain native `<select>` without the title |
+| `Picker` + `.pickerStyle(.menu)` + `.labelsHidden()` | native `<select>` without the title, border or background: the selected value in the tint followed by up-and-down chevrons, as iOS draws a menu button |
 | `DatePicker` + `.labelsHidden()` + `.datePickerStyle(.compact)` | plain native `<input type="date">` (`.date`), `type="time"` (`.hourAndMinute`) or `datetime-local` |
 
 The style modifiers are inherited through the environment, as in SwiftUI, so

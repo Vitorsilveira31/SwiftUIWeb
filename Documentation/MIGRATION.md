@@ -103,6 +103,39 @@ pt_BR, `74%` for `0.736.formatted(.percent.precision(.fractionLength(0)))`, and 
 
 ### Looks that changed
 
+- **A NavigationLink or a Link whose label fills its row fills it.** The page laid an `<a>` out as a closed box the size
+  of its text, so a link whose label is `.frame(maxWidth: .infinity)` (the wide pill of a hero's primary action, beside a
+  48-point button) hugged its text, and a pill with a fixed height clipped it. A NavigationLink or a Link without a
+  bordered style now passes the proposal to its label, as a plain `Button` already did. Checked in a browser against the
+  same screen on an iPad: the pill is 502 px wide in a 600 px column where it was 92. A link whose label does not fill
+  keeps its width; nothing in an application needs to change.
+- **A mouse drag over a view that a `DragGesture` moves selects no text.** Dragging a carousel with a mouse selected the
+  titles it crossed, which iOS and Android never show. Text outside a drag gesture stays selectable.
+- **A pushed screen that hides the tab bar is as wide as the page.** `toolbar(.hidden, for: .tabBar)` removed the sidebar
+  of a `sidebarAdaptable` TabView but kept its inset, so a pushed detail sat beside a 248-pixel empty band. The band is
+  gone, as on an iPad; the sidebar and its inset come back when the screen is popped.
+- **A NavigationLink draws its label through an app-defined `ButtonStyle`.** SwiftUI treats a link as a button, so
+  `.buttonStyle(PrimaryButtonStyle())` on a NavigationLink fills it as it fills a Button; the page drew the bare label.
+  The style receives `isPressed` as it does for a Button. Built-in styles are unchanged.
+- **A menu Picker with hidden labels is a menu button, as on iOS and iPadOS.** `Picker(…).pickerStyle(.menu).labelsHidden()`
+  rendered a chrome-less select in the inherited color, which an application then decorated itself. It now shows the
+  selected value in the tint with the up-and-down chevrons after it, still without a field border or background. An
+  application that drew its own chevron next to one should drop it, or put a `Picker` in a `Menu` with its own label, as
+  it would on iOS.
+- **A Button inside a view with a `DragGesture` acts on a click or a tap.** The page captured the pointer for the gesture as
+  soon as it went down, so the release and the click went to the gesture's view and the button never ran its action (the
+  play button of a player whose controls sit in a swipe-to-dismiss view). The pointer now stays with the control until it
+  moves farther than a tap, then the drag takes it, as in SwiftUI.
+- **A `Picker` in a `Menu` lists its options as the menu's items**, a checkmark before the selected one, as in SwiftUI; it
+  drew a select inside the menu.
+- **The back button of a pushed screen has the native bar's leading inset**: 16 points from the edge, as on iOS and
+  iPadOS. It was pulled 4 points toward the edge.
+- **The floating tab bar of a phone is as wide as iOS draws it**: about 99 points a tab, centered, with a 16-point margin
+  on a narrow screen. It hugged its titles. Each tab's symbol and title sit together in the middle of the tab, with the
+  same space above and below; the title used to fill the rest of the tab and pushed the symbol to the top.
+- **A switch knob is white in dark appearance too**, as SwiftUI draws it; it was the inverse of the primary color.
+- **More SF Symbols have a glyph.** `paintbrush`, `paintbrush.pointed`, `shield`, `calendar.badge.clock`,
+  `calendar.badge.exclamationmark` and `chevron.up.chevron.down` drew nothing.
 - **One typeface for all text.** The base gave `<html>` the stack `Inter, ui-sans-serif, system-ui, -apple-system, …`, while
   the text styles (`.font(.title)`, `.headline` and the rest) use the system stack (`-apple-system, BlinkMacSystemFont,
   system-ui, …`). On a machine with Inter installed, text without a `.font` was drawn in Inter beside titles in San

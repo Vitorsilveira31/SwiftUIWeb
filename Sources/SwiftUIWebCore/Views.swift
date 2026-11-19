@@ -1827,7 +1827,8 @@ public nonisolated struct Picker<SelectionValue: Hashable, Content: View>: View 
     _RenderStaging.enterStage()
     let renderedContent = content._render(in: optionsContext)
     _RenderStaging.exitStage()
-    let segmented = context.environment._pickerStyle == "segmented"
+    let inMenu = context.environment[_MenuContentKey.self]
+    let segmented = !inMenu && context.environment._pickerStyle == "segmented"
     let isGrouped = !labelsHidden && !segmented && context.environment[_GroupedListKey.self]
     let result: _RenderNode = segmented ? _segmentedPickerNode(title: title, context: context) : node
     if isGrouped {
@@ -1870,6 +1871,43 @@ public nonisolated struct Picker<SelectionValue: Hashable, Content: View>: View 
         }
         select.children = optionNodes
         let optionTokens = tokens
+        if inMenu {
+          // In a Menu the options are its items: one checkable button each, the selected one checked. A click picks it
+          // and the host closes the menu, as for any button in it.
+          let isEnabled = context.environment.isEnabled
+          let group = _RenderNode.element("div")
+          group.classes = ["menu-picker"]
+          group.attributes["role"] = "group"
+          _AccessibilityBackend.setLabel(title, on: group)
+          var items: [_RenderNode] = []
+          for (index, candidate) in candidates.enumerated() {
+            guard let value = candidate.value.read(SelectionValue.self) else { continue }
+            let checked = value == selection.wrappedValue
+            let item = _RenderNode.element("button")
+            item.attributes["type"] = "button"
+            item.attributes["role"] = "menuitemradio"
+            item.attributes["aria-checked"] = checked ? "true" : "false"
+            item.classes = ["menu-picker-item"]
+            let mark = Image(systemName: "checkmark")._render(in: context.child(_FiberKey("menu-check-\(index)")))
+            mark.classes.append("menu-picker-check")
+            mark.attributes["aria-hidden"] = "true"
+            if !checked { mark.styles["visibility"] = "hidden" }
+            let label = _RenderNode.element("span")
+            label.children = [.text(candidate.label)]
+            item.children = [mark, label]
+            if isEnabled {
+              item.events["click"] = _EventHandler(name: "click", action: {
+                if selection.wrappedValue != value { selection.wrappedValue = value }
+              })
+            } else {
+              item.attributes["disabled"] = "disabled"
+            }
+            items.append(item)
+          }
+          group.children = items
+          stage.complete(group)
+          return
+        }
         if segmented {
           let isEnabled = context.environment.isEnabled
           let segments = candidates.compactMap { candidate -> _SegmentedPickerOption? in
@@ -2340,7 +2378,8 @@ public nonisolated struct Menu<Label: View, Content: View>: View {
     // A manual popover: the host shows it in the browser's top layer (above every stacking context, never clipped by an
     // ancestor's overflow) while the `<details>` is open, and places it under the summary.
     menu.attributes["popover"] = "manual"
-    let contentContext = context.child(_FiberKey("content"))
+    var contentContext = context.child(_FiberKey("content"))
+    contentContext.environment[_MenuContentKey.self] = true
     if _RenderStaging.wantsDeferral {
       _deferStackChild(content, context: contentContext, to: menu)
     } else {
