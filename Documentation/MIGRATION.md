@@ -103,6 +103,13 @@ pt_BR, `74%` for `0.736.formatted(.percent.precision(.fractionLength(0)))`, and 
 
 ### Looks that changed
 
+- **On a phone the page scrolls the document.** The screen's ScrollView scrolled inside a box of the window's height, so
+  the page ended above a phone browser's bottom bar and the bars never shrank. On a touch screen the vertical ScrollView
+  that fills the bottom of the window now hands its scrolling to the document: the page runs under the browser's bars,
+  which shrink as it scrolls, and what sits above the scroll view (a header) stays at the top of the screen, as before.
+  Nothing to change in an application: the scroll view's offset, `scrollPosition`, `ScrollViewReader`, lazy stacks and
+  each tab's offset behave as they did. A window whose scroll view sits in a NavigationStack, a sidebar-adaptable
+  TabView, a GeometryReader or a user-defined Layout keeps the scroll view's own scrolling. With a mouse nothing changes.
 - **A push fades the new page in under a mouse.** A push slid the new screen across the whole window in half a second,
   as UIKit does on a phone. In a window driven by a mouse (`hover: hover` and `pointer: fine`) the new page now fades
   in where it lands, rising 12 pixels over 280 ms, over a page that stays put, and a pop fades it out, as web pages

@@ -46,7 +46,9 @@ await runSuite(async () => {
     await page.addStyleTag({ content: readFileSync(join(ROOT, "Tools/showcase.css"), "utf8") });
     await module(page, "Tools/showcase-host.js", ["mountShowcaseHost"], "Docs");
     await module(page, "Tools/css-layout.js", ["CssLayout"], "CssLayoutModule");
-    await module(page, "Tools/layout-host.js", ["SemanticLayoutHost", "ownsLayoutStyle", "ownsLayoutAttribute"], "Layout");
+    // layout-host.js imports the document scroll (a touch screen's page scroll view); the module is handed to it by name.
+    await module(page, "Tools/document-scroll.js", ["DocumentScroll"], "DocumentScrollModule");
+    await module(page, "Tools/layout-host.js", ["SemanticLayoutHost", "ownsLayoutStyle", "ownsLayoutAttribute"], "Layout", "const {DocumentScroll}=globalThis.DocumentScrollModule;");
     await module(page, "Tools/host-interactions.js", ["FocusCoordinator", "ScrollCoordinator", "KeyboardShortcutCoordinator", "HistoryCoordinator"], "Interactions");
     // The coordinators embedded-dom.js loads after the first screen (deferred-hosts.js), under the same global.
     await module(page, "Tools/presentation-host.js", ["PresentationCoordinator"], "InteractionsPresentation");

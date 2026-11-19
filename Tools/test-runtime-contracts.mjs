@@ -67,6 +67,8 @@ await test('a repeating style patch recognizes every transition longhand',()=>{
 });
 await test('attributes the layout writes cannot be removed by DOM diff',()=>{
   assert.equal(ownsLayoutAttribute('data-cl'),true);assert.equal(ownsLayoutAttribute('data-cl-12'),true);assert.equal(ownsLayoutAttribute('data-layout-hidden'),true);assert.equal(ownsLayoutAttribute('data-fit-selected'),true);assert.equal(ownsLayoutAttribute('class'),false);
+  // The document scroll's marks are the layout's; Swift's `data-document-head` is not, so a patch keeps the document head current.
+  assert.equal(ownsLayoutAttribute('data-document-scroller'),true);assert.equal(ownsLayoutAttribute('data-document-scroll-chain'),true);assert.equal(ownsLayoutAttribute('data-document-sticky'),true);assert.equal(ownsLayoutAttribute('data-document-head'),false);
 });
 await test('navigation push/replace/pop acknowledgments and typed restoration',()=>{
   const w=new EventTarget();w.AbortController=AbortController;w.location=new URL('https://example.test/layout');let entry=0;const entries=[{url:w.location.href,state:{docs:true}}],acks=[],restores=[],pops=[],roots=[];

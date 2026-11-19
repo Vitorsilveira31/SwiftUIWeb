@@ -42,8 +42,10 @@ await runSuite(async () => {
     // `page.setContent` has an opaque about:blank base URL. Inline the host's dependency modules as data URLs as well, otherwise
     // the browser rejects the relative imports before the fixture can publish `window.fixture.ready`.
     let hostSource = read("Tools/embedded-dom.js").toString();
+    // layout-host.js imports the document scroll (a touch screen's page scroll view), inlined into it the same way.
+    const layoutHostUrl = "data:text/javascript;base64," + Buffer.from(read("Tools/layout-host.js").toString().replaceAll("'./document-scroll.js'", () => `'${dataUrl("Tools/document-scroll.js")}'`)).toString("base64");
     for (const module of ["layout-host", "css-layout", "host-interactions", "first-paint-host", "tab-shell", "event-value", "geometry-host", "media-host", "split-view-host", "transition-host"]) {
-      hostSource = hostSource.replaceAll(`'./${module}.js'`, `'${dataUrl(`Tools/${module}.js`)}'`);
+      hostSource = hostSource.replaceAll(`'./${module}.js'`, `'${module === "layout-host" ? layoutHostUrl : dataUrl(`Tools/${module}.js`)}'`);
     }
     // The hosts embedded-dom.js imports after the first screen, with the modules they gather.
     let deferredSource = read("Tools/deferred-hosts.js").toString();

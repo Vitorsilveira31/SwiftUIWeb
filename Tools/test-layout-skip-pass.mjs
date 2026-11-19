@@ -15,6 +15,8 @@ function host() {
     changed: false, windowResized: false, epoch: 2, resizedAt: 10,
     css: { pending: new Set(), layouts: new Set(), released: [], flush() {}, islandOf: () => null },
     mutations: { takeRecords: () => [] },
+    // A touch screen's page scroll view (document-scroll.js): no window here hands one over.
+    documentScroll: { begin() {}, sync() {} },
   });
   layout.passed = { epoch: 2, resizedAt: 10 };
   return { layout };
