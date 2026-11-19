@@ -103,6 +103,11 @@ pt_BR, `74%` for `0.736.formatted(.percent.precision(.fractionLength(0)))`, and 
 
 ### Looks that changed
 
+- **A navigation bar is transparent at the scroll edge, as on iOS.** The bar always drew its material and hairline, as if
+  content were scrolled under it. It is now transparent while the screen on top of the stack sits at its top, and takes the
+  material and hairline once its vertical scroll view scrolls under it (the host marks the view with `data-scrolled`). A
+  screen whose background fills the window (a reader's paper) shows through the bar; an app that made the bar transparent
+  with its own CSS can drop it.
 - **A VideoPlayer that takes no touches shows no controls.** Under `.allowsHitTesting(false)` (on the player or a
   container) the AVKit controls stayed on screen, inert, over a player screen that draws its own transport. On iOS they
   appear only in answer to a touch, so they never show there; the page now hides them too, and the app no longer needs CSS

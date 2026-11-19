@@ -908,7 +908,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
     // `data-enter-animation` and `data-navigation-motion` are the transition host's: they mark a surface while its entry
     // animation runs, and the screen under a push or a pop while it plays (inert while a push covers it).
     const covered = old.getAttribute('data-navigation-motion') === 'covered';
-    const skip = name => name === 'style' || name === 'data-enter-animation' || name === 'data-navigation-motion' || (covered && name === 'inert') || ownsLayoutAttribute(name) || (nativeDetails && name === 'open') || (hostOwns !== null && hostOwns(name)) || (isIcon && (name === 'data-lucide' || name === 'data-lucide-fallback'));
+    const skip = name => name === 'style' || name === 'data-enter-animation' || name === 'data-navigation-motion' || name === 'data-scrolled' || (covered && name === 'inert') || ownsLayoutAttribute(name) || (nativeDetails && name === 'open') || (hostOwns !== null && hostOwns(name)) || (isIcon && (name === 'data-lucide' || name === 'data-lucide-fallback'));
     // Backwards over the live list, so a removal does not shift the attributes still to visit.
     const current = old.attributes;
     for (let index = current.length - 1; index >= 0; index--) {
@@ -1018,6 +1018,8 @@ export function mountEmbeddedBrowser(instance, options = {}) {
         if (element.hasAttribute('data-symbol') && (name === 'data-lucide' || name === 'data-lucide-fallback')) return true;
         // The image pipeline (Tools/image-pipeline.js) writes the load hints, the size, the readiness and the ratio of an image.
         if (name === 'data-image-ratio' || (element.localName === 'img' && (PIPELINE_IMAGE_HINTS.has(name) || name === 'sizes' || name === 'width' || name === 'height' || name === 'data-image-ready' || name === 'data-image-error'))) return true;
+        // The scroll host marks a vertical scroll view that is not at its top (the navigation bar's scroll edge).
+        if (name === 'data-scrolled') return true;
         if (!hostOwns.has(element)) hostOwns.set(element, hostOwnedAttributes(element));
         const owns = hostOwns.get(element);
         return owns !== null && owns(name);
@@ -3286,6 +3288,9 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   }
   const repositionMenus=()=>{for(const menu of openMenus){if(!menu.isConnected||!menu.open)closeMenuPanel(menu);else placeMenuPanel(menu);}};
   listen(window,'scroll',repositionMenus,true);
+  // A vertical scroll view that is not at its top carries `data-scrolled`: the navigation bar above it then takes its
+  // material and hairline, as iOS draws it once content scrolls under it, and is transparent at the scroll edge.
+  listen(root,'scroll',event=>{const el=event.target;if(!(el instanceof Element)||!el.classList.contains('scroll-vertical'))return;const scrolled=el.scrollTop>0;if(el.hasAttribute('data-scrolled')!==scrolled)el.toggleAttribute('data-scrolled',scrolled);},true);
   listen(window,'resize',repositionMenus);
   // Like a native menu: an outside press or choosing an item closes it.
   listen(root,'pointerdown',event=>{
