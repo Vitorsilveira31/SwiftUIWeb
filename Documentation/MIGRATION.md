@@ -103,6 +103,10 @@ pt_BR, `74%` for `0.736.formatted(.percent.precision(.fractionLength(0)))`, and 
 
 ### Looks that changed
 
+- **Links do not underline under the pointer.** A `NavigationLink` underlined its label on hover, so every poster or
+  card behind one underlined its titles, and a `Link` with a text label did too. Neither underlines in SwiftUI; an
+  underline now shows only when the app asks for it (`.underline()`, `.buttonStyle(.link)` or the hover underline
+  modifier).
 - **A shape background or overlay is drawn at the size of the view it decorates.** In
   `.frame(width: 92, height: 92).background(.green, in: Circle())` the circle's path was computed for the window, so it
   came out about half the frame. A background with a shape, and an overlay on top of it, are now offered the frame's

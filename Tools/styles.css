@@ -1093,16 +1093,12 @@
     color: var(--tint-color);
   }
 
+  /* A `Link` and a `NavigationLink` keep their look under the pointer, as in SwiftUI: no underline appears unless the
+     app asks for one (`.underline()`, `.buttonStyle(.link)` or the hover underline modifier). A card or a poster
+     behind a link no longer underlines its titles on hover. */
   .anchor-link {
     color: var(--color-swu-primary);
     text-underline-offset: 4px;
-    /* Only a link whose label is plain text underlines under the pointer. A link with a custom label (drawn as a pill, a
-       button or a card) keeps its look, as a `Link` with a custom label does in SwiftUI. */
-    &:hover:has(> [data-layout-leaf="text"]:only-child) {
-      @media (hover: hover) {
-        text-decoration-line: underline;
-      }
-    }
   }
 
   .navigation-link {
@@ -1111,11 +1107,6 @@
     gap: calc(var(--spacing) * 2);
     color: var(--color-swu-primary);
     text-underline-offset: 4px;
-    &:hover {
-      @media (hover: hover) {
-        text-decoration-line: underline;
-      }
-    }
   }
 
   /* A root Form still fills its viewport, while individual fields retain a
