@@ -2,6 +2,9 @@
 // Drives Tools/avfoundation.js with the Shaka Player pinned in package.json against a real HLS stream
 // (Tests/Fixtures/AdaptiveMedia: 180p and 360p renditions, English and Portuguese audio, two subtitle tracks), in a
 // browser. The unit tests fake the player; this one catches a Shaka release that renames or drops an API the helper calls.
+// It runs the Shaka that package.json pins, and fails at once when node_modules holds another: with an older one (4.10, left
+// by an install that predates the pin) the stream never started and the test waited for it forever. A stream that does not
+// start within a few seconds fails the test as well.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -10,7 +13,14 @@ import { ROOT, launch, runSuite } from "./browser-test-support.mjs";
 const FIXTURE = join(ROOT, "Tests", "Fixtures", "AdaptiveMedia");
 const TYPES = { ".m3u8": "application/vnd.apple.mpegurl", ".mp4": "video/mp4", ".m4s": "video/iso.segment", ".vtt": "text/vtt" };
 
+// The Shaka in node_modules is the one package.json pins: an install that predates the pin tests another release.
+const PINNED = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).devDependencies["shaka-player"];
+const INSTALLED = JSON.parse(readFileSync(join(ROOT, "node_modules", "shaka-player", "package.json"), "utf8")).version;
+// How long the stream has to start playing (it starts in well under a second).
+const START_MS = 5_000;
+
 await runSuite(async () => {
+  assert.equal(INSTALLED, PINNED, `node_modules holds Shaka ${INSTALLED}, package.json pins ${PINNED}: run bun install --frozen-lockfile`);
   const built = await Bun.build({ entrypoints: [join(ROOT, "Tools", "shaka-loader.js")], format: "esm", minify: true });
   assert.ok(built.success, "the Shaka helper builds");
   const loader = await built.outputs[0].text();
@@ -40,13 +50,14 @@ await runSuite(async () => {
     page.on("console", (message) => { if (message.type() === "error") failures.push(message.text()); });
     await page.goto(`http://127.0.0.1:${server.port}/`);
     const tracks = (lines) => lines.split("\n").filter(Boolean).map((line) => line.split("\t"));
-    const report = await page.evaluate(async () => {
+    const report = await page.evaluate(async (startMs) => {
       const video = document.getElementById("v");
       let failed = null;
       video.addEventListener("error", (event) => { failed = String(event.detail ?? "error"); });
       const settle = (ms = 400) => new Promise((resolve) => setTimeout(resolve, ms));
       await window.__attachAdaptiveMedia(video, "/master.m3u8");
-      await video.play().catch(() => {});
+      // A stream that never starts would keep play() pending forever: the test waits a few seconds, and currentTime says.
+      await Promise.race([video.play().catch(() => {}), settle(startMs)]);
       await settle();
       const loaded = window.__adaptiveMediaTracks(video);
       const text = loaded.split("\n").find((line) => line.startsWith("t\t") && line.split("\t")[2] === "pt");
@@ -59,7 +70,7 @@ await runSuite(async () => {
       const time = video.currentTime;
       window.__detachAdaptiveMedia(video);
       return { failed, loaded, chosen, off, time, after: window.__adaptiveMediaTracks(video) };
-    });
+    }, START_MS);
     assert.equal(report.failed, null, `the stream failed to load: ${report.failed}`);
     const loaded = tracks(report.loaded);
     assert.deepEqual(loaded.filter(([kind]) => kind === "v").map(([, width, height]) => `${width}x${height}`), ["320x180", "640x360"], "both renditions are listed");
@@ -74,8 +85,7 @@ await runSuite(async () => {
     assert.ok(report.time > 0, `the stream plays (currentTime ${report.time})`);
     assert.equal(report.after, "", "a detached element reports no tracks");
     assert.deepEqual(failures.filter((text) => !/play\(\)/.test(text)), [], "no page errors");
-    const version = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).devDependencies["shaka-player"];
-    console.log(`PASS adaptive media: Shaka ${version} lists and selects renditions, audio and subtitles of a real HLS stream`);
+    console.log(`PASS adaptive media: Shaka ${PINNED} lists and selects renditions, audio and subtitles of a real HLS stream`);
   } finally {
     await browser.close();
     server.stop();
