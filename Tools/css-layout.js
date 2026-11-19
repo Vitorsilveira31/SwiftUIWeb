@@ -519,7 +519,7 @@ export class CssLayout {
     const box = text.clientWidth;
     const range = this.document.createRange();
     range.selectNodeContents(text);
-    const full = range.getBoundingClientRect().width;
+    const full = range.getBoundingClientRect().width / this.drawnScale(text);
     if (!box || full <= box + 0.5) {
       text.style.fontSize = swift;
       this.fontSizes.delete(text);
@@ -528,6 +528,15 @@ export class CssLayout {
     text.style.fontSize = `${Math.max(base * factor, base * box / full)}px`;
     this.fontSizes.set(text, { swift, base, size: text.style.fontSize });
   }
+  /** How much larger than its layout box `text` is drawn: the scale of its transformed ancestors, when they scale both
+   * axes alike (a `scaleEffect`); 1 otherwise, a rotation included, whose drawn box is no measure of the scale. */
+  drawnScale(text) {
+    const width = text.offsetWidth, height = text.offsetHeight;
+    if (!(width > 0 && height > 0)) return 1;
+    const drawn = text.getBoundingClientRect();
+    const x = drawn.width / width, y = drawn.height / height;
+    return x > 0 && Math.abs(x - y) < 0.01 * x ? x : 1;
+  }
   /** The width of the lines `text` draws in its box, when they are narrower than the box (else null): its longest line when
    * it wraps; when it is one line cut with an ellipsis, the part it shows and the ellipsis. */
   linesWidth(text) {
@@ -535,11 +544,15 @@ export class CssLayout {
     if (!box || !text.firstChild) return null;
     const range = this.document.createRange();
     range.selectNodeContents(text);
-    const full = range.getBoundingClientRect().width;
+    // What the browser reports is drawn: under a scaled ancestor (a card growing under the pointer) it is that much
+    // larger than the box it is compared with, which is laid out unscaled. Measured in the box's own units, a text that
+    // fits is not taken for one that is cut.
+    const scale = this.drawnScale(text);
+    const full = range.getBoundingClientRect().width / scale;
     let width;
     if (text.style.whiteSpace === 'nowrap' && text.style.textOverflow === 'ellipsis') {
       if (full <= box + 0.5) return null;
-      width = this.truncatedWidth(text, range, box);
+      width = this.truncatedWidth(text, range, box, scale);
     } else {
       // Fragments on one line share their top: a line is as wide as from its first fragment's start to its last one's end.
       const lines = new Map();
@@ -549,14 +562,14 @@ export class CssLayout {
         lines.set(top, line ? [Math.min(line[0], rect.left), Math.max(line[1], rect.right)] : [rect.left, rect.right]);
       }
       if (lines.size < 2) return null;
-      width = Math.max(...[...lines.values()].map(([left, right]) => right - left));
+      width = Math.max(...[...lines.values()].map(([left, right]) => right - left)) / scale;
     }
     const padding = text.offsetWidth - box;
     // A hundredth over what the lines need keeps the browser breaking (or cutting) them where it did.
     return width != null && width < box - 0.25 ? width + padding + 0.01 : null;
   }
   /** A one-line text cut to `box`: as wide as the longest start of it that leaves room for the ellipsis, and the ellipsis. */
-  truncatedWidth(text, range, box) {
+  truncatedWidth(text, range, box, scale = 1) {
     const view = this.document.defaultView, style = view.getComputedStyle(text);
     const context = (this.measureContext ??= this.document.createElement('canvas').getContext('2d'));
     if (!context) return null;
@@ -571,7 +584,7 @@ export class CssLayout {
       let left = count, index = 0;
       while (index < nodes.length - 1 && left > nodes[index].length) { left -= nodes[index].length; index++; }
       range.setStart(nodes[0], 0); range.setEnd(nodes[index], Math.min(left, nodes[index].length));
-      return range.getBoundingClientRect().width;
+      return range.getBoundingClientRect().width / scale;
     };
     let low = 0, high = total;
     while (low < high) {

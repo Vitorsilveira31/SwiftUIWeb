@@ -338,6 +338,9 @@ public nonisolated struct AsyncImage<Content: View>: View {
   public typealias Body = Never
   package let url: URL?
   package let scale: Double
+  /// The transaction the phase changes in, as SwiftUI's: an animation in it plays the image's arrival (a `transition` on
+  /// the loaded image fades it in over its placeholder).
+  package let transaction: Transaction
   private let content: (AsyncImagePhase) -> Content
   @State(memberID: 3649057272) private var phase: AsyncImagePhase = .empty
   @State(memberID: 3649057273) private var phaseSource: String? = nil
@@ -345,10 +348,12 @@ public nonisolated struct AsyncImage<Content: View>: View {
   nonisolated public init(
     url: URL?,
     scale: Double = 1,
+    transaction: Transaction = Transaction(),
     @ViewBuilder content: @escaping (AsyncImagePhase) -> Content
   ) {
     self.url = url
     self.scale = scale
+    self.transaction = transaction
     self.content = content
   }
 
@@ -379,6 +384,7 @@ public nonisolated struct AsyncImage<Content: View>: View {
   ) where Content == AnyView {
     self.url = url
     self.scale = scale
+    transaction = Transaction()
     self.content = { phase in
       switch phase {
       case .success(let image): return AnyView(content(image))
@@ -416,14 +422,19 @@ public nonisolated struct AsyncImage<Content: View>: View {
       // browser from settling an AsyncImage phase; doing so would leave the
       // view permanently on its placeholder. The phase events are internal
       // lifecycle events and remain safe to register for every image.
+      let transaction = transaction
       preload.events["load"] = _EventHandler(name: "load", action: {
-        phaseSource = source
-        // The image the URL loaded: a remote source is what `AsyncImage` is for, unlike a name given to `Image(_:)`.
-        phase = .success(Image(source, alt: source))
+        _inAsyncImageTransaction(transaction) {
+          phaseSource = source
+          // The image the URL loaded: a remote source is what `AsyncImage` is for, unlike a name given to `Image(_:)`.
+          phase = .success(Image(source, alt: source))
+        }
       })
       preload.events["error"] = _EventHandler(name: "error", action: {
-        phaseSource = source
-        phase = .failure(AsyncImageError("Unable to load image"))
+        _inAsyncImageTransaction(transaction) {
+          phaseSource = source
+          phase = .failure(AsyncImageError("Unable to load image"))
+        }
       })
       let wrapper = _RenderNode.element("div")
       wrapper.classes = ["async-image"]
@@ -432,6 +443,11 @@ public nonisolated struct AsyncImage<Content: View>: View {
       return wrapper
     }
   }
+}
+
+/// Settles a phase in the image's transaction; one left at its default changes the phase as it always has, outside any.
+@MainActor private func _inAsyncImageTransaction(_ transaction: Transaction, _ body: () -> Void) {
+  if transaction == Transaction() { body() } else { withTransaction(transaction, body) }
 }
 
 private func _asyncImageScale(_ scale: Double) -> String {
