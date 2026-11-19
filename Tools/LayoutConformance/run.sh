@@ -5,7 +5,9 @@ OUT="$ROOT/.build/layout-conformance"; mkdir -p "$OUT"
 Tools/LayoutConformance/run-apple.sh "$OUT/apple.json"
 BUILD_ONLY=1 CONFIGURATION="${SUITE_CONFIGURATION:-release}" Tools/run-browser.sh conformance
 BUNDLE="$ROOT/.build/browser/LayoutConformanceApp"
-PORT="${CONFORMANCE_PORT:-8099}"
+# A free port unless one is given: a fixed one can be another checkout's server, which the page would then load (its
+# own app, where no fixture is found).
+PORT="${CONFORMANCE_PORT:-$(bun -e 'const s = Bun.listen({ hostname: "127.0.0.1", port: 0, socket: { data() {} } }); console.log(s.port); s.stop(true)')}"
 bun Tools/bun-server.ts "$BUNDLE" "$PORT" >"$OUT/server.log" 2>&1 & SERVER=$!
 trap 'kill "$SERVER" >/dev/null 2>&1 || true' EXIT
 for _ in {1..50}; do curl -fsS "http://127.0.0.1:$PORT/" >/dev/null 2>&1 && break; sleep .1; done

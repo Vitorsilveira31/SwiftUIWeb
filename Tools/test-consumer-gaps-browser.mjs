@@ -21,6 +21,8 @@ import { parseArgs } from "node:util";
 import { launch, runSuite, serveDirectory } from "./browser-test-support.mjs";
 
 // Reads the navigation bar geometry of the pushed screen, and how far the centre of its `detail` text is from the screen's.
+// Every animation of the page has finished (a push's fade and rise), so the boxes are where they land.
+const SETTLED = "Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => null))).then(() => true)";
 const MEASURE = `(detail) => {
   const main = document.querySelector('main.navigation-stack');
   const mr = main.getBoundingClientRect();
@@ -172,6 +174,8 @@ await runSuite(async () => {
     await openFixture("Open navigation bar fixture");
     await page.getByRole("link", { name: "Inline title", exact: true }).click();
     await page.getByText("Inline detail", { exact: true }).waitFor({ timeout: 10_000 });
+    // Under a mouse a push fades the new page in, rising 12 px over 280 ms (#65): it is measured where it lands.
+    await page.evaluate(SETTLED);
     const inline = await page.evaluate(`(${MEASURE})("Inline detail")`);
     check(
       "an inline title is centred and inset clear of the trailing item",
@@ -188,6 +192,7 @@ await runSuite(async () => {
     await openFixture("Open navigation bar fixture");
     await page.getByRole("link", { name: "Large title", exact: true }).click();
     await page.getByText("Large detail", { exact: true }).waitFor({ timeout: 10_000 });
+    await page.evaluate(SETTLED);
     const large = await page.evaluate(`(${MEASURE})()`);
     check(
       "a large title with no bar items starts at the top, with no empty bar row above it, and the screen below it",
@@ -197,6 +202,7 @@ await runSuite(async () => {
     await openFixture("Open navigation bar fixture");
     await page.getByRole("link", { name: "Hidden bar", exact: true }).click();
     await page.getByText("Hidden detail", { exact: true }).waitFor({ timeout: 10_000 });
+    await page.evaluate(SETTLED);
     const hidden = await page.evaluate(`(${MEASURE})()`);
     check(
       "a hidden navigation bar draws no title and reserves no space",
