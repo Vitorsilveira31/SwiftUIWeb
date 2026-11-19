@@ -109,6 +109,9 @@ pt_BR, `74%` for `0.736.formatted(.percent.precision(.fractionLength(0)))`, and 
   open one. A touch screen keeps the slide.
 - **`AsyncImage(url:scale:transaction:content:)`.** The phase changes in the transaction given, so an animation in it
   plays the loaded image's transition (`image.transition(.opacity)` fades it in over its placeholder), as in SwiftUI.
+- **An `AsyncImage` whose image the browser already holds shows it.** A loader created for a URL already on the page (a
+  story on two cards) could fire its load before it joined the page, where the host never saw it, and the view stayed
+  on its placeholder. A loader that joins the page loaded now reports its load, once.
 - **A text under a `scaleEffect` keeps its width.** A one-line text in a scaled view (a card grown under the pointer)
   was measured at its drawn size against its unscaled box, taken for cut and capped narrower, and kept an ellipsis
   after the scale went back.

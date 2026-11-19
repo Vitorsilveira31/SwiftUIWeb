@@ -2563,6 +2563,26 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   function fallbackAsyncImageLoading() {
     for (const image of root.querySelectorAll('img.async-image-loader')) image.setAttribute('loading', 'eager');
   }
+  // What each AsyncImage loader last told Swift (its source and the phase): a phase is reported once per source, and a
+  // loader given a new source (the same element, another URL) reports that one's.
+  const reportedLoaders = new WeakMap();
+  const loaderReport = (image, type) => `${image.getAttribute('src') || ''}\u001f${type}`;
+  function reportLoader(image, type) {
+    if (reportedLoaders.get(image) === loaderReport(image, type)) return;
+    const owner = namedEventOwner(image, type);
+    if (!owner) return;
+    reportedLoaders.set(image, loaderReport(image, type));
+    dispatchNamed(owner, type);
+  }
+  // A loader whose image the browser already holds (the same URL on another card) is complete as it is created and fires
+  // its load before it joins the page, where the root's listener never sees it: the view would stay on its placeholder.
+  // A loader that joins the page already loaded reports its load now. Only a load is inferred: a lazy image whose request
+  // has not started is `complete` too, with no width, so a failure is left to the error event.
+  function reportCompleteLoaders(images) {
+    for (const image of images) {
+      if (image.classList.contains('async-image-loader') && image.complete && image.naturalWidth > 0) reportLoader(image, 'load');
+    }
+  }
   function syncImagePipeline(initial) {
     if (!initial && !markerSeen('images')) return;
     const images = [...root.querySelectorAll('img.picture-view, img.async-image-loader')];
@@ -2572,6 +2592,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
     ].join('\u001f')).join('\u001e');
     if (signature === imagePipelineSignature) return;
     imagePipelineSignature = signature;
+    reportCompleteLoaders(images);
     if (!images.length && !imagePipelineRequested) return;
     const configure = window.__loadImagePipeline;
     if (typeof configure !== 'function') {
@@ -3178,7 +3199,10 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   listen(root,'click',async event=>{const button=elementOf(event.target)?.closest('[data-paste-button="true"]');if(!button||!root.contains(button)||button.closest('[disabled],[aria-disabled="true"],[inert]'))return;try{if(!navigator.clipboard?.readText)throw new Error('Clipboard API unavailable');const value=await navigator.clipboard.readText();const data=new TextEncoder().encode(value),id=`embedded-paste-${Date.now()}`;dispatchNamed(button,'pasteButton',`inline-text:${bytesToBase64(data)}`);}catch(e){dispatchNamed(button,'pasteButton',`error:${e?.message||e}`);}},true);
   for (const type of Object.keys(eventCodes)) listen(root,type,event=>fire(event,type));
   for (const type of ['load','error']) listen(root,type,event=>{
-    if (!root.contains(elementOf(event.target))) return;
+    const target=elementOf(event.target);
+    if (!root.contains(target)) return;
+    // A loader reports its phase once: a load the commit already reported (reportCompleteLoaders) is not sent again.
+    if (target?.classList?.contains('async-image-loader')) { reportLoader(target,type); return; }
     const owner=namedEventOwner(event.target,type);
     if (owner) dispatchNamed(owner,type);
   },true);
