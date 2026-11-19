@@ -103,6 +103,11 @@ pt_BR, `74%` for `0.736.formatted(.percent.precision(.fractionLength(0)))`, and 
 
 ### Looks that changed
 
+- **A pushed screen has no back button on the web.** `NavigationStack` drew a back button on every pushed screen, as
+  an app's navigation bar does. A website has none: every push is an entry of the page's history, so the browser's
+  back (or the phone's back gesture) pops it, and the bar now shows only the items the screen declares. A screen that
+  should offer another way out declares it (a close button, a toolbar item); `navigationBarBackButtonHidden(_:)` has
+  nothing left to hide. The compact `NavigationSplitView` keeps its back to the list, which is not a history entry.
 - **A scroll view runs under a bottom `safeAreaInset`, as in SwiftUI.** The content and the inset were stacked, so a
   `ScrollView` ended where a floating bottom bar began and nothing scrolled under it. When the inset's content is a
   vertical scroll view (through its background, overlay, frame or padding), it now keeps its full height and the inset

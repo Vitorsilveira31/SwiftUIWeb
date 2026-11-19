@@ -328,10 +328,10 @@ final class _NavigationStackBuild {
   var destinationChrome = _NavigationBarChrome()
 }
 
-/// What a pushed screen asks of its own navigation bar: `navigationBarBackButtonHidden(_:)` and
-/// `toolbar(_:for: .navigationBar)`. Collected while the screen's toolbars are extracted.
+/// What a pushed screen asks of its own navigation bar: `toolbar(_:for: .navigationBar)`. Collected while the screen's
+/// toolbars are extracted. (A pushed screen has no back button on the web, so `navigationBarBackButtonHidden(_:)` asks
+/// nothing of it.)
 struct _NavigationBarChrome {
-  var hidesBackButton = false
   var hidesBar = false
 }
 
@@ -676,17 +676,12 @@ public nonisolated struct NavigationStack<Content: View>: View {
     } else if renderedDepth > 0, barHidden {
       if let bottom = bottomItemsOnly(built.destinationToolbar) { renderedChildren.insert(bottom, at: 0) }
     } else if renderedDepth > 0 {
-      // A pushed screen has its own bar, as in SwiftUI: a back button and whatever the screen declares. The root
-      // screen's toolbar belongs to the root and is not carried over. `navigationBarBackButtonHidden(true)` removes
-      // the system back button only; the screen's own toolbar items stay.
-      var barItems = built.destinationToolbar.map { $0.kind == .fragment ? $0.children : [$0] } ?? []
-      if !built.destinationChrome.hidesBackButton {
-        let back = ToolbarItem(placement: .navigationBarLeading) {
-          Button { navigation.popPath() } label: { Image(systemName: "chevron.left") }
-            .accessibilityLabel("Back")
-        }._render(in: local.child(_FiberKey("back")))
-        barItems.insert(back, at: 0)
-      }
+      // A pushed screen has its own bar with whatever the screen declares. The root screen's toolbar belongs to the
+      // root and is not carried over. On the web a pushed screen draws no back button, as a website does: every push
+      // is an entry of the page's history, so the browser's back (or the phone's back gesture) pops it. A screen that
+      // needs another way out declares it (a close button, a toolbar item); `navigationBarBackButtonHidden` has
+      // nothing left to hide.
+      let barItems = built.destinationToolbar.map { $0.kind == .fragment ? $0.children : [$0] } ?? []
       if !barItems.isEmpty {
         let bar = _RenderNode.fragment()
         bar.attributes["role"] = "toolbar"
@@ -766,7 +761,6 @@ private func _extractNavigationToolbars(
   guard !root.isEmpty else { return root }
   // Modifiers on the screen (or on any view inside it, outside a nested stack) decide its bar.
   func note(_ node: _RenderNode) {
-    if node.attributes["data-navigation-back-button-hidden"] == "true" { chrome.hidesBackButton = true }
     if node.attributes[_toolbarVisibilityAttribute(.navigationBar)] == "hidden" { chrome.hidesBar = true }
   }
   note(root)
