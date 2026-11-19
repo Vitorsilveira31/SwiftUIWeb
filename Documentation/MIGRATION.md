@@ -103,6 +103,15 @@ pt_BR, `74%` for `0.736.formatted(.percent.precision(.fractionLength(0)))`, and 
 
 ### Looks that changed
 
+- **A mobile tab's scroll view ends clear of the floating bar.** The last content of the shown tab scrolled under the
+  bottom bar (the clearance rule waited for a marker nothing set). The layout now adds `--tab-content-clearance` (96
+  points plus the home indicator by default) to the bottom of the outer vertical scroll view's content, as the iOS tab
+  bar insets it; a scroll view inside it, a screen that hides the bar and the sidebar layout keep none.
+- **Plain buttons and links keep the look around them.** Under `.buttonStyle(.plain)` a `Button` drew its label in the
+  control font and colour and a `NavigationLink` in the tint, so a list mixing them read in two colours and two sizes.
+  Both now inherit the font and foreground style, as in SwiftUI; a plain link also highlights and hit-tests its
+  label's `contentShape` as a plain button does. A destructive plain or borderless button is red text, not a red fill.
+- **`rectangle.portrait.and.arrow.right` draws a sign-out glyph** (Lucide's `log-out`) instead of the fallback dot.
 - **Links do not underline under the pointer.** A `NavigationLink` underlined its label on hover, so every poster or
   card behind one underlined its titles, and a `Link` with a text label did too. Neither underlines in SwiftUI; an
   underline now shows only when the app asks for it (`.underline()`, `.buttonStyle(.link)` or the hover underline

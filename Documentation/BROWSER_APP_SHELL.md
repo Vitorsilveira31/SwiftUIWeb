@@ -322,9 +322,9 @@ Set them on `:root` (and `[data-color-scheme="dark"]`) in `app.css`:
 | `--tab-sidebar-footer-display` | Footer display in sidebar/rail (default `none`) |
 
 The content column stays a plain scroll container: applications render their
-own top bar inside each tab. On mobile, scroll owners in the active tab
-(`ScrollView`s and overflowing panels) receive the bottom clearance through the
-layout-published `--content-extent`.
+own top bar inside each tab. On mobile, the outer vertical `ScrollView` of the shown tab ends with
+`--tab-content-clearance` of room (the layout adds `--scroll-end-clearance` to
+the bottom padding of its last content), so it scrolls clear of the floating bar.
 
 ## Custom fonts and rich text
 

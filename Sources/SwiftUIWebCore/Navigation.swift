@@ -2270,6 +2270,13 @@ public nonisolated struct NavigationLink<Label: View, Destination: View>: View {
       node.events["click"] = _EventHandler(name: "click", action: {})
     }
     if let navigationContext = context.navigationContext { activeRegistration?(navigationContext) }
+    // Under `.buttonStyle(.plain)` (or `.borderless`) a link is a plain button to SwiftUI: its label keeps the font and
+    // the foreground style around it instead of the tint. Only those styles are marked: the layout reads an unmarked
+    // link as plain too.
+    let style = context.environment.buttonStyle.rawValue
+    if !context.environment.buttonStyleIsCustom, style == "plain" || style == "borderless" {
+      node.attributes["data-button-style"] = style
+    }
     let child: _RenderNode
     if context.environment.buttonStyleIsCustom, !context.environment._buttonStyleIsPrimitive {
       // A link is a button to SwiftUI: an app-defined `ButtonStyle` draws its label, with a live `isPressed`.
@@ -2279,6 +2286,8 @@ public nonisolated struct NavigationLink<Label: View, Destination: View>: View {
       _applyButtonVisibleShape(child, to: node)
     } else {
       child = label._render(in: context)
+      // A plain link highlights and hit-tests the shape its label declares (`contentShape`), as a plain button does.
+      if node.attributes["data-button-style"] == "plain" { _applyButtonVisibleShape(child, to: node) }
     }
     _markFlexibleWidthControl(child, control: node)
     if context.environment[_GroupedListKey.self], !child.isEmpty, context.environment[_ListSelectionKey.self] == nil {

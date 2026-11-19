@@ -1252,17 +1252,23 @@ export class CssLayout {
     else if (k === 'opaque' && (e.localName === 'select' || e.querySelector('select'))) push('field-sizing', 'content');
     // A Gauge's label is as wide as its text (the stylesheet's column would stretch it over the track); the track still takes the width.
     else if (k === 'field' && e.classList.contains('gauge-meter')) push('align-items', 'flex-start');
+    // The last content of a vertical scroll view ends with the room the stylesheet asks for (`--scroll-end-clearance`: a
+    // mobile tab's floating bar), so it scrolls clear of what floats over it. It is the content's padding: the scroll
+    // view's own padding would follow its one-row track, not the content that overflows it.
+    const endsScroll = parent?.kind === 'scroll' && parent.kids[parent.kids.length - 1] === n &&
+      !parent.element.classList.contains('scroll-horizontal');
+    const bottom = value => endsScroll ? `calc(${value} + var(--scroll-end-clearance))` : value;
     if (k === 'tabview') {
       // The sidebar's width and the mobile bottom bar's height, as the stylesheet sets them for the layout and state.
       push('padding', '0 0 var(--tab-bottom-inset) 0'); push('padding-inline-start', 'var(--tab-sidebar-width)');
     } else if (n.plan) {
       const p = n.plan.pad;
-      push('padding', `${px(p.top)} ${px(p.trailing)} ${px(p.bottom)} ${px(p.leading)}`);
+      push('padding', `${px(p.top)} ${px(p.trailing)} ${bottom(px(p.bottom))} ${px(p.leading)}`);
     } else if (k === 'padding' || k === 'labeledrow') {
       const p = side => Math.max(0, num(e.getAttribute('data-padding-' + side), 0));
-      push('padding', `${px(p('top'))} ${px(p('trailing'))} ${px(p('bottom'))} ${px(p('leading'))}`);
+      push('padding', `${px(p('top'))} ${px(p('trailing'))} ${bottom(px(p('bottom')))} ${px(p('leading'))}`);
     // A leaf keeps the padding the stylesheet gives it (a native button's): it is part of the size the JS host measures.
-    } else if (!LEAVES.has(k) && (k !== 'grid' || !n.extent[0] && !n.extent[1])) push('padding', '0');
+    } else if (!LEAVES.has(k) && (k !== 'grid' || !n.extent[0] && !n.extent[1])) push('padding', endsScroll ? `0 0 ${bottom('0px')} 0` : '0');
     push('box-sizing', 'border-box');
     const m = parent?.margin;
     if (ctx !== 'root') { push('position', 'relative'); push('inset', 'auto'); push('margin', m ? `${px(m.top)} ${px(m.trailing)} ${px(m.bottom)} ${px(m.leading)}` : '0'); push('grid-area', parent?.kind === 'inset' && parent.kids.length > 1 ? insetArea(parent, n) : parent?.kind === 'navstack' ? (isBottomBar(n.element) ? '3 / 1 / 4 / -1' : barColumns(parent) ? '2 / 1 / 3 / -1' : '2 / 1') : ctx === 'cell' && !['grid', 'table', 'gridrow'].includes(parent.kind) && !stackedScroll(parent) ? '1 / 1' : 'auto'); }
