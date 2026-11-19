@@ -175,11 +175,12 @@ export class SemanticLayoutHost {
     }
     this.orphans=found;this.orphanSet=new Set(found);
     this.flushCss();
-    // The texts are measured once the pass laid everything out: each takes the width of the lines it draws (`fitTexts`).
+    // The texts are measured once the pass laid everything out: each takes the width of the lines it draws (`fitTexts`); a
+    // view that ignores the safe area at the top of a screen grows under its navigation bar (`extendUnderBars`).
     // Its own writes are not records of the page.
     this.mutations.disconnect();
     // The page's scroll view follows the pass: which one it is, what sticks and how tall the chain stays.
-    try{this.css.fitTexts();this.documentScroll.sync();}finally{this.observeMutations();}
+    try{this.css.fitTexts();this.css.extendUnderBars();this.documentScroll.sync();}finally{this.observeMutations();}
     this.metrics.passes++;
     this.metrics.unlaid=this.unlaid.size;
     this.passed={epoch:this.epoch,resizedAt:this.resizedAt};

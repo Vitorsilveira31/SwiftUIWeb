@@ -316,6 +316,13 @@ export class CssLayout {
     // The stack may itself be the styled root (an app whose window content is a NavigationStack), not only below one.
     this.sheet.insertRule('.navigation-stack[data-cl]::before{grid-area:1 / 1 / 2 / -1 !important}', 0);
     this.sheet.insertRule(':is(.navigation-stack,.navigation-view)[data-navigation-depth]:not([data-navigation-depth="0"])[data-cl] > .navigation-root:not([data-navigation-motion="covered"]){display:none !important}', 0);
+    // A view that ignores the safe area grows under its stack's bar by the bar's height (`extendUnderBars`), its bottom where
+    // it was: in a grid cell or across a row, by a negative top margin and that much more than its cell; along a column, by
+    // the margin alone (it grows into the room the margin frees, as the column's filling view); as a layer of an overlay or
+    // a background, by its top and height.
+    this.sheet.insertRule('[data-cl][data-cl-under-bar="cell"]{margin-top:calc(-1 * var(--sl-under-bar)) !important;height:calc(100% + var(--sl-under-bar)) !important}', 0);
+    this.sheet.insertRule('[data-cl][data-cl-under-bar="column"]{margin-top:calc(-1 * var(--sl-under-bar)) !important}', 0);
+    this.sheet.insertRule('[data-cl][data-cl-under-bar="layer"]{top:calc(-1 * var(--sl-under-bar)) !important;height:calc(100% + var(--sl-under-bar)) !important}', 0);
     // A ViewThatFits being probed (`probeFits`) shows no candidate.
     this.sheet.insertRule('.view-that-fits[data-fit-probe] > *{display:none !important}', 0);
     // A hidden tab or screen keeps its blocks, whose `display` would override the stylesheet's `display: none`.
@@ -495,6 +502,38 @@ export class CssLayout {
     }
     for (const [text] of this.textWidths) if (!capped.has(text)) text.style.removeProperty('--sl-text-w');
     this.textWidths = capped;
+  }
+  /** SwiftUI lays a screen of a NavigationStack out in its safe area, below the navigation bar, and draws the bar over it.
+   * A view that ignores the safe area (`.ignoresSafeArea()`, `data-ignores-safe-area`) and reaches the top of that area
+   * grows under the bar to the top of the stack: a background that fills the screen runs behind a transparent bar, as on
+   * iOS. The bar is the first row of the stack's grid (`declarations`), measured once the page is laid out; the view gets
+   * that height (`--sl-under-bar`) and is marked (`data-cl-under-bar`, see the global rules). Only a view that fills the
+   * height it is offered grows (a rigid one keeps its size), only the outermost of nested ones, and not one inside a scroll
+   * view. Every view is read first and written after, so the page is laid out once. */
+  extendUnderBars() {
+    const view = this.document.defaultView, writes = [], extended = [], bars = new Map();
+    const barOf = stack => {
+      if (!bars.has(stack)) bars.set(stack, stack.hasAttribute('data-cl') ? parseFloat(view.getComputedStyle(stack).gridTemplateRows) || 0 : 0);
+      return bars.get(stack);
+    };
+    for (const e of this.document.querySelectorAll('[data-ignores-safe-area]')) {
+      const screen = e.closest('.navigation-root,.navigation-destination'), stack = screen?.parentElement, node = this.cache.get(e);
+      const grows = !!screen && !!stack?.matches('.navigation-stack,.navigation-view') && e.hasAttribute('data-cl') && !!node?.axis?.y?.fill && !!node.def?.y &&
+        e.parentElement.closest('.scroll-view,.navigation-root,.navigation-destination') === screen && !extended.some(outer => outer.contains(e));
+      const bar = grows ? barOf(stack) : 0;
+      const applied = e.hasAttribute('data-cl-under-bar') ? parseFloat(e.style.getPropertyValue('--sl-under-bar')) || 0 : 0;
+      if (bar > 0 && Math.abs(e.getBoundingClientRect().top + applied - screen.getBoundingClientRect().top) <= 0.5) {
+        extended.push(e);
+        const holder = view.getComputedStyle(e.parentElement);
+        const place = view.getComputedStyle(e).position === 'absolute' ? 'layer' : holder.display.endsWith('flex') && holder.flexDirection.startsWith('column') ? 'column' : 'cell';
+        writes.push([e, px(bar), place]);
+      } else if (e.hasAttribute('data-cl-under-bar')) writes.push([e, null, null]);
+    }
+    for (const [e, length, place] of writes) {
+      if (length == null) { e.removeAttribute('data-cl-under-bar'); e.style.removeProperty('--sl-under-bar'); continue; }
+      if (e.style.getPropertyValue('--sl-under-bar') !== length) e.style.setProperty('--sl-under-bar', length);
+      if (e.getAttribute('data-cl-under-bar') !== place) e.setAttribute('data-cl-under-bar', place);
+    }
   }
   /** SwiftUI's minimumScaleFactor: a one-line text wider than its box is drawn at the font size that fits it, but not below
    * the factor's share of its size. The size Swift set is the base; a size this host set last is replaced by it, so the
