@@ -5,9 +5,9 @@
 // + JavaScript host bundle built by `BUILD_ONLY=1 CONFIGURATION=debug Tools/run-browser.sh lowering`:
 //
 // - a VideoPlayer fills a flexible 430x844 frame, keeps its label, and its <video> element survives a resize;
-// - a pushed screen with navigationBarBackButtonHidden(true) and toolbar(.hidden, for: .tabBar) shows neither the
-//   system back button nor the tab bar, and a pushed screen without those requests keeps both; a tab built when its
-//   button is pressed shows that screen in the frame the bar goes, not one before;
+// - a pushed screen draws no back button on the web (the browser's back pops it); one with toolbar(.hidden, for:
+//   .tabBar) shows no tab bar, and one without keeps it; a tab built when its button is pressed shows that screen in
+//   the frame the bar goes, not one before;
 // - two toolbar(_:for:) modifiers on one screen merge: toolbar(.hidden, for: .navigationBar) and toolbar(.hidden, for:
 //   .tabBar) together hide both bars;
 // - EmbeddedNavigationBarFixture: an inline title is centred between the back button and a trailing item (its
@@ -116,8 +116,8 @@ await runSuite(async () => {
     await page.getByRole("tab", { name: "Shown bar", exact: true }).click();
     await page.getByText("Default back and tab bar", { exact: true }).waitFor({ timeout: 10_000 });
     check(
-      "a pushed screen without requests keeps the system back button",
-      (await page.locator('[aria-label="Back"]:visible').count()) === 1,
+      "a pushed screen draws no back button on the web: the browser's back pops it",
+      (await page.locator('[aria-label="Back"]:visible').count()) === 0,
     );
     check("...and the tab bar", (await page.locator(".tab-list:visible").count()) === 1);
 
@@ -143,7 +143,7 @@ await runSuite(async () => {
       `frames=${JSON.stringify(hiddenBarFrames)}`,
     );
     check(
-      "navigationBarBackButtonHidden(true) removes the system back button only",
+      "a pushed screen with navigationBarBackButtonHidden(true) has no back button either",
       (await page.locator('[aria-label="Back"]:visible').count()) === 0,
     );
     check(
@@ -174,7 +174,7 @@ await runSuite(async () => {
     await page.getByText("Inline detail", { exact: true }).waitFor({ timeout: 10_000 });
     const inline = await page.evaluate(`(${MEASURE})("Inline detail")`);
     check(
-      "an inline title is centred and inset clear of the back button and the trailing item",
+      "an inline title is centred and inset clear of the trailing item",
       inline.textAlign === "center" &&
         inline.padLeft >= (inline.backRight ?? 0) &&
         inline.padRight >= inline.trailingWidth && inline.trailingWidth > 0,
@@ -190,8 +190,8 @@ await runSuite(async () => {
     await page.getByText("Large detail", { exact: true }).waitFor({ timeout: 10_000 });
     const large = await page.evaluate(`(${MEASURE})()`);
     check(
-      "a large title sits below the bar row, under the back button",
-      (large.backBottom ?? 0) <= large.padTop && large.padTop > 0,
+      "a large title with no bar items starts at the top, with no empty bar row above it, and the screen below it",
+      large.backBottom === null && large.padTop === 0 && large.destinationTop > 0,
       `measure=${JSON.stringify(large)}`,
     );
     await openFixture("Open navigation bar fixture");

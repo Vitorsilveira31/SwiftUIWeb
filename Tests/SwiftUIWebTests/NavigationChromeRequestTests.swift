@@ -29,10 +29,19 @@ final class NavigationChromeRequestTests {
   }
 
   @Test
-  func testPushedScreenKeepsSystemBackButtonByDefault() {
+  func testPushedScreenDrawsNoBackButtonOnTheWeb() {
+    // As a website: the browser's back pops a pushed screen (every push is a history entry), so the bar draws none.
     let html = StaticHTMLFiberRenderer().render(PushedScreen(screen: AnyView(Text("Detail"))))
     _expectTrue(html.contains("Detail"))
-    #expect(backButtonCount(html) == 1)
+    #expect(backButtonCount(html) == 0)
+  }
+
+  @Test
+  func testPushedScreenKeepsTheToolbarItemsItDeclares() {
+    let screen = AnyView(Text("Detail").toolbar { ToolbarItem(placement: .topBarLeading) { Button("Close") {} } })
+    let html = StaticHTMLFiberRenderer().render(PushedScreen(screen: screen))
+    _expectTrue(html.contains("Close"))
+    #expect(backButtonCount(html) == 0)
   }
 
   @Test
@@ -162,13 +171,15 @@ final class NavigationChromeRequestTests {
   func testLastToolbarVisibilityWinsForEachPlacement() {
     let screen = AnyView(
       Text("Detail")
+        .toolbar { Text("Share item") }
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.visible, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
     )
     let html = StaticHTMLFiberRenderer().render(PushedScreen(screen: screen))
     _expectTrue(html.contains("Detail"))
-    #expect(backButtonCount(html) == 1)
+    // The bar is shown: the screen's own item is drawn.
+    _expectTrue(html.contains("Share item"))
     _expectFalse(html.contains("data-navigation-bar-hidden=\"true\""))
   }
 
