@@ -742,7 +742,9 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   // publication does not carry them, so a commit while the menu is open removed them, and the panel, a fixed popover in the
   // top layer, jumped to the corner of the window until something placed it again.
   const MENU_PANEL = '.menu-popup > [role="menu"]';
-  const ownsPageStyle = (element, name) => ownsLayoutStyle(element, name) || ((name === 'left' || name === 'top') && element.matches?.(MENU_PANEL) === true);
+  // The layout measures a bottom inset that content runs under and writes its height on the inset's container
+  // (`--safe-area-inset-extent`, Tools/css-layout.js `watchInset`); a publication does not carry it.
+  const ownsPageStyle = (element, name) => ownsLayoutStyle(element, name) || name === '--safe-area-inset-extent' || ((name === 'left' || name === 'top') && element.matches?.(MENU_PANEL) === true);
   function patchStyle(old, next, armed = null) {
     const iterations = next.getAttribute('data-animation-iterations');
     const repeats = iterations === 'infinite' || Number(iterations) > 1;
@@ -1024,7 +1026,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
         const owns = hostOwns.get(element);
         return owns !== null && owns(name);
       },
-      styleOwned: (element, name) => ownsLayoutStyle(element, name) || name === '--presentation-detent-height' || (element.hasAttribute('data-image-paint') && name.startsWith('background-')) || (name === 'aspect-ratio' && (element.localName === 'img' || element.hasAttribute('data-image-ratio'))),
+      styleOwned: (element, name) => ownsLayoutStyle(element, name) || name === '--presentation-detent-height' || name === '--safe-area-inset-extent' || (element.hasAttribute('data-image-paint') && name.startsWith('background-')) || (name === 'aspect-ratio' && (element.localName === 'img' || element.hasAttribute('data-image-ratio'))),
       styleText: styleDeclarations,
       contentOwned: element => element.hasAttribute('data-symbol') || element.hasAttribute('data-image-paint') || element.hasAttribute('data-web-mount-key') || element.hasAttribute('data-dom-view') || (element.getAttribute('data-host-managed') || '').startsWith('*children')
     });

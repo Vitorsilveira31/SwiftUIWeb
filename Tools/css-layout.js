@@ -190,10 +190,28 @@ const barArea = (n, item) => {
 /** A safeAreaInset (or a TabView's bottom tab bar): the edge its inset sits on (`data-inset-edge`), whether that edge is
  * vertical (top or bottom: the inset is a row), and whether it is the start (top or leading). */
 const insetEdge = n => { const edge = (n.attr ? n.attr('data-inset-edge') : n.element.getAttribute('data-inset-edge')) || 'bottom'; return { edge, vertical: edge === 'top' || edge === 'bottom', start: edge === 'top' || edge === 'leading' }; };
-/** The grid area of an inset's child: the content's track and the inset's (its edge's end of the grid). */
+/** The grid area of an inset's child: the content's track and the inset's (its edge's end of the grid). Content that
+ * passes under its inset (`scrollUnderInset`) spans both tracks, as a scroll view runs under a bar in SwiftUI. */
 const insetArea = (parent, n) => {
   const { vertical, start } = insetEdge(parent), first = (parent.kids[1] === n) === start;
+  if (parent.underScroll && parent.kids[0] === n) return '1 / 1 / 3 / 2';
   return vertical ? `${first ? 1 : 2} / 1` : `1 / ${first ? 1 : 2}`;
+};
+/** The vertical scroll view a bottom safeAreaInset's content is, through the wrappers that only decorate it (a
+ * background, an overlay, a frame, a padding); else null. In SwiftUI it keeps its full height and runs under the inset,
+ * which only widens its safe area: its content ends clear of the inset (`--safe-area-inset-extent`, which the host
+ * measures). */
+const scrollUnderInset = n => {
+  if (n.kids.length < 2 || insetEdge(n).edge !== 'bottom') return null;
+  let body = n.kids[0];
+  for (let depth = 0; body && depth < 16; depth++) {
+    if (body.kind === 'scroll') return body.element.classList.contains('scroll-horizontal') ? null : body;
+    if (body.kind === 'background') body = body.kids[body.kids.length - 1];
+    else if (body.kind === 'overlay') body = body.kids[0];
+    else if (['frame', 'padding', 'fixed', 'panel', 'zstack'].includes(body.kind) && body.kids.length === 1) body = body.kids[0];
+    else return null;
+  }
+  return null;
 };
 /** A ScrollView holding several views: its children are rows of its grid, in order (see `declarations`). */
 const stackedScroll = n => n.kind === 'scroll' && n.kids.length > 1;
@@ -221,6 +239,29 @@ function restoreScrollOffsets(offsets) {
 }
 
 export class CssLayout {
+  /** Publishes the height of a bottom inset that content runs under as `--safe-area-inset-extent` on its container, and
+   * keeps it current: the scroll view under it ends with that room (`scrollUnderInset`). The host keeps the property
+   * across commits (Tools/embedded-dom.js, `styleOwned`). */
+  watchInset(container, inset) {
+    const view = this.document.defaultView;
+    if (!view || typeof view.ResizeObserver !== 'function') return;
+    this.insetObserver ??= new view.ResizeObserver(entries => {
+      for (const entry of entries) {
+        const box = entry.target.parentElement;
+        if (!box) continue;
+        const value = `${Math.round(entry.target.getBoundingClientRect().height * 100) / 100}px`;
+        if (box.style.getPropertyValue('--safe-area-inset-extent') !== value) box.style.setProperty('--safe-area-inset-extent', value);
+      }
+    });
+    // The inset's analysed node can sit inside pass-through wrappers: observe the container's child that holds it.
+    let child = inset;
+    while (child && child.parentElement !== container) child = child.parentElement;
+    this.watchedInsets ??= new WeakSet();
+    if (!child || this.watchedInsets.has(child)) return;
+    this.watchedInsets.add(child);
+    this.insetObserver.observe(child);
+  }
+
   constructor(document, options = {}) {
     this.document = document;
     this.options = options; // baseline: true aligns `.firstTextBaseline` stacks on the text baseline (the JS host centres them)
@@ -1053,6 +1094,8 @@ export class CssLayout {
       case 'gridrow': through('x'); through('y'); break;
       case 'inset': {
         if (kids.length < 2) { through('x'); through('y'); break; }
+        n.underScroll = scrollUnderInset(n);
+        if (n.underScroll) n.underScroll.endsUnderInset = true;
         // A safe-area inset: the content takes what the inset leaves along its edge; across it, the larger of the two.
         const main = insetEdge(n).vertical ? 'y' : 'x', cross = main === 'y' ? 'x' : 'y', [body, inset] = kids;
         axis[main].fill = body.axis[main].fill; axis[main].soft = body.axis[main].fill && body.axis[main].soft;
@@ -1276,6 +1319,10 @@ export class CssLayout {
     push('box-sizing', 'border-box');
     const m = parent?.margin;
     if (ctx !== 'root') { push('position', 'relative'); push('inset', 'auto'); push('margin', m ? `${px(m.top)} ${px(m.trailing)} ${px(m.bottom)} ${px(m.leading)}` : '0'); push('grid-area', parent?.kind === 'inset' && parent.kids.length > 1 ? insetArea(parent, n) : parent?.kind === 'navstack' ? (isBottomBar(n.element) ? '3 / 1 / 4 / -1' : barColumns(parent) ? '2 / 1 / 3 / -1' : '2 / 1') : ctx === 'cell' && !['grid', 'table', 'gridrow'].includes(parent.kind) && !stackedScroll(parent) ? '1 / 1' : 'auto'); }
+    // An inset over content that runs under it paints above that content.
+    if (parent?.kind === 'inset' && parent.underScroll && parent.kids[1] === n) { push('z-index', '1'); this.watchInset(parent.element, n.element); }
+    // The scroll view that runs under a bottom inset ends with room for it (the content's bottom padding adds it).
+    if (k === 'scroll' && n.endsUnderInset) push('--scroll-end-clearance', 'var(--safe-area-inset-extent, 0px)');
     // Grid cell content of a one-cell grid container.
     if (ctx !== 'root') this.placement(n, parent, ctx, push, d);
     else if (this.roots.has(e)) this.rootPlacement(n, push);
