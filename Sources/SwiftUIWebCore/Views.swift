@@ -2416,7 +2416,7 @@ public nonisolated struct LazyVGrid<Content: View>: View {
     node.classes = ["grid-layout"]
     node.attributes["data-lazy"] = "vertical"
     node.styles["align-items"] = alignment.cssValue
-    node.styles["grid-template-columns"] = columns.map(_gridTrack).joined(separator: " ")
+    node.styles["grid-template-columns"] = columns.map { _gridTrack($0, across: true) }.joined(separator: " ")
     node.attributes["data-layout-kind"] = "grid"
     node.attributes["data-grid-tracks"] = columns.map(_semanticGridTrack).joined(separator: "|")
     // `spacing` separates rows; columns are separated by `GridItem.spacing`.
@@ -2449,7 +2449,7 @@ public nonisolated struct LazyHGrid<Content: View>: View {
     node.classes = ["grid-layout", "hgrid"]
     node.attributes["data-lazy"] = "horizontal"
     node.styles["align-items"] = alignment.cssValue
-    node.styles["grid-template-rows"] = rows.map(_gridTrack).joined(separator: " ")
+    node.styles["grid-template-rows"] = rows.map { _gridTrack($0, across: false) }.joined(separator: " ")
     node.attributes["data-layout-kind"] = "grid"
     node.attributes["data-grid-tracks"] = rows.map(_semanticGridTrack).joined(separator: "|")
     // `spacing` separates columns; rows are separated by `GridItem.spacing`.
@@ -2534,9 +2534,15 @@ public nonisolated struct GridRow<Content: View>: View {
   }
 }
 
-private func _gridTrack(_ item: GridItem) -> String {
+/// A track of a grid. `across` is a LazyVGrid's columns: there an adaptive item's minimum is never wider than the grid, so
+/// a minimum larger than the width it is offered gives one column as wide as the grid, as in SwiftUI, and not a column that
+/// overflows it (on a phone, `.adaptive(minimum: 400)` in a 350-point column). A LazyHGrid's height is rarely definite, and
+/// a percentage of an indefinite height would not resolve, so its rows keep the plain minimum.
+private func _gridTrack(_ item: GridItem, across: Bool) -> String {
   switch item.size {
-  case .adaptive(let minimum, let maximum): return "repeat(auto-fit, minmax(\(minimum.clean)px, \(maximum.isFinite ? maximum.clean + "px" : "1fr")))"
+  case .adaptive(let minimum, let maximum):
+    let floor = across ? "min(\(minimum.clean)px, 100%)" : "\(minimum.clean)px"
+    return "repeat(auto-fit, minmax(\(floor), \(maximum.isFinite ? maximum.clean + "px" : "1fr")))"
   case .fixed(let value): return "\(value.clean)px"
   case .flexible(let minimum, let maximum): return "minmax(\(minimum.clean)px, \(maximum.isFinite ? maximum.clean + "px" : "1fr"))"
   }

@@ -3,8 +3,6 @@ import SwiftUIWeb
 /// The pages as a list of links, under a narrow header. Each is a link to the page's address (see `SiteNavPill`).
 struct SiteCompactNavList: View {
   let viewModel: SiteViewModel
-  /// The label's minimum width: with the 12pt of padding on each side, every row is 240pt wide.
-  private static let labelWidth: CGFloat = 216
 
   var body: some View {
     VStack(alignment: .leading, spacing: 2) {
@@ -12,17 +10,17 @@ struct SiteCompactNavList: View {
         if let destination = SiteLinks.page(page, viewModel.language) {
           let isSelected = page == viewModel.page
           Link(destination: destination) {
-            // A link is as wide as what it holds, so a highlight is as wide as its label. The label has a common minimum width,
-            // which gives every page the same highlight, the longest label included. The padding is on the stack around it:
-            // a padding and a frame on one view share one box, and one of the two is lost.
+            // Every row is as wide as the header, so the highlight runs from edge to edge of the column whatever the label,
+            // the way a row of a list is selected. The spacer is what makes the link take the width (as in `SiteLinkCard`).
             HStack(spacing: 0) {
               Label(ShellStrings.tab(page, viewModel.language), systemImage: page.symbol)
                 .fontWeight(isSelected ? .semibold : .regular)
                 .foregroundStyle(isSelected ? Color.primary : Color.secondary)
-                .frame(minWidth: Self.labelWidth, alignment: .leading)
+              Spacer(minLength: 0)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(isSelected ? Color.primary.opacity(0.08) : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: 10))
           }
@@ -30,6 +28,7 @@ struct SiteCompactNavList: View {
         }
       }
     }
+    .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.top, 8)
   }
 }
