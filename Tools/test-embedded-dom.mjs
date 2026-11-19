@@ -518,6 +518,21 @@ await runSuite(async () => {
       assert.notEqual(await drag("#plain-text"), "", "text without a drag gesture is selected as before");
       await page.evaluate(() => getSelection().removeAllRanges());
     });
+    await check("a vertical scroll view off its top carries data-scrolled, and a render keeps it", async () => {
+      const view = page.locator("#scroll-edge");
+      await view.scrollIntoViewIfNeeded();
+      const marked = () => view.evaluate((e) => e.hasAttribute("data-scrolled"));
+      assert.equal(await marked(), false, "at its top it is not marked");
+      await view.evaluate((e) => { e.scrollTop = 120; });
+      await page.waitForFunction(() => document.querySelector("#scroll-edge").hasAttribute("data-scrolled"));
+      const text = () => view.evaluate((e) => e.textContent);
+      const before = await text();
+      await page.evaluate(() => { fixture.state.count++; fixture.render(); fixture.session.flush(); });
+      assert.notEqual(await text(), before, "the render reached the view");
+      assert.equal(await marked(), true, "a render from Swift does not remove the host's mark");
+      await view.evaluate((e) => { e.scrollTop = 0; });
+      await page.waitForFunction(() => !document.querySelector("#scroll-edge").hasAttribute("data-scrolled"));
+    });
     await check("a click on a Button inside a view with a DragGesture reaches the button, and a drag still reaches the gesture", async () => {
       const clicks = () => page.evaluate(() => fixture.stats.dispatches.filter((d) => d.id === 96).length);
       const button = page.locator("#drag-chrome-button");

@@ -69,6 +69,7 @@ function render() {
   <button id="press" data-press-tracking="true" ${attr('press',33,'click,pressed')}>Press <span>label</span></button>
   <div id="drag-card" ${attr('drag-card',93,'gesture')} data-gesture-count="1" data-gesture-descriptors="kind=drag;minDistance=6" style="width:260px;padding:12px;background:#eee">Café com Destino</div>
   <div id="plain-text" style="width:260px;padding:12px">Texto que se seleciona</div>
+  <div id="scroll-edge" class="scroll-view scroll-vertical" ${attr('scroll-edge')} style="height:60px;overflow-y:auto"><div style="height:300px">Scrolled content ${state.count}</div></div>
   <div id="drag-chrome" ${attr('drag-chrome',95,'drag-changed,drag-ended')} data-gesture-count="1" data-gesture-event-prefix-0="drag" data-gesture-descriptors="kind=drag;minDistance=55" style="width:260px;padding:12px;background:#ddd"><button id="drag-chrome-button" ${attr('drag-chrome-button',96,'click')}>Play</button></div>
   <div role="tablist" ${attr('tabs')}>${[0,1].map(i=>`<button role="tab" ${attr('tab-'+i,14+i,'click')} aria-selected="${state.tab===i}" id="tab${i}">Tab ${i}</button>`).join('')}</div>
   <main ${attr('page-'+state.page)} id="page"><h1>Page ${state.page}</h1>${button(100+state.page,'Page action','page-action-'+state.page)}<div data-view-id="lower-card" style="margin-top:400px">Anchor target</div></main>

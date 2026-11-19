@@ -2276,6 +2276,16 @@
     backdrop-filter: blur(8px);
   }
 
+  /* iOS draws the bar transparent while the screen's content sits at its top (the scroll edge appearance) and gives it
+     its material and hairline once content scrolls under it. The host marks a vertical scroll view that is not at its top
+     (`data-scrolled`, Tools/embedded-dom.js); the screen on top of the stack is its last root or destination. */
+  .navigation-stack[data-navigation-title]:not(:has(> :nth-last-child(1 of .navigation-root, .navigation-destination) .scroll-view.scroll-vertical[data-scrolled]))::before {
+    border-bottom-color: transparent;
+    background-color: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
   .navigation-stack[data-navigation-title-display-mode="large"]::before {
     min-height: calc(var(--spacing) * 16);
     align-items: flex-end;
