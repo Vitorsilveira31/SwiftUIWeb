@@ -1245,6 +1245,10 @@ export class CssLayout {
       // A vertical Divider draws its line along its leading edge, the stylesheet's rule along the top of a horizontal one.
       if (n.divider && n.vertical) { push('border-top-width', '0'); push('border-left-width', '1px'); }
     }
+    // A lazy stack's spacer stands in for the rows outside the window; with none to stand in for (the window reaches that
+    // end) it is not laid out at all, so the stack's spacing ends at its last row instead of adding a gap after it.
+    else if (k === 'size' && e.hasAttribute('data-lazy-spacer') &&
+      !(num(e.getAttribute('data-size-h'), 0) > 0 || num(e.getAttribute('data-size-w'), 0) > 0)) push('display', 'none');
     else if (k === 'spacer' || k === 'size') push('display', 'block');
     // A flexible leaf that holds elements keeps the stylesheet's display, which lays them out (NavigationSplitView's grid of
     // columns, whose content is laid out as semantic roots of their own).
