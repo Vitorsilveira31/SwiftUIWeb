@@ -103,6 +103,15 @@ pt_BR, `74%` for `0.736.formatted(.percent.precision(.fractionLength(0)))`, and 
 
 ### Looks that changed
 
+- **A push fades the new page in under a mouse.** A push slid the new screen across the whole window in half a second,
+  as UIKit does on a phone. In a window driven by a mouse (`hover: hover` and `pointer: fine`) the new page now fades
+  in where it lands, rising 12 pixels over 280 ms, over a page that stays put, and a pop fades it out, as web pages
+  open one. A touch screen keeps the slide.
+- **`AsyncImage(url:scale:transaction:content:)`.** The phase changes in the transaction given, so an animation in it
+  plays the loaded image's transition (`image.transition(.opacity)` fades it in over its placeholder), as in SwiftUI.
+- **A text under a `scaleEffect` keeps its width.** A one-line text in a scaled view (a card grown under the pointer)
+  was measured at its drawn size against its unscaled box, taken for cut and capped narrower, and kept an ellipsis
+  after the scale went back.
 - **A pushed screen has no back button on the web.** `NavigationStack` drew a back button on every pushed screen, as
   an app's navigation bar does. A website has none: every push is an entry of the page's history, so the browser's
   back (or the phone's back gesture) pops it, and the bar now shows only the items the screen declares. A screen that

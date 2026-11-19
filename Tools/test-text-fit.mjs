@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // A Text is as wide as the lines it draws, as SwiftUI sizes it (Tools/css-layout.js `fitTexts`): a truncated one as what it
 // shows and the ellipsis, so the lower-priority text beside it takes the rest (`layoutPriority`); a wrapped one as its
-// longest line, so a VStack centres the lines; a text that fits keeps no cap; a cap is lifted when the text is offered more.
+// longest line, so a VStack centres the lines; a text that fits keeps no cap; a cap is lifted when the text is offered more; under a scaled ancestor the text is measured in its box's units.
 //   bun Tools/test-text-fit.mjs
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -21,6 +21,9 @@ const html = `<div id="embedded-app-root"><div id="app" data-layout-kind="vstack
     <div id="column" class="vstack" data-layout-kind="vstack" data-layout-gap="0" data-align-x="0.5">${text("wrapped", "Lines that wrap in a narrow column")}${text("short", "Fits")}</div>
   </div>
   <div id="shrink-frame" data-layout-kind="frame" data-frame-w="120" data-align-x="0.5" data-align-y="0.5">${text("shrink", "SHRINK ME PLEASE", oneLine, 'data-minimum-scale-factor="0.5"')}</div>
+  <div data-layout-kind="frame" data-frame-w="300" data-align-x="0" data-align-y="0.5" style="transform:scale(1.07)">${text("grown", "Último Sinal", oneLine)}</div>
+  <div data-layout-kind="frame" data-frame-w="120" data-align-x="0" data-align-y="0.5">${text("cut", "HIGH PRIORITY CONTENT", oneLine)}</div>
+  <div data-layout-kind="frame" data-frame-w="120" data-align-x="0" data-align-y="0.5" style="transform:scale(2);transform-origin:0 0">${text("cut-scaled", "HIGH PRIORITY CONTENT", oneLine)}</div>
 </div></div>`;
 
 await runSuite(async () => {
@@ -87,6 +90,18 @@ await runSuite(async () => {
     assert.equal(await sizeAfter("e.setAttribute('data-minimum-scale-factor', '1')"), 17, "a factor of 1 restores the font size");
     assert.ok(await sizeAfter("e.setAttribute('data-minimum-scale-factor', '0.5')") < 17, "a factor below 1 shrinks it again");
     assert.equal(await sizeAfter("e.style.whiteSpace = 'normal'"), 17, "a text that is no longer one line restores the font size");
+    // Under a scaled ancestor (a card grown under the pointer) the text is measured in its box's own units: one that fits
+    // stays whole, and one that is cut is as wide as it is unscaled.
+    const scaled = await page.evaluate(() => {
+      window.css.fitTexts();
+      const grown = document.getElementById("grown");
+      const width = (id) => document.getElementById(id).offsetWidth;
+      return { capped: grown.hasAttribute("data-text-fit"), cut: grown.scrollWidth > grown.clientWidth + 0.5, plain: width("cut"), scaled: width("cut-scaled") };
+    });
+    assert.equal(scaled.cut, false, `a text that fits under a scaled ancestor is not cut (${JSON.stringify(scaled)})`);
+    assert.equal(scaled.capped, false, "and carries no cap");
+    assert.ok(scaled.plain < 120, `a text cut in its box is as wide as what it shows: ${scaled.plain}`);
+    assert.ok(Math.abs(scaled.scaled - scaled.plain) < 0.5, `and as wide under a scaled ancestor: ${scaled.scaled} vs ${scaled.plain}`);
     console.log("text fit: OK");
   } finally {
     await browser.close();

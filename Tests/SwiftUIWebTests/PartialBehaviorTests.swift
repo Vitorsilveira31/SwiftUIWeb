@@ -1621,6 +1621,31 @@ final class PartialBehaviorTests {
   }
 
   @Test
+  func testAsyncImageSettlesItsPhaseInItsTransaction() {
+    let imageURL = URL(string: "https://example.com/art.png")!
+    for animated in [true, false] {
+      let transaction = animated ? Transaction(animation: .easeOut(duration: 0.3)) : Transaction()
+      let view = AsyncImage(url: imageURL, transaction: transaction) { phase in
+        if let image = phase.image {
+          image.transition(.opacity)
+        } else {
+          Text("Loading")
+        }
+      }
+      let tree = FiberTree(view)
+      _ = tree.root.stateStore._takeAnimationTransactionCSS()
+      guard let loader = tree.findNode(withEvent: "load") else {
+        return _fail("AsyncImage should expose a host load event")
+      }
+      tree.dispatch(event: "load", on: loader)
+      let commitAnimation = tree.root.stateStore._takeAnimationTransactionCSS()
+      _ = tree.update(view)
+      #expect(tree.renderNode.htmlDescription.contains("art.png"), "the loaded image shows (animated: \(animated))")
+      #expect((commitAnimation != nil) == animated, "the load animates only in an animated transaction (animated: \(animated))")
+    }
+  }
+
+  @Test
   func testAsyncImageStartsNewPhaseWhenURLChangesWithinSameIdentity() {
     let firstURL = URL(string: "https://example.com/first.png")!
     let secondURL = URL(string: "https://example.com/second.png")!

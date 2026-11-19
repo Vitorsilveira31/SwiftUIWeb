@@ -12,8 +12,10 @@ import { engineName, freePort, launch, runSuite, serveBundle, ROOT } from "./bro
 
 const BUNDLE = resolve(process.env.MOTION_BUNDLE ?? join(ROOT, ".build/browser/MotionApp"));
 
-async function openFixture(browser, server, { reducedMotion = "no-preference" } = {}) {
-  const context = await browser.newContext({ viewport: { width: 800, height: 900 } });
+async function openFixture(browser, server, { reducedMotion = "no-preference", touch = false } = {}) {
+  // A touch screen: no hovering pointer, so pushes slide as UIKit slides them (Firefox has no mobile emulation).
+  const device = touch ? { hasTouch: true, ...(engineName() === "firefox" ? {} : { isMobile: true }) } : {};
+  const context = await browser.newContext({ viewport: { width: 800, height: 900 }, ...device });
   const page = await context.newPage();
   await page.emulateMedia({ reducedMotion });
   const problems = [];
@@ -1867,6 +1869,8 @@ async function swiftAnimations(page, label) {
  * the one it covers, which moves a third of the way out behind it, and a pop plays that backwards. */
 async function uikitPresentationMotion(page, label) {
   const curve = "cubic-bezier(0.32, 0.72, 0, 1)";
+  // A push slides as UIKit slides it on a touch screen; a window driven by a mouse fades the new page in (styles.css).
+  const mouse = await page.evaluate(() => matchMedia("(hover: hover) and (pointer: fine)").matches);
   const waitUntil = async (check, what) => {
     for (let waited = 0; waited < 3000; waited += 40) {
       if (await page.evaluate(check)) return;
@@ -1902,30 +1906,41 @@ async function uikitPresentationMotion(page, label) {
     return [root.offsetLeft, root.offsetTop, root.offsetWidth];
   });
   await click(page, "push");
-  const push = await page.evaluate(() => {
+  const push = await page.evaluate((mouse) => {
     const pushed = window.__byId("pushed-text")?.closest(".navigation-destination");
     const root = window.__byId("nav-root-text")?.closest(".navigation-root");
     const named = (element, name) => element?.getAnimations().find((each) => each.animationName === name);
     const slide = named(pushed, "swu-navigation-push"), cover = named(root, "swu-navigation-cover");
     const found = { motion: root?.getAttribute("data-navigation-motion"), display: root && getComputedStyle(root).display, pushed: pushed?.getAnimations().map((each) => each.animationName) };
     if (!slide || !cover) return found;
-    for (const animation of [slide, cover]) { animation.pause(); animation.currentTime = 250; }
+    for (const animation of [slide, cover]) { animation.pause(); animation.currentTime = mouse ? 140 : 250; }
     const layout = (element) => [element.offsetLeft, element.offsetTop, element.offsetWidth];
+    const moved = (element) => new DOMMatrix(getComputedStyle(element).transform);
     Object.assign(found, {
-      width: pushed.offsetWidth, slid: new DOMMatrix(getComputedStyle(pushed).transform).m41, covered: new DOMMatrix(getComputedStyle(root).transform).m41,
+      width: pushed.offsetWidth, slid: moved(pushed).m41, rose: moved(pushed).m42, opacity: Number(getComputedStyle(pushed).opacity),
+      covered: moved(root).m41, coveredRise: moved(root).m42,
       pushedBox: layout(pushed), rootBox: layout(root), duration: slide.effect.getTiming().duration, easing: slide.effect.getKeyframes()[0].easing,
     });
     for (const animation of [slide, cover]) animation.play();
     return found;
-  });
+  }, mouse);
   assert.equal(push.motion, "covered", `${label}: the screen a push covers stays in view under it (${JSON.stringify(push)})`);
   assert.notEqual(push.display, "none", `${label}: shown while the push plays`);
-  assert.ok(push.width > 0, `${label}: the pushed screen slides in (${JSON.stringify(push)})`);
-  assert.equal(push.duration, 500, `${label}: a push lasts half a second`);
-  assert.equal(push.easing, curve, `${label}: along UIKit's curve`);
+  assert.ok(push.width > 0, `${label}: the pushed screen comes in (${JSON.stringify(push)})`);
   assert.deepEqual(push.rootBox, rootBefore, `${label}: the covered screen stays where it was`);
-  assert.ok(push.slid > 0 && push.slid < push.width, `${label}: half way through, the new screen is on its way in (${push.slid} of ${push.width})`);
-  near(push.covered, -0.3 * (push.width - push.slid), 1, `${label}: and the covered one has moved a third as far, the other way`);
+  if (mouse) {
+    // A web page under a mouse: the new page fades in where it lands, rising a few pixels, over a page that stays put.
+    assert.equal(push.duration, 280, `${label}: a push under a mouse is a short fade`);
+    assert.equal(push.slid, 0, `${label}: the page does not slide across the window (${push.slid})`);
+    assert.ok(push.rose > 0 && push.rose < 12, `${label}: half way through, it is still rising into place (${push.rose})`);
+    assert.ok(push.opacity > 0 && push.opacity < 1, `${label}: and fading in (${push.opacity})`);
+    assert.deepEqual([push.covered, push.coveredRise], [0, 0], `${label}: the covered page does not move`);
+  } else {
+    assert.equal(push.duration, 500, `${label}: a push lasts half a second`);
+    assert.equal(push.easing, curve, `${label}: along UIKit's curve`);
+    assert.ok(push.slid > 0 && push.slid < push.width, `${label}: half way through, the new screen is on its way in (${push.slid} of ${push.width})`);
+    near(push.covered, -0.3 * (push.width - push.slid), 1, `${label}: and the covered one has moved a third as far, the other way`);
+  }
   await settle(page);
   await waitUntil(() => {
     const root = window.__byId("nav-root-text")?.closest(".navigation-root");
@@ -2153,6 +2168,13 @@ async function main() {
     assert.deepEqual(problems, [], `${label}: no page errors`);
     await page.context().close();
     await reducedMotion(browser, server, label);
+    const touchScreen = await openFixture(browser, server, { touch: true });
+    const touchMedia = await touchScreen.page.evaluate(() => matchMedia("(hover: none)").matches);
+    // Firefox cannot emulate a phone, so its touch context still has a hovering pointer: there the run checks the fade.
+    if (label !== "firefox") assert.ok(touchMedia, `${label}: the touch context has no hovering pointer`);
+    await uikitPresentationMotion(touchScreen.page, `${label} (touch)`);
+    assert.deepEqual(touchScreen.problems, [], `${label}: no page errors on a touch screen`);
+    await touchScreen.page.context().close();
     console.log(`PASS ${label}: transitions in and out, the default fade, sliding siblings, numeric text, springs, custom transitions, Swift-driven animations, presentation exits, UIKit presentation and push motion, text renderers, per-edge scroll transitions, symbol replacement, matched geometry and text layout preferences`);
   } finally {
     await browser.close();

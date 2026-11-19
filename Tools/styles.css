@@ -5589,6 +5589,44 @@
   from { transform: translateX(calc(var(--motion-shift, 30%) * -1 * var(--motion-direction, 1))); }
 }
 
+/* A window driven by a mouse is a web page, not a phone: a page does not slide across the whole window, it fades in
+   where it lands, rising a few pixels, and the page it covers stays where it is (as the streaming sites open a title).
+   The keyframes keep their names, so the transition host settles each screen exactly as it does after a slide. */
+@media (hover: hover) and (pointer: fine) {
+  @keyframes swu-navigation-push {
+    from { opacity: 0; transform: translateY(0.75rem); }
+  }
+
+  @keyframes swu-navigation-pop {
+    to { opacity: 0; transform: translateY(0.75rem); }
+  }
+
+  @keyframes swu-navigation-cover {
+    to { transform: none; }
+  }
+
+  @keyframes swu-navigation-reveal {
+    from { transform: none; }
+  }
+
+  .navigation-destination[data-enter-animation="true"]:not([data-navigation-inactive="true"]),
+  [data-navigation-motion="covered"],
+  [data-navigation-motion="revealed"] {
+    animation-duration: 280ms;
+    animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .navigation-destination[data-enter-animation="true"]:not([data-navigation-inactive="true"]),
+  .navigation-destination[data-exit-animation="true"] {
+    box-shadow: none;
+  }
+
+  .navigation-destination[data-exit-animation="true"] {
+    animation-duration: 200ms;
+    animation-timing-function: ease-in;
+  }
+}
+
 .toast-banner[data-enter-animation="true"],
 [role="status"][data-enter-animation="true"],
 [aria-live="polite"][data-enter-animation="true"] {
