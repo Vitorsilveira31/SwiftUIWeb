@@ -5993,6 +5993,10 @@
 
   .avkit-video-player:focus-visible { outline: 2px solid #0a84ff; outline-offset: -2px; }
   .avkit-video-player:has(> .avkit-controls[data-ctl-hidden="1"]) { cursor: none; }
+  /* A VideoPlayer that cannot be touched (`.allowsHitTesting(false)` on it or on a container) shows no controls, as on iOS,
+     where they appear only in answer to a touch. A player screen that draws its own transport over the video relies on it. */
+  [data-allows-hit-testing="false"] .avkit-controls,
+  .avkit-video-player[data-allows-hit-testing="false"] > .avkit-controls { display: none; }
 
   .avkit-controls {
     --avkit-fg: rgba(255, 255, 255, 0.96);

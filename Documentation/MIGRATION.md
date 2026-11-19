@@ -103,6 +103,10 @@ pt_BR, `74%` for `0.736.formatted(.percent.precision(.fractionLength(0)))`, and 
 
 ### Looks that changed
 
+- **A VideoPlayer that takes no touches shows no controls.** Under `.allowsHitTesting(false)` (on the player or a
+  container) the AVKit controls stayed on screen, inert, over a player screen that draws its own transport. On iOS they
+  appear only in answer to a touch, so they never show there; the page now hides them too, and the app no longer needs CSS
+  of its own for it.
 - **A NavigationLink or a Link whose label fills its row fills it.** The page laid an `<a>` out as a closed box the size
   of its text, so a link whose label is `.frame(maxWidth: .infinity)` (the wide pill of a hero's primary action, beside a
   48-point button) hugged its text, and a pill with a fixed height clipped it. A NavigationLink or a Link without a
