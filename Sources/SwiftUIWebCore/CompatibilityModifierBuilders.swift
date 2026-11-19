@@ -79,7 +79,9 @@ package func _contentMarginsModifier(_ edges: Edge.Set, _ insets: EdgeInsets, fo
 
 @inline(never)
 func _resizableModifier(capInsets: EdgeInsets, resizingMode: Image.ResizingMode) -> _SemanticCompatibilityModifier {
-  _SemanticCompatibilityModifier(attributes: ["data-resizable": "true", "data-resizing-mode": resizingMode.rawValue], styles: ["object-fit": "contain", "object-position": "center"])
+  // A resizable image stretches to the space it is offered, as in SwiftUI (`object-fit: fill`, sized by the stylesheet);
+  // `aspectRatio`, `scaledToFit` and `scaledToFill` set their own fit after it.
+  _SemanticCompatibilityModifier(attributes: ["data-resizable": "true", "data-resizing-mode": resizingMode.rawValue], styles: ["object-fit": "fill", "object-position": "center"])
 }
 
 @inline(never)

@@ -103,6 +103,13 @@ pt_BR, `74%` for `0.736.formatted(.percent.precision(.fractionLength(0)))`, and 
 
 ### Looks that changed
 
+- **A resizable image takes the frame it is offered.** `Image(...).resizable().frame(width: 300, height: 200)` drew the
+  picture with `object-fit: contain` at its own ratio, so a 4:3 picture was 300 by 225, past its frame and lower than the
+  layers around it. `resizable()` now stretches the image to its frame, as in SwiftUI; `aspectRatio`, `scaledToFit` and
+  `scaledToFill` still keep the ratio.
+- **Transforms compose.** A `scaleEffect` or `rotationEffect` replaced an `.offset` (or another effect) on the same view,
+  so `.offset(y: 540).scaleEffect(1)` drew the view at the top. The effects now apply in the order of the modifiers, as
+  in SwiftUI.
 - **A ZStack paints its children in order, the last on top.** CSS paints a positioned or transformed box after in-flow
   ones, so an earlier layer with an `.offset`, a clipped frame or a mask covered the content after it (a sign-in form went
   under its background art). Each child of a ZStack is now its own stacking context, painted in order; a `zIndex` still
