@@ -107,6 +107,9 @@ pt_BR, `74%` for `0.736.formatted(.percent.precision(.fractionLength(0)))`, and 
   the width the grid is offered (`.adaptive(minimum: 400)` in a 350-point phone column), the one column kept the
   minimum and the cells ran past the right edge of the screen. The column now takes the grid's width, as in SwiftUI;
   where the minimum fits, nothing changes. A `LazyHGrid`'s rows keep the plain minimum.
+- **A lazy stack ends at its last row.** The spacer that stands in for the rows outside a `LazyVStack`'s or
+  `LazyHStack`'s window took the stack's spacing even when it stood in for none, so every lazy stack ended (and began)
+  with an extra gap. An empty spacer now takes no room and no spacing, as in SwiftUI.
 - **A mobile tab's scroll view ends clear of the floating bar.** The last content of the shown tab scrolled under the
   bottom bar (the clearance rule waited for a marker nothing set). The layout now adds `--tab-content-clearance` (96
   points plus the home indicator by default) to the bottom of the outer vertical scroll view's content, as the iOS tab
