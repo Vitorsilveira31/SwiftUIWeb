@@ -300,11 +300,32 @@ async function checkFrame(browser, base, query) {
       assert.ok(seen.brand !== null && Math.abs(seen.brand - 40 - left) <= 1, `${slug} at ${width}px: the header's brand starts at ${seen.brand}px, not at the column's edge (${left}px)`);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
       assert.ok(overflow <= 1, `${slug} at ${width}px: the page scrolls ${overflow}px sideways`);
+      // The page's own scroll view clips what overflows it, so the document alone does not show a card running past the
+      // screen: no visible box may end past the right edge, except what a horizontal scroll view holds (a code block).
+      const past = await pastRightEdge(page);
+      assert.ok(past.by <= 1, `${slug} at ${width}px: ${past.what} runs ${Math.round(past.by)}px past the right edge of the screen`);
     }
     assert.deepEqual(errors, [], `frame at ${width}px: page errors`);
     await context.close();
   }
   return "frame";
+}
+
+// How far the visible box that reaches furthest right ends past the screen's right edge, and what it is. What a horizontal
+// scroll view holds is left out: it scrolls inside its own box, which is checked.
+async function pastRightEdge(page) {
+  return page.evaluate(() => {
+    let worst = { by: 0, what: "nothing" };
+    for (const element of document.querySelectorAll("body *")) {
+      if (element.parentElement?.closest('[data-scroll-axes="1"], [data-scroll-axes="3"]')) continue;
+      if (!element.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+      const box = element.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) continue;
+      const by = box.right - innerWidth;
+      if (by > worst.by) worst = { by, what: `<${element.localName} class="${element.className?.baseVal ?? element.className}">` + (element.textContent ?? "").trim().slice(0, 40) };
+    }
+    return worst;
+  });
 }
 
 // The cards of a row of a grid (SiteCard with fillsHeight) are as tall as the row: a card with less text is not shorter.
@@ -482,6 +503,8 @@ async function checkPhone(browser, base, query) {
   const rows = await pageLinkWidths();
   assert.ok(rows.length >= 5, `the menu of pages shows ${rows.length} links`);
   assert.equal(new Set(rows).size, 1, `the highlights of the menu of pages have different widths: ${rows}`);
+  // A row runs the width of the header's column (the screen less its 20 px margins), so the highlight is not cut short.
+  assert.ok(Math.abs(rows[0] - (390 - 40)) <= 1, `a row of the menu of pages is ${rows[0]}px wide, not the column's 350px`);
   // The highlight does not touch its icon: the row has padding before the label.
   const inset = await page.evaluate(() => {
     const link = [...document.querySelectorAll("a")].find((a) => a.getBoundingClientRect().width > 0 && a.textContent.trim() === "Components");

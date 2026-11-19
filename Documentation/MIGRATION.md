@@ -103,6 +103,10 @@ pt_BR, `74%` for `0.736.formatted(.percent.precision(.fractionLength(0)))`, and 
 
 ### Looks that changed
 
+- **A `LazyVGrid` column is never wider than the grid.** With `GridItem(.adaptive(minimum:))` and a minimum larger than
+  the width the grid is offered (`.adaptive(minimum: 400)` in a 350-point phone column), the one column kept the
+  minimum and the cells ran past the right edge of the screen. The column now takes the grid's width, as in SwiftUI;
+  where the minimum fits, nothing changes. A `LazyHGrid`'s rows keep the plain minimum.
 - **A mobile tab's scroll view ends clear of the floating bar.** The last content of the shown tab scrolled under the
   bottom bar (the clearance rule waited for a marker nothing set). The layout now adds `--tab-content-clearance` (96
   points plus the home indicator by default) to the bottom of the outer vertical scroll view's content, as the iOS tab

@@ -19,6 +19,8 @@ struct GridItemBoundsTests {
     }
     #expect(node.attributes["data-grid-tracks"] == "adaptive:80.0:160.0:::|flexible:24.0:120.0:::|flexible:10.0:inf:::")
     let property = horizontal ? "grid-template-rows" : "grid-template-columns"
-    #expect(node.styles[property] == "repeat(auto-fit, minmax(80px, 160px)) minmax(24px, 120px) minmax(10px, 1fr)")
+    // A column's adaptive minimum is capped at the grid's width, so it never overflows the grid; a row's is not.
+    let adaptiveFloor = horizontal ? "80px" : "min(80px, 100%)"
+    #expect(node.styles[property] == "repeat(auto-fit, minmax(\(adaptiveFloor), 160px)) minmax(24px, 120px) minmax(10px, 1fr)")
   }
 }

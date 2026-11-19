@@ -1301,8 +1301,12 @@ export class CssLayout {
     // Along the grid (a LazyVGrid's rows, a LazyHGrid's columns) the cells are `data-row-spacing` apart.
     const rowGap = num(e.getAttribute('data-row-spacing'), n.spacing);
     const adaptive = tracks.find(t => t.type === 'adaptive');
-    if (adaptive) push(horizontal ? 'grid-template-rows' : 'grid-template-columns', `repeat(auto-fill,minmax(${px(adaptive.min)},${adaptive.max === Infinity ? '1fr' : px(adaptive.max)}))`);
-    else push(horizontal ? 'grid-template-rows' : 'grid-template-columns', cols.join(' '));
+    // A LazyVGrid's adaptive minimum is never wider than the grid: one column as wide as the grid, as in SwiftUI, not one that
+    // overflows it. A LazyHGrid keeps the plain minimum (a percentage of an indefinite height does not resolve).
+    if (adaptive) {
+      const floor = horizontal ? px(adaptive.min) : `min(${px(adaptive.min)},100%)`;
+      push(horizontal ? 'grid-template-rows' : 'grid-template-columns', `repeat(auto-fill,minmax(${floor},${adaptive.max === Infinity ? '1fr' : px(adaptive.max)}))`);
+    } else push(horizontal ? 'grid-template-rows' : 'grid-template-columns', cols.join(' '));
     push(horizontal ? 'grid-template-columns' : 'grid-template-rows', 'none');
     push('grid-auto-flow', horizontal ? 'column' : 'row');
     // The spacing after the first track is the gap between tracks (a per-track spacing is not expressible).
