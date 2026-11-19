@@ -272,6 +272,38 @@ settled fractions to Swift (`split-positions`), so the next render places the sl
 wraps, a ScrollView and a split view in a pane, a publication and a resize) has its boxes checked against the recorded ones, and the
 test requires that the mapper refuses nothing in it and that no root is left without a layout.
 
+## The document scrolls
+
+A phone's browser draws its bars over the page and shrinks them as the page scrolls, but only when the document itself
+scrolls. The window's root is proposed `100dvh`, so a screen's ScrollView kept the scrolling in a box of the window's height:
+the page ended a bar's height above the bottom of the screen and the bars never shrank. On a touch screen
+(`pointer: coarse`) `Tools/document-scroll.js`, which `layout-host.js` runs at the end of every pass, hands the scrolling of
+the page's scroll view to the document:
+
+- **Which scroll view.** The vertical ScrollView, outside any other, as wide as the window and reaching its bottom (the
+  shown tab's, when the window is a TabView). Nothing between it and the window may keep a box of its own: no
+  NavigationStack, sidebar-adaptable TabView, GeometryReader, user-defined Layout, split view or presentation, and no layer
+  (an overlay) smaller than the view it covers, which would be placed against a view as tall as the page. Such a window
+  keeps the scroll view's own scrolling.
+- **Its chain grows.** The scroll view and the views around it up to the window (`data-document-scroll-chain`) are as tall
+  as what they hold, and never shorter than the screen less what sits above and below them (`--document-scroll-min`): a
+  short page still fills the screen. A view of the chain that clipped or scrolled (a TabView's panel) clips across only.
+- **What is around it sticks.** The views beside the chain stay where they are on the screen: those above it stick at the
+  top (a header, a Divider), those below it at the bottom (a bar, a bottom `safeAreaInset`), measured with nothing stuck.
+  One that paints no background gets the window's, since SwiftUI shows the window there and not the page scrolled under it.
+  The document's `scroll-padding-top` is what sticks at the top, and it has no scroll anchoring: a header that grows (a
+  menu that opens in it) does not move the page, as a scroll view below a header keeps its offset.
+- **The scroll view answers for the document.** Its `scrollTop`, `scrollTo`, `scrollBy`, `scrollHeight` and
+  `clientHeight`, its box (the screen between what sticks at the top and at the bottom) and its `scroll` events are the
+  document's, so the hosts that read or move a scroll view (scroll positions, lazy stacks, `scrollTo`, a large title)
+  work unchanged. A pass that lays the page out shorter for a moment (a ViewThatFits measured) puts the document's offset
+  back.
+- **Each tab keeps its offset.** The offset of a scroll view is kept as it scrolls; another tab's opens at its own, and
+  a scroll view handed back to its own scrolling (a pointer that is no longer coarse) keeps it.
+
+The rules are a constructed stylesheet of the module, outside the stylesheet's layers and `!important` like the mapper's
+blocks, which they outrank by specificity. `Tools/test-document-scroll-browser.mjs` checks them on the project site.
+
 ## Checks
 
 | Check | What |

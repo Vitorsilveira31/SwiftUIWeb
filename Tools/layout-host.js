@@ -3,16 +3,21 @@
  * after every DOM patch, and keeps the DOM patch away from what the layout owns.
  * A root nobody can lay out is reported once (`metrics.unlaid`), not laid out.
  */
+import {DocumentScroll} from './document-scroll.js';
 // The `display: none` of an element the layout hides (`data-layout-hidden`): a DOM patch that writes Swift's own `display`
 // there would show what the layout hides (a ViewThatFits's other candidates). The CSS layout's container lengths
 // (`--sl-cw`, `--sl-ch`) are the layout's too, and so are the lengths of the blocks the mapper writes (`--cl-len<i>`, see
 // `lengthVariables`).
 // `--motion-` properties are the transition host's: the box and color of a screen under a push (transition-host.js).
-export function ownsLayoutStyle(element, name) { return (name === 'display' && element.hasAttribute('data-layout-hidden')) || name.startsWith('--sl-') || name.startsWith('--cl-') || name.startsWith('--motion-'); }
+// `--document-scroll-` and `--document-sticky-` properties are the document scroll's: how tall the page's chain stays and where a
+// stuck view sits (document-scroll.js).
+export function ownsLayoutStyle(element, name) { return (name === 'display' && element.hasAttribute('data-layout-hidden')) || name.startsWith('--sl-') || name.startsWith('--cl-') || name.startsWith('--motion-') || name.startsWith('--document-scroll-') || name.startsWith('--document-sticky-'); }
 // The attributes the layout writes, which a DOM patch leaves alone. Swift renders a ViewThatFits with its first candidate
 // selected (`data-fit-selected`); the CSS mapper moves the selection, which a later publication that patches the candidate
 // must not undo.
-export function ownsLayoutAttribute(name) { return name === 'data-layout-hidden' || name === 'data-text-fit' || name === 'data-fit-selected' || name === 'data-measuring' || name === 'data-cl' || name.startsWith('data-cl-'); }
+// The document scroll marks the page's scroll view, its chain and what sticks (`data-document-scroll*`, `data-document-sticky*`;
+// not `data-document-head`, which is Swift's and a patch keeps current).
+export function ownsLayoutAttribute(name) { return name === 'data-layout-hidden' || name === 'data-text-fit' || name === 'data-fit-selected' || name === 'data-measuring' || name === 'data-cl' || name.startsWith('data-cl-') || name.startsWith('data-document-scroll') || name.startsWith('data-document-sticky'); }
 // A window resize holds CSS transitions off for this many ms after its last step: an element with an `.animation` modifier
 // (a progress bar) would otherwise run its transition on every step, and each frame of it is a commit and a layout pass.
 export const RESIZE_SETTLE_MS = 300;
@@ -44,6 +49,10 @@ export class SemanticLayoutHost {
     this.ownAttributes=new Set(['data-layout-hidden','data-fit-selected','data-cl','data-measuring','fetchpriority','loading','decoding']);
     // The mapper's factory (`options.cssLayout`, from Tools/css-layout.js): the page's CSS layout.
     this.css=options.cssLayout(this.document,{onProposal:options.onProposal,onLayoutSizes:options.onLayoutSizes});
+    // On a touch screen the page's scroll view hands its scrolling to the document (document-scroll.js); a pointer that
+    // changes (a tablet's keyboard and trackpad) asks for a pass that hands it back or over.
+    this.documentScroll=new DocumentScroll(root);
+    this.documentScroll.media?.addEventListener?.('change',()=>{this.epoch++;this.schedule();},{signal:this.abort.signal});
     if(this.performanceDiagnostics)this.window.__cssLayoutInstance=this.css;
     this.mutations=new this.window.MutationObserver(records=>this.collect(records));
     this.observeMutations=()=>this.mutations.observe(root,{attributes:true,attributeOldValue:true,childList:true,subtree:true,characterData:true});
@@ -149,6 +158,7 @@ export class SemanticLayoutHost {
     // A commit whose patch wrote nothing the layout reads, with nothing scheduled, finds nothing to claim or to style.
     if(!requested&&this.unchangedSincePass()){this.metrics.passesSkipped++;this.metrics.unlaid=this.unlaid.size;completed=true;return;}
     this.unlaid=new Set();
+    this.documentScroll.begin();
     // The CSS of the islands the mapper already holds goes in
     // before the first read below: the analysis reads attributes only, so the patch and the CSS are recalculated by one
     // forced style recalculation instead of one each. An island claimed during this pass is styled at its end.
@@ -168,7 +178,8 @@ export class SemanticLayoutHost {
     // The texts are measured once the pass laid everything out: each takes the width of the lines it draws (`fitTexts`).
     // Its own writes are not records of the page.
     this.mutations.disconnect();
-    try{this.css.fitTexts();}finally{this.observeMutations();}
+    // The page's scroll view follows the pass: which one it is, what sticks and how tall the chain stays.
+    try{this.css.fitTexts();this.documentScroll.sync();}finally{this.observeMutations();}
     this.metrics.passes++;
     this.metrics.unlaid=this.unlaid.size;
     this.passed={epoch:this.epoch,resizedAt:this.resizedAt};
@@ -298,5 +309,5 @@ export class SemanticLayoutHost {
     try{this.update();}catch(e){this.onError(e);}
   }
   get pending(){return this.scheduled!==0;}
-  dispose(){this.disposed=true;this.abort.abort();this.window.clearTimeout(this.resizeTimer);this.document.documentElement.removeAttribute(RESIZING_ATTRIBUTE);this.mutations.disconnect();this.globals.disconnect();if(this.scheduled)this.window.cancelAnimationFrame(this.scheduled);}
+  dispose(){this.disposed=true;this.abort.abort();this.documentScroll.dispose();this.window.clearTimeout(this.resizeTimer);this.document.documentElement.removeAttribute(RESIZING_ATTRIBUTE);this.mutations.disconnect();this.globals.disconnect();if(this.scheduled)this.window.cancelAnimationFrame(this.scheduled);}
 }

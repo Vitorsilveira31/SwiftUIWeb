@@ -649,7 +649,8 @@ view-transition-browser-test:
 	bun Tools/test-view-transition-browser.mjs
 	$(ON_WEBKIT) bun Tools/test-view-transition-browser.mjs
 
-# The project site (Examples/ShowcaseSite) in Chromium and WebKit, in the Worker and on the main thread.
+# The project site (Examples/ShowcaseSite) in Chromium and WebKit, in the Worker and on the main thread, and on a phone's touch
+# screen, where its page scroll view hands its scrolling to the document (Tools/document-scroll.js).
 react-board-parity-test:
 	(cd Benchmarks/ReactComparison/react-board && bun install --frozen-lockfile && bun build.mjs)
 	BUILD_ONLY=1 CONFIGURATION=release Tools/run-browser.sh board
@@ -690,6 +691,8 @@ showcase-site-test:
 	BUILD_ONLY=1 CONFIGURATION=release Tools/run-browser.sh site
 	bun Tools/test-showcase-site-browser.mjs
 	$(ON_WEBKIT) bun Tools/test-showcase-site-browser.mjs
+	bun Tools/test-document-scroll-browser.mjs
+	$(ON_WEBKIT) bun Tools/test-document-scroll-browser.mjs
 
 # The project site on Cloudflare (Tools/cloudflare-site): a Worker that serves the ShowcaseSite release bundle as static
 # assets. The deploy signs in with `cf auth login` on a workstation, or CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID
