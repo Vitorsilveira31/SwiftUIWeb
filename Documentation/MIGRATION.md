@@ -180,6 +180,14 @@ pt_BR, `74%` for `0.736.formatted(.percent.precision(.fractionLength(0)))`, and 
   material and hairline once its vertical scroll view scrolls under it (the host marks the view with `data-scrolled`). A
   screen whose background fills the window (a reader's paper) shows through the bar; an app that made the bar transparent
   with its own CSS can drop it.
+- **A view that ignores the safe area runs under the navigation bar, as on iOS.** A screen of a NavigationStack is laid
+  out below the bar (its safe area) and the bar is drawn over it, but `.ignoresSafeArea()` only made a view fill its own
+  box, so a reader's paper (`ZStack { paper.ignoresSafeArea(); … }`) stopped at the bar and the window's background
+  showed behind the back button. Now a view that ignores the safe area, fills the height it is offered and reaches the
+  top of the screen grows up to the top of the stack, under the bar; a background layer
+  (`.background { color.ignoresSafeArea() }`) does too. The rest of the screen still starts below the bar, and a view of
+  a fixed height, one that does not reach the top, one inside a scroll view and one under a hidden bar stay where they
+  were. An application that pulled such a view up with its own CSS can drop it.
 - **A VideoPlayer that takes no touches shows no controls.** Under `.allowsHitTesting(false)` (on the player or a
   container) the AVKit controls stayed on screen, inert, over a player screen that draws its own transport. On iOS they
   appear only in answer to a touch, so they never show there; the page now hides them too, and the app no longer needs CSS
