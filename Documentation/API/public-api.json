@@ -17804,6 +17804,12 @@
     {
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/State.swift",
+      "signature": "public func _install()",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebCore",
+      "file": "Sources/SwiftUIWebCore/State.swift",
       "signature": "public func _isStructural(_ source: _StateSourceID) -> Bool",
       "availability": []
     },

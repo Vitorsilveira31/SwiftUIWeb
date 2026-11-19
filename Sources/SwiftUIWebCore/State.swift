@@ -1420,7 +1420,16 @@ extension Set: _WriteEquatable where Element: _WriteEquatable {}
     let storage = self.storage
     return _assumeMainActor { storage.registeredStateBox() }
   }
+
+  /// Installs the state in the current render scope (`View._installState`): its storage takes the box of the view's
+  /// identity, so later reads, in the body or in an action that runs outside any scope, see that box. Records no read.
+  public func _install() {
+    let storage = self.storage
+    _assumeMainActor { _ = storage.registeredStateBox() }
+  }
 }
+
+extension State: _InstallableState {}
 
 /// SwiftUI-shaped focus state. Focus is ordinary Fiber-owned state; the
 /// browser host only sees the `focus`/`blur` event metadata emitted by the
@@ -1529,18 +1538,27 @@ extension Set: _WriteEquatable where Element: _WriteEquatable {}
   }
 
   private func _read() -> ObjectType {
-    let object: ObjectType
-    if let scope = StateRuntime.scope {
-      let key = scope.key(for: storage)
-      object = scope.store.object(key, create: storage.seed())
-      storage.adopt(object)
-      storage.attachedStore = scope.store
-      storage.attachedKey = key
-      scope.store.observe(object)
-    } else {
-      object = storage.seed()
-    }
+    guard let scope = StateRuntime.scope else { return storage.seed() }
+    let object = _attach(in: scope)
+    scope.store.observe(object)
     return object
+  }
+
+  /// The object of the view's identity in `scope`'s store, which this wrapper adopts.
+  private func _attach(in scope: StateScope) -> ObjectType {
+    let key = scope.key(for: storage)
+    let object = scope.store.object(key, create: storage.seed())
+    storage.adopt(object)
+    storage.attachedStore = scope.store
+    storage.attachedKey = key
+    return object
+  }
+
+  /// Installs the object in the current render scope (`View._installState`): an action that runs outside any scope
+  /// then reads the object of the view's identity, not the one this value of the view would create. Observes nothing.
+  public func _install() {
+    guard let scope = StateRuntime.scope else { return }
+    _ = _attach(in: scope)
   }
 
 #if hasFeature(Embedded)
@@ -1556,6 +1574,33 @@ extension Set: _WriteEquatable where Element: _WriteEquatable {}
   }
 #endif
 }
+
+extension StateObject: _InstallableState {}
+
+/// A property a view's state scope installs before the view's body is formed (`View._installState`).
+protocol _InstallableState {
+  @MainActor func _install()
+}
+
+#if !hasFeature(Embedded)
+/// View types none of whose stored properties is installable state, so their bodies skip the reflection.
+@MainActor private var _viewTypesWithoutState: Set<ObjectIdentifier> = []
+
+/// `View._installState` where there is reflection: installs every `@State` and `@StateObject` of `view`, in the order
+/// they are declared, so their slots in the scope are the same on every render.
+@MainActor func _installStateByReflection<V: View>(_ view: V) {
+  guard StateRuntime.scope != nil else { return }
+  let type = ObjectIdentifier(V.self)
+  if _viewTypesWithoutState.contains(type) { return }
+  var installed = false
+  for child in Mirror(reflecting: view).children {
+    guard let state = child.value as? any _InstallableState else { continue }
+    state._install()
+    installed = true
+  }
+  if !installed { _viewTypesWithoutState.insert(type) }
+}
+#endif
 
 @MainActor @preconcurrency @propertyWrapper public struct ObservedObject<ObjectType: AnyObject>: DynamicProperty {
   /// `$model`: reads the object through the view's observation scope on each access, so

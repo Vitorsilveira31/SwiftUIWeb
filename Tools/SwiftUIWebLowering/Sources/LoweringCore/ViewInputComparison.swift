@@ -45,7 +45,7 @@ public struct ViewInputComparisonTransform: SourceTransform {
 
     var insertions: [(offset: Int, text: String)] = []
     for scope in index.scopes {
-      guard let view = scope.node.as(StructDeclSyntax.self), isView(view) else { continue }
+      guard let view = scope.node.as(StructDeclSyntax.self), ViewDeclarations.isView(view) else { continue }
       let path = scope.path
       // A nested private view is out of reach of an extension at file scope.
       if path.count > 1 && (view.modifiers.contains(.private) || view.modifiers.contains(.fileprivate)) { continue }
@@ -61,8 +61,8 @@ public struct ViewInputComparisonTransform: SourceTransform {
       let qualified = path.joined(separator: ".")
       if plain.contains("extension \(qualified) {\n  \(access)static var _comparesInputs") { continue }
       // The declaration at file scope that holds the view (itself, when it is at file scope).
-      guard let outer = outermostScope(of: scope, in: index), outer.path.count == 1 else { continue }
-      if conditionalBranches(of: scope.node) != conditionalBranches(of: outer.node) { continue }
+      guard let outer = ViewDeclarations.outermostScope(of: scope, in: index), outer.path.count == 1 else { continue }
+      if ViewDeclarations.conditionalBranches(of: scope.node) != ViewDeclarations.conditionalBranches(of: outer.node) { continue }
       guard let names = inputNames(of: view, bytes: bytes) else { continue }
       let comparison = names.isEmpty
         ? "true"
@@ -84,34 +84,6 @@ public struct ViewInputComparisonTransform: SourceTransform {
       edits = edits.map { TextEdit(start: min($0.start, output.utf8.count), end: min($0.end, output.utf8.count), replacement: $0.replacement) }
     }
     return try apply(edits, to: output)
-  }
-
-  private func isView(_ declaration: StructDeclSyntax) -> Bool {
-    guard let clause = declaration.inheritanceClause else { return false }
-    return clause.inheritedTypes.contains { ["View", "SwiftUI.View", "SwiftUIWeb.View"].contains($0.type.trimmedDescription) }
-  }
-
-  /// The top-most type scope that holds `scope`, itself included.
-  private func outermostScope(of scope: TypeScope, in index: ScopeIndex) -> TypeScope? {
-    var result = scope
-    var parent = scope.node.parent
-    while let node = parent {
-      if let enclosing = index.scope(of: node) { result = enclosing }
-      parent = node.parent
-    }
-    return result
-  }
-
-  /// The `#if` branches that hold a node, outermost first: each `#if`, `#elseif` and `#else` is a branch of its own,
-  /// so two nodes with the same branches are compiled together.
-  private func conditionalBranches(of node: Syntax) -> [SyntaxIdentifier] {
-    var branches: [SyntaxIdentifier] = []
-    var parent = node.parent
-    while let current = parent {
-      if current.is(IfConfigClauseSyntax.self) { branches.append(current.id) }
-      parent = current.parent
-    }
-    return branches.reversed()
   }
 
   /// The stored inputs of a view's body, or nil when the view cannot compare them: a property the runtime does not
@@ -159,5 +131,37 @@ public struct ViewInputComparisonTransform: SourceTransform {
         accessor.accessorSpecifier.tokenKind == .keyword(.willSet) || accessor.accessorSpecifier.tokenKind == .keyword(.didSet)
       }
     }
+  }
+}
+
+/// What the passes that write an extension for each of an application's views (`view-inputs`, `state-installation`)
+/// read of a view declaration.
+enum ViewDeclarations {
+  static func isView(_ declaration: StructDeclSyntax) -> Bool {
+    guard let clause = declaration.inheritanceClause else { return false }
+    return clause.inheritedTypes.contains { ["View", "SwiftUI.View", "SwiftUIWeb.View"].contains($0.type.trimmedDescription) }
+  }
+
+  /// The top-most type scope that holds `scope`, itself included.
+  static func outermostScope(of scope: TypeScope, in index: ScopeIndex) -> TypeScope? {
+    var result = scope
+    var parent = scope.node.parent
+    while let node = parent {
+      if let enclosing = index.scope(of: node) { result = enclosing }
+      parent = node.parent
+    }
+    return result
+  }
+
+  /// The `#if` branches that hold a node, outermost first: each `#if`, `#elseif` and `#else` is a branch of its own,
+  /// so two nodes with the same branches are compiled together.
+  static func conditionalBranches(of node: Syntax) -> [SyntaxIdentifier] {
+    var branches: [SyntaxIdentifier] = []
+    var parent = node.parent
+    while let current = parent {
+      if current.is(IfConfigClauseSyntax.self) { branches.append(current.id) }
+      parent = current.parent
+    }
+    return branches.reversed()
   }
 }

@@ -25,6 +25,12 @@ public protocol View {
   /// Whether the view renders through its own `_render` although it has a body: an `Animatable` view renders its body
   /// with the data its animation has reached (`Animator.swift`), so a renderer must not form the body itself.
   static var _swiftUIWebRendersItself: Bool { get }
+  /// Installs the view's `@State` and `@StateObject` properties in the current state scope, before its body is formed:
+  /// SwiftUI installs a view's state before it evaluates the body, so the body, the closures it builds and the actions
+  /// it registers (`onAppear`, a button's action) all read the storage of the view's identity, never the initial value
+  /// a later value of the view brings. The source lowering writes it for an application's views (Embedded Swift has no
+  /// reflection); elsewhere the default finds the properties with a `Mirror`.
+  func _installState()
 }
 
 /// Collections below this size stay on the ordinary eager path when the
@@ -39,7 +45,13 @@ public extension View {
   static var _swiftUIWebRendersItself: Bool { false }
   package nonisolated func eraseToAnyView() -> AnyView { AnyView(self) }
   func _render(in context: _RenderContext) -> _RenderNode {
-    body._render(in: context)
+    _installState()
+    return body._render(in: context)
+  }
+  func _installState() {
+    #if !hasFeature(Embedded)
+    _installStateByReflection(self)
+    #endif
   }
 }
 
@@ -120,6 +132,7 @@ struct _RenderScopeSaved {
       return node
     }
   }
+  view._installState()
   // Form every body-backed layer while the current owner is tracked. The
   // final primitive/container renderer runs later, outside this access list;
   // nested AnyViews then install their own native tracking scopes.
