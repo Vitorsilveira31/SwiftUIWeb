@@ -3330,13 +3330,15 @@
   }
 
   .button-plain[data-visible-shape]:hover:not(:disabled),
-  .button-borderless[data-visible-shape]:hover:not(:disabled) {
+  .button-borderless[data-visible-shape]:hover:not(:disabled),
+  .navigation-link[data-button-style="plain"][data-visible-shape]:hover {
     background-color: var(--color-swu-accent);
     color: var(--color-swu-accent-foreground);
   }
 
   .button-plain:not(:disabled):active,
-  .button-borderless:not(:disabled):active {
+  .button-borderless:not(:disabled):active,
+  .navigation-link[data-button-style="plain"]:active {
     opacity: 0.6;
   }
 
@@ -3414,6 +3416,26 @@
   }
 
   
+
+  /* A plain button, and a NavigationLink under `.buttonStyle(.plain)`, draw their label in the font and foreground style
+     around them, as SwiftUI's plain style: no tint, no control font. A destructive plain or borderless button is red
+     text, not a red fill. */
+  .button-plain,
+  .push-button[data-button-style="plain"],
+  .navigation-link[data-button-style="plain"] {
+    color: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    line-height: inherit;
+  }
+  .button-plain[data-role="destructive"],
+  .button-borderless[data-role="destructive"],
+  .push-button[data-button-style="plain"][data-role="destructive"],
+  .push-button[data-button-style="borderless"][data-role="destructive"] {
+    border-color: transparent;
+    background-color: transparent;
+    color: var(--color-swu-destructive);
+  }
 
   /* Borderless buttons use the tint for their label, whatever the generic ghost rules above set. */
   .button-borderless[data-tint],
@@ -4798,19 +4820,15 @@
     border: 2px solid var(--tab-background, var(--color-swu-background));
   }
 
-  /* The floating button overlays content. Scroll owners inside the active
-     tab keep clearance after their last content so it is never covered. */
-  .tab-view[data-tab-layout="mobile"] .tab-panel[data-content-overflow]::after,
-  .tab-view[data-tab-layout="mobile"] .tab-panel .scroll-vertical[data-content-overflow]::after,
-  .tab-view[data-tab-layout="mobile"] .tab-panel .scroll-both[data-content-overflow]::after {
-    content: "";
-    position: absolute;
-    top: var(--content-extent, 100%);
-    left: 0;
-    width: 1px;
-    height: var(--tab-content-clearance, calc(96px + env(safe-area-inset-bottom, 0px)));
-    visibility: hidden;
-    pointer-events: none;
+  /* The floating bar (or menu button) overlays the content, as the iOS tab bar does: the outer vertical scroll view of
+     the shown tab ends with room for it and the home indicator, so its last content scrolls clear of the bar. The
+     layout adds `--scroll-end-clearance` to the bottom padding of a scroll view's last content; every scroll view sets
+     it back to none for its own content, so only the outer one keeps it. A screen that hides the bar keeps none. */
+  .scroll-view {
+    --scroll-end-clearance: 0px;
+  }
+  .tab-view[data-tab-layout="mobile"]:not([data-tab-bar-hidden="true"]) .tab-panel :is(.scroll-vertical, .scroll-both):not(:is(.scroll-vertical, .scroll-both) *) {
+    --scroll-end-clearance: var(--tab-content-clearance, calc(96px + env(safe-area-inset-bottom, 0px)));
   }
 
   /* Mobile with up to five tabs: a floating bottom tab bar instead of the menu button. */
@@ -5969,6 +5987,12 @@
 }
 
 @property --tab-bottom-inset {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+@property --scroll-end-clearance {
   syntax: "<length>";
   inherits: true;
   initial-value: 0px;

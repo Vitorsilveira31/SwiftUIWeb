@@ -966,6 +966,19 @@ struct CorePublicViewContractTests {
   }
 
   @Test
+  func plainNavigationLinkIsAPlainButtonWithItsLabelsShape() {
+    // Under `.buttonStyle(.plain)` a NavigationLink is marked plain (it keeps the look around it) and takes its label's
+    // `contentShape` as its highlight, as a plain Button does; a link without the style is not marked.
+    let plain = StaticHTMLFiberRenderer().render(NavigationStack {
+      NavigationLink(value: 1) { Text("Editar perfil").contentShape(Rectangle()) }.buttonStyle(.plain)
+    })
+    #expect(plain.contains("data-button-style=\"plain\""))
+    #expect(plain.contains("data-visible-shape=\"true\""))
+    let tinted = StaticHTMLFiberRenderer().render(NavigationStack { NavigationLink(value: 1) { Text("Ver tudo") } })
+    #expect(!tinted.contains("data-button-style=\"plain\""))
+  }
+
+  @Test
   func resizableImageStretchesAndAFitKeepsItsRatio() {
     // `resizable()` alone stretches the image to its frame, as in SwiftUI; `scaledToFit` / `scaledToFill` set their fit.
     let stretched = StaticHTMLFiberRenderer().render(Image("ledge.png").resizable().frame(width: 300, height: 200))
