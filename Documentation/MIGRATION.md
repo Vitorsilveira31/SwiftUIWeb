@@ -103,6 +103,12 @@ pt_BR, `74%` for `0.736.formatted(.percent.precision(.fractionLength(0)))`, and 
 
 ### Looks that changed
 
+- **A scroll view runs under a bottom `safeAreaInset`, as in SwiftUI.** The content and the inset were stacked, so a
+  `ScrollView` ended where a floating bottom bar began and nothing scrolled under it. When the inset's content is a
+  vertical scroll view (through its background, overlay, frame or padding), it now keeps its full height and the inset
+  paints over it; the layout measures the inset and ends the scroll content with that room
+  (`--safe-area-inset-extent`), so its last row still scrolls clear of the bar. Other content keeps the track above the
+  inset.
 - **A `LazyVGrid` column is never wider than the grid.** With `GridItem(.adaptive(minimum:))` and a minimum larger than
   the width the grid is offered (`.adaptive(minimum: 400)` in a 350-point phone column), the one column kept the
   minimum and the cells ran past the right edge of the screen. The column now takes the grid's width, as in SwiftUI;
