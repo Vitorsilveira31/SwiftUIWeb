@@ -67,6 +67,9 @@ function render() {
   ${button(32,'Shortcut').replace('<button ','<button data-keyboard-shortcut="k|command" ')}
   <button disabled data-keyboard-shortcut="j|command" ${attr('shortcut-disabled',34,'click')} id="b34">Disabled shortcut</button>
   <button id="press" data-press-tracking="true" ${attr('press',33,'click,pressed')}>Press <span>label</span></button>
+  <div id="drag-card" ${attr('drag-card',93,'gesture')} data-gesture-count="1" data-gesture-descriptors="kind=drag;minDistance=6" style="width:260px;padding:12px;background:#eee">Café com Destino</div>
+  <div id="plain-text" style="width:260px;padding:12px">Texto que se seleciona</div>
+  <div id="drag-chrome" ${attr('drag-chrome',95,'drag-changed,drag-ended')} data-gesture-count="1" data-gesture-event-prefix-0="drag" data-gesture-descriptors="kind=drag;minDistance=55" style="width:260px;padding:12px;background:#ddd"><button id="drag-chrome-button" ${attr('drag-chrome-button',96,'click')}>Play</button></div>
   <div role="tablist" ${attr('tabs')}>${[0,1].map(i=>`<button role="tab" ${attr('tab-'+i,14+i,'click')} aria-selected="${state.tab===i}" id="tab${i}">Tab ${i}</button>`).join('')}</div>
   <main ${attr('page-'+state.page)} id="page"><h1>Page ${state.page}</h1>${button(100+state.page,'Page action','page-action-'+state.page)}<div data-view-id="lower-card" style="margin-top:400px">Anchor target</div></main>
   </section>`;
@@ -110,7 +113,7 @@ const api={memory,
     else if(id===17)state.imageVersion++;
     else if(id===100+state.page)state.count++;
     else if(id===32||id===33)state.count++;
-    else if([41,42,43,44].includes(id)){} // the owners of `submitFields` and `focusShell`: only recorded
+    else if([41,42,43,44,96].includes(id)){} // the owners of `submitFields` and `focusShell`: only recorded
     else {stats.invalid++;return}
     render();
   },

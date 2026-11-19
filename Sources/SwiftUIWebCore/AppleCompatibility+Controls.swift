@@ -22,6 +22,11 @@ enum _GroupedListKey: EnvironmentKey {
   static let defaultValue = false
 }
 
+/// True inside a `Menu`'s content: a Picker there lists its options as the menu's checkable items, as in SwiftUI.
+enum _MenuContentKey: EnvironmentKey {
+  static let defaultValue = false
+}
+
 package enum _ListSelectionKey: EnvironmentKey {
   package static let defaultValue: _ListSelection? = nil
 }
