@@ -966,6 +966,26 @@ struct CorePublicViewContractTests {
   }
 
   @Test
+  func resizableImageStretchesAndAFitKeepsItsRatio() {
+    // `resizable()` alone stretches the image to its frame, as in SwiftUI; `scaledToFit` / `scaledToFill` set their fit.
+    let stretched = StaticHTMLFiberRenderer().render(Image("ledge.png").resizable().frame(width: 300, height: 200))
+    #expect(stretched.contains("object-fit: fill"))
+    let fitted = StaticHTMLFiberRenderer().render(Image("ledge.png").resizable().scaledToFit())
+    #expect(fitted.contains("object-fit: contain"))
+    let filled = StaticHTMLFiberRenderer().render(Image("ledge.png").resizable().scaledToFill())
+    #expect(filled.contains("object-fit: cover"))
+  }
+
+  @Test
+  func stackedTransformsComposeInModifierOrder() {
+    // An offset then a scale both apply, the outer one first in the CSS list, as the offset modifier already chains.
+    let html = StaticHTMLFiberRenderer().render(Color.red.frame(width: 10, height: 10).offset(y: 540).scaleEffect(0.5))
+    #expect(html.contains("scale(0.5) translate(0px, 540px)"))
+    let twice = StaticHTMLFiberRenderer().render(Color.red.frame(width: 10, height: 10).scaleEffect(2).rotationEffect(.degrees(0)))
+    #expect(twice.contains("rotate(0.0rad) scale(2.0)"))
+  }
+
+  @Test
   func swiftUIOwnersOfImageListAndToolbarModifiersKeepTheirBehavior() throws {
     // `resizable`, `interpolation` and `antialiased` are `Image -> Image` in SwiftUI, so they chain in any order.
     let image: Image = Image("donut.png").resizable().interpolation(.none).antialiased(true)

@@ -579,6 +579,10 @@ public nonisolated struct _SemanticCompatibilityModifier: ViewModifier {
           // Filters chain, in the order of the modifiers (`.blur` then `.contrast` applies both), and a `colorMultiply`
           // before them keeps its place.
           node.styles["filter"] = existing + " " + value
+        } else if key == "transform", let existing = node.styles["transform"], !existing.isEmpty, existing != "none" {
+          // Transforms compose, as in SwiftUI: `.offset(y: 20).scaleEffect(0.9)` moves the view and then scales it, so the
+          // outer modifier comes first in the CSS list (applied last), as `StyleModifier` does for an offset.
+          node.styles["transform"] = value + " " + existing
         } else {
           node.styles[isText && key == "box-shadow" ? "text-shadow" : key] = value
         }
