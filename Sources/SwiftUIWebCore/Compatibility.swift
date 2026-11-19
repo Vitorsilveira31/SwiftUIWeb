@@ -897,6 +897,20 @@ private func _scrollEdgeToken(_ edge: Edge) -> String {
   }
 }
 
+/// The CSS gradient of a mask that is a gradient (a `LinearGradient` or `RadialGradient` view, alone or framed), which
+/// CSS can use as `mask-image` directly. A gradient view renders as a rectangle painted with it (`data-shape-paint`).
+@MainActor private func _maskGradient(in node: _RenderNode) -> String? {
+  var current: _RenderNode? = node
+  while let candidate = current {
+    if let paint = candidate.attributes["data-shape-paint"],
+       paint.hasPrefix("linear-gradient(") || paint.hasPrefix("radial-gradient(") {
+      return paint
+    }
+    current = candidate.children.count == 1 ? candidate.children[0] : nil
+  }
+  return nil
+}
+
 package nonisolated struct MaskCompatibilityModifier<Mask: View>: ViewModifier {
   private let mask: () -> Mask
   public init(mask: @escaping () -> Mask) { self.mask = mask }
@@ -904,7 +918,15 @@ package nonisolated struct MaskCompatibilityModifier<Mask: View>: ViewModifier {
     let maskNode = AnyView(mask())._render(in: context.child(_FiberKey("mask")))
     guard !maskNode.isEmpty else { return }
     let original = node.cloneSharingChildren()
-    if let path = maskNode.attributes["data-shape-path"], !path.isEmpty {
+    if let gradient = _maskGradient(in: maskNode) {
+      // A gradient masks by its alpha, as SwiftUI's `.mask { LinearGradient(...) }` fades the content out.
+      original.styles["mask-image"] = gradient
+      original.styles["-webkit-mask-image"] = gradient
+      original.styles["mask-size"] = "100% 100%"
+      original.styles["-webkit-mask-size"] = "100% 100%"
+      original.styles["mask-repeat"] = "no-repeat"
+      original.styles["-webkit-mask-repeat"] = "no-repeat"
+    } else if let path = maskNode.attributes["data-shape-path"], !path.isEmpty {
       let maskURI = _svgMaskDataURI(path: path)
       original.styles["mask-image"] = "url(\"\(maskURI)\")"
       original.styles["-webkit-mask-image"] = "url(\"\(maskURI)\")"
@@ -921,9 +943,9 @@ package nonisolated struct MaskCompatibilityModifier<Mask: View>: ViewModifier {
     // The mask view remains in the semantic tree for accessibility and
     // reconciliation, but its pixels must not cover the masked content once
     // the CSS/SVG mask is active.
-    if original.styles["mask-image"] != nil {
+    if let image = original.styles["mask-image"] {
       maskNode.styles["display"] = "none"
-      node.attributes["data-mask-backend"] = "svg"
+      node.attributes["data-mask-backend"] = image.hasPrefix("url(") ? "svg" : "gradient"
     }
     node.children = [original, maskNode]
     node.events = .init()

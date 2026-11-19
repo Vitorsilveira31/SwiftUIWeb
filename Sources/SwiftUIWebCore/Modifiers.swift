@@ -1090,10 +1090,12 @@ public extension Shape where Self == RoundedRectangle {
 public extension Shape {
   nonisolated func _render(in context: _RenderContext) -> _RenderNode {
     // A shape with animatable data draws the path of the data its animation has reached (`Animator.swift`).
-    guard Self._swiftUIWebAnimates else { return _svgShapeNode(shape: self, context: context) }
+    guard Self._swiftUIWebAnimates else { return _filledWithForeground(_svgShapeNode(shape: self, context: context)) }
     nonisolated(unsafe) let shape = self
     return _assumeMainActor {
-      AnyView(_ownerBoundaryOf: _AnimatedShape(shape: shape) { shape, context in _svgShapeNode(shape: shape, context: context) })
+      AnyView(_ownerBoundaryOf: _AnimatedShape(shape: shape) { shape, context in
+        _filledWithForeground(_svgShapeNode(shape: shape, context: context))
+      })
         ._render(in: context)
     }
   }
@@ -1715,6 +1717,13 @@ private func _svgShapeNode(path d: String, name: String, isCircle: Bool, adapter
     node.attributes["data-trim-to"] = adapter.trimTo.clean
   }
   node.children = [pathNode]
+  return node
+}
+
+/// A shape drawn as a view without `fill` or `stroke` is filled with the foreground style, as in SwiftUI (`Circle()` is a
+/// filled disc in the text colour, a custom triangle in a label takes the label's colour).
+private func _filledWithForeground(_ node: _RenderNode) -> _RenderNode {
+  if let path = node.children.first { _setSVGPaint(path, "fill", "currentColor") }
   return node
 }
 

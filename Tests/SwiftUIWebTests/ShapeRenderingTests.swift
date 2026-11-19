@@ -194,6 +194,27 @@ final class ShapeRenderingTests {
   }
 
   @Test
+  func testGradientMaskFadesByItsAlpha() {
+    let faded = Text("faded").mask {
+      LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+    }
+    let html = StaticHTMLFiberRenderer().render(faded)
+    _expectTrue(html.contains("data-mask=\"true\""))
+    // The gradient is the mask, not a rectangle path, and it is not drawn over the content.
+    _expectTrue(html.contains("mask-image: linear-gradient("))
+    _expectFalse(html.contains("mask-image: url("))
+    _expectTrue(html.contains("data-mask-backend=\"gradient\""))
+  }
+
+  @Test
+  func testBareShapeIsFilledWithTheForegroundStyle() {
+    let bare = StaticHTMLFiberRenderer().render(Triangle().frame(width: 14, height: 18))
+    _expectTrue(bare.contains("fill: currentColor"))
+    let painted = StaticHTMLFiberRenderer().render(Triangle().stroke(Color.red, lineWidth: 2).frame(width: 14, height: 18))
+    _expectFalse(painted.contains("fill: currentColor"))
+  }
+
+  @Test
   func testShapeStyleErasureAndViewTransformsRemainInspectable() {
     let style = AnyShapeStyle(LinearGradient(colors: [.red, .blue], startPoint: .top, endPoint: .bottom))
     let html = StaticHTMLFiberRenderer().render(

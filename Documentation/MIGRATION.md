@@ -103,6 +103,14 @@ pt_BR, `74%` for `0.736.formatted(.percent.precision(.fractionLength(0)))`, and 
 
 ### Looks that changed
 
+- **A ZStack paints its children in order, the last on top.** CSS paints a positioned or transformed box after in-flow
+  ones, so an earlier layer with an `.offset`, a clipped frame or a mask covered the content after it (a sign-in form went
+  under its background art). Each child of a ZStack is now its own stacking context, painted in order; a `zIndex` still
+  reorders them. A `z-index` inside a child no longer reaches past its ZStack sibling, as in SwiftUI.
+- **A gradient mask fades the content by its alpha.** `.mask { LinearGradient(...) }` (or a `RadialGradient`) became a
+  rectangle mask, so nothing faded. The gradient is now the CSS `mask-image`, as SwiftUI masks by the gradient's alpha.
+- **A shape drawn without `fill` or `stroke` is filled with the foreground style.** `Circle()` or a custom triangle in a
+  label drew nothing; SwiftUI fills it with the foreground style, and so does the page now.
 - **A navigation bar is transparent at the scroll edge, as on iOS.** The bar always drew its material and hairline, as if
   content were scrolled under it. It is now transparent while the screen on top of the stack sits at its top, and takes the
   material and hairline once its vertical scroll view scrolls under it (the host marks the view with `data-scrolled`). A
