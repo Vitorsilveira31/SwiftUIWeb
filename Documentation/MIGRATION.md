@@ -103,6 +103,10 @@ pt_BR, `74%` for `0.736.formatted(.percent.precision(.fractionLength(0)))`, and 
 
 ### Looks that changed
 
+- **A shape background or overlay is drawn at the size of the view it decorates.** In
+  `.frame(width: 92, height: 92).background(.green, in: Circle())` the circle's path was computed for the window, so it
+  came out about half the frame. A background with a shape, and an overlay on top of it, are now offered the frame's
+  size, as in SwiftUI.
 - **`stroke(style:)` and `stroke(lineWidth:)` draw in the foreground style.** A shape outlined without a colour was drawn
   in the page's text colour (`CanvasText`), so a `.foregroundStyle(.green)` on it was ignored. It now takes the
   foreground style, as in SwiftUI.

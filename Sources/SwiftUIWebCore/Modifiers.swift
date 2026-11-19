@@ -2287,7 +2287,7 @@ package nonisolated struct ShapeBackgroundModifier<Style: ShapeStyle, Clip: Shap
     if let mesh = _meshGradientValue(style) {
       background = _meshBackgroundNode(mesh, context: context.child(_FiberKey("background-mesh-gradient")))
     } else {
-      let backgroundContext = context.child(_FiberKey("background-shape"))
+      let backgroundContext = _decoratedLayerContext(original, context, key: "background-shape")
       background = _svgShapeNode(shape: clip, context: backgroundContext)
       _applySVGShapePaint(style: style, stroke: nil, strokeBorder: false, fillStyle: nil, to: background, context: backgroundContext)
       if let rounded = _cssRoundedShape(clip) {
@@ -2520,10 +2520,30 @@ package nonisolated struct SearchableModifier: ViewModifier {
 /// The context a background or overlay renders its content in. SwiftUI offers that content the size of the view it
 /// decorates; a frame applied before the modifier records its size on its node (`data-frame-w`/`data-frame-h`), not in
 /// the modifier's context, so the content of `.background(Circle())` on a 64-point frame must take the 64-point size here.
+/// The node that carries the frame of a decorated view: the view itself, or the content inside the background and
+/// overlay wrappers already around it (`.frame(...).background(..., in: Circle()).overlay(...)` decorates the
+/// background's wrapper, whose content is the frame).
+@MainActor private func _framedContent(_ node: _RenderNode) -> _RenderNode {
+  var current = node
+  while current.attributes["data-frame-w"] == nil, current.attributes["data-frame-h"] == nil {
+    if current.classes.contains("backdrop-layer"), let content = current.children.last {
+      current = content
+    } else if current.classes.contains("overlay-layer"), let content = current.children.first {
+      current = content
+    } else {
+      break
+    }
+  }
+  return current
+}
+
 @MainActor private func _decoratedLayerContext(_ node: _RenderNode, _ context: _RenderContext, key: String) -> _RenderContext {
   var layer = context.child(_FiberKey(key))
-  let width = node.attributes["data-frame-w"].flatMap(Double.init)
-  let height = node.attributes["data-frame-h"].flatMap(Double.init)
+  // A background or overlay is offered the size of the view it decorates, as in SwiftUI: a shape in it is drawn at
+  // the frame's size, not at the window's.
+  let framed = _framedContent(node)
+  let width = framed.attributes["data-frame-w"].flatMap(Double.init)
+  let height = framed.attributes["data-frame-h"].flatMap(Double.init)
   if width != nil || height != nil {
     let inherited = context._layoutProposal
     layer._layoutProposal = ProposedViewSize(width: width.map { CGFloat($0) } ?? inherited?.width, height: height.map { CGFloat($0) } ?? inherited?.height)

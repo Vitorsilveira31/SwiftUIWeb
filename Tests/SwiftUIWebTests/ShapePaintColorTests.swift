@@ -173,6 +173,18 @@ struct ShapePaintColorTests {
     #expect(elements(named: "path", in: plainRoot).contains { $0.styles["stroke"] == "currentColor" && $0.attributes["stroke-width"] == "2" }, "the view strokes with the foreground style")
   }
 
+  @Test
+  func testShapeBackgroundAndOverlayAreDrawnAtTheFramesSize() {
+    // `.frame(92).background(_, in: Circle()).overlay(Circle().stroke(...))` draws both circles at 92 by 92: SwiftUI
+    // offers a background and an overlay the size of the view they decorate, not the window's.
+    let avatar = Text("A").frame(width: 92, height: 92)
+      .background(Color.red, in: Circle())
+      .overlay(Circle().stroke(Color.blue, lineWidth: 4))
+    let root = FiberTree(avatar, deferLazyCollections: false, rootLayoutProposal: ProposedViewSize(width: 402, height: 874)).renderNode
+    let boxes = elements(named: "svg", in: root).map { $0.attributes["viewBox"] ?? "" }
+    #expect(boxes == ["0 0 92 92", "0 0 92 92"], "both circles take the frame's size")
+  }
+
   /// Apple's instance levels: `color.secondary` is the receiver at the second level, with the static levels' strength.
   @Test
   func testShapeStyleInstanceLevelsMixTheReceiverAtTheStaticStrengths() {
