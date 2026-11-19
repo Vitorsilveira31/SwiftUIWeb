@@ -215,6 +215,14 @@ final class ShapeRenderingTests {
   }
 
   @Test
+  func testStrokeWithoutAStyleTakesTheForegroundStyle() {
+    // `stroke(style:)` and `stroke(lineWidth:)` outline the shape in the foreground style, as in SwiftUI.
+    let html = StaticHTMLFiberRenderer().render(Circle().stroke(lineWidth: 2).foregroundStyle(Color.red).frame(width: 10, height: 10))
+    _expectTrue(html.contains("stroke: currentColor"))
+    _expectFalse(html.contains("CanvasText"))
+  }
+
+  @Test
   func testShapeStyleErasureAndViewTransformsRemainInspectable() {
     let style = AnyShapeStyle(LinearGradient(colors: [.red, .blue], startPoint: .top, endPoint: .bottom))
     let html = StaticHTMLFiberRenderer().render(

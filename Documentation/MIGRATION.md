@@ -103,6 +103,9 @@ pt_BR, `74%` for `0.736.formatted(.percent.precision(.fractionLength(0)))`, and 
 
 ### Looks that changed
 
+- **`stroke(style:)` and `stroke(lineWidth:)` draw in the foreground style.** A shape outlined without a colour was drawn
+  in the page's text colour (`CanvasText`), so a `.foregroundStyle(.green)` on it was ignored. It now takes the
+  foreground style, as in SwiftUI.
 - **A resizable image takes the frame it is offered.** `Image(...).resizable().frame(width: 300, height: 200)` drew the
   picture with `object-fit: contain` at its own ratio, so a 4:3 picture was 300 by 225, past its frame and lower than the
   layers around it. `resizable()` now stretches the image to its frame, as in SwiftUI; `aspectRatio`, `scaledToFit` and

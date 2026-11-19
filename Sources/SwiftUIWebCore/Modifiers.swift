@@ -909,8 +909,10 @@ nonisolated struct _StrokedShape<Base: Shape>: Shape {
   let stroke: StrokeStyle
   nonisolated func path(in rect: CGRect) -> Path { base.path(in: rect) }
   nonisolated var _swiftUIWebStrokeStyle: StrokeStyle? { stroke }
+  /// Drawn in the foreground style, as SwiftUI strokes a `stroke(style:)` shape: the colour of the surrounding text or
+  /// of a `foregroundStyle` on it, not the page's text colour.
   @MainActor func _render(in context: _RenderContext) -> _RenderNode {
-    _ShapeView(shape: base, style: Color.primary, stroke: stroke)._render(in: context)
+    _ShapeView(shape: base, style: ForegroundStyle(), stroke: stroke)._render(in: context)
   }
 }
 

@@ -170,7 +170,7 @@ struct ShapePaintColorTests {
 
     let plain = Circle().stroke(lineWidth: 2).frame(width: 40, height: 40)
     let plainRoot = FiberTree(plain, deferLazyCollections: false, rootLayoutProposal: ProposedViewSize(width: 40, height: 40)).renderNode
-    #expect(elements(named: "path", in: plainRoot).contains { $0.styles["stroke"] == Color.primary.cssValue && $0.attributes["stroke-width"] == "2" }, "the view strokes with the foreground paint")
+    #expect(elements(named: "path", in: plainRoot).contains { $0.styles["stroke"] == "currentColor" && $0.attributes["stroke-width"] == "2" }, "the view strokes with the foreground style")
   }
 
   /// Apple's instance levels: `color.secondary` is the receiver at the second level, with the static levels' strength.

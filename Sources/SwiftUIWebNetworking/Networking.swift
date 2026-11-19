@@ -1334,6 +1334,18 @@ public final class URLSessionWebSocketTask: URLSessionTask, @unchecked Sendable 
     get { connectionLock.withLock { _connection } }
     set { connectionLock.withLock { _connection = newValue } }
   }
+  /// Stores the connection and drops the task that resolved it in one step. Done in two, a `send` on another thread
+  /// could read the connection before it was set and the task after it was dropped, and see neither.
+  private func publish(_ connection: WebSocketConnection) {
+    connectionLock.withLock {
+      _connection = connection
+      _connectionTask = nil
+    }
+  }
+  /// The connection, or the task that resolves it, read together (see `publish`).
+  private var connectionOrTask: (WebSocketConnection?, Task<WebSocketConnection, Error>?) {
+    connectionLock.withLock { (_connection, _connectionTask) }
+  }
   private let sessionConfiguration: URLSessionConfiguration
 
   fileprivate init(request: URLRequest, configuration: URLSessionConfiguration) {
@@ -1383,17 +1395,15 @@ public final class URLSessionWebSocketTask: URLSessionTask, @unchecked Sendable 
     // when the existing connection is still alive. Browser WebSockets cannot
     // be paused at the protocol layer, so they remain connected while the
     // task's scheduling state is suspended.
-    if connection != nil { return }
-    if connectionTask == nil {
-      connectionTask = Task { [request = self.request, configuration = sessionConfiguration] in
-        try await NetworkRuntime.webSocket(request, configuration: configuration)
-      }
+    let (existing, pending) = connectionOrTask
+    if existing != nil { return }
+    let connectionTask = pending ?? Task { [request = self.request, configuration = sessionConfiguration] in
+      try await NetworkRuntime.webSocket(request, configuration: configuration)
     }
-    guard let connectionTask else { return }
+    if pending == nil { self.connectionTask = connectionTask }
     Task { [self] in
       do {
-        self.connection = try await connectionTask.value
-        self.connectionTask = nil
+        self.publish(try await connectionTask.value)
       }
       catch {
         self.connectionFailure = error
@@ -1481,12 +1491,12 @@ public final class URLSessionWebSocketTask: URLSessionTask, @unchecked Sendable 
   }
 
   private func resolvedConnection() async throws -> WebSocketConnection {
+    let (connection, connectionTask) = connectionOrTask
     if let connection { return connection }
     guard let connectionTask else { throw NetworkError.unsupported("WebSocket task was not resumed") }
-    let connection = try await connectionTask.value
-    self.connection = connection
-    self.connectionTask = nil
-    return connection
+    let resolved = try await connectionTask.value
+    publish(resolved)
+    return resolved
   }
 }
 
