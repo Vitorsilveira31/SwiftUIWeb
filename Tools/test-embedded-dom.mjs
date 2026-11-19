@@ -98,6 +98,31 @@ await runSuite(async () => {
       assert.deepEqual(await page.evaluate("fixture.stats.namedDispatches.slice(-1)[0]"), { id: 18, name: "error", value: "" });
     });
 
+    await check("an AsyncImage loader whose image is already loaded reports its load once", async () => {
+      // The browser already holds the image (another card shows the same URL): the new loader is complete as it is
+      // created and can fire its load before it joins the page, where the root never sees it. That lost event is
+      // stood in for by a listener on the document (a load never reaches the window), which runs before the root's and
+      // stops it. The commit reports the
+      // load all the same, once.
+      const source = "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==";
+      await page.evaluate(async (url) => {
+        const image = new Image(); image.src = url; await image.decode(); window.__heldImage = image;
+        window.__swallowCachedLoad = (event) => { if (event.target?.id === "cached-image") event.stopPropagation(); };
+        document.addEventListener("load", window.__swallowCachedLoad, true);
+      }, source);
+      await page.evaluate((url) => { fixture.state.cachedImage = url; fixture.render(); }, source);
+      await flush();
+      await page.waitForTimeout(150);
+      const loads = await page.evaluate(() => fixture.stats.namedDispatches.filter((entry) => entry.id === 19));
+      assert.deepEqual(loads, [{ id: 19, name: "load", value: "" }], JSON.stringify(loads));
+      // Its own load, when it does reach the root, is not sent a second time.
+      await page.evaluate(() => { document.removeEventListener("load", window.__swallowCachedLoad, true); document.getElementById("cached-image").dispatchEvent(new Event("load")); });
+      await flush();
+      assert.equal(await page.evaluate(() => fixture.stats.namedDispatches.filter((entry) => entry.id === 19).length), 1, "the load is reported once");
+      await page.evaluate(() => { fixture.state.cachedImage = null; fixture.render(); });
+      await flush();
+    });
+
     await check("hover rules arrive as changes and touch only their own rules", async () => {
       const publish = (rules) => page.evaluate((r) => { fixture.state.hoverRules = r; fixture.state.tick++; fixture.render(); fixture.session.flush(); }, rules);
       const sheet = () => page.evaluate(() => {
