@@ -132,6 +132,9 @@ public nonisolated struct GeometryReader<Content: View>: View, _OwnerBoundaryCon
     // it is drawn for the size the layout gives it (Tools/embedded-dom.js): the first evaluation runs at the enclosing
     // reader's size or the window's, and showed a page at sizes it never has (Food Truck's donuts at 560 points).
     node.attributes["data-geometry-rendered"] = "\(_layoutNumber(CGFloat(measurement.size.width))),\(_layoutNumber(CGFloat(measurement.size.height)))"
+    // Drawn for a guess, not for what the page measured (Tools/embedded-dom.js holds such a reader until it is drawn for its
+    // box; one the page has measured, though its element is new, shows at once).
+    if !store.hasHostMeasurement { node.attributes["data-geometry-guess"] = "true" }
     // Sticky: a proxy captured by a child view may be read by a later,
     // independent body evaluation of that child.
     store.readsPosition = store.readsPosition || access.readsPosition

@@ -8,56 +8,104 @@ import {GeometryHost} from './geometry-host.js';
 import {MediaHost} from './media-host.js';
 import {SplitViewHost} from './split-view-host.js';
 
-/** A NavigationSplitView column hidden or shown slides as iPad slides it: the columns that stay keep the width they had
- * (`data-column-sliding`) and ride on the edge of the one coming or going while its track opens or closes
- * (Tools/styles.css), then take their new width at once. Laid out again at every step of the slide, Food Truck's
- * detail stretched its cards frame by frame and its GeometryReaders redrew for every width on the way. */
-class SplitColumnSlide {
+/** A NavigationSplitView column hidden or shown, as iPad animates it: the page lays the columns out once, for where they
+ * end, and every block of the content (a card, the header, the title) moves and grows from where it was to where it ends
+ * while the sidebar slides in or out over it, as SwiftUI interpolates each view's frame. Swift draws the new width once.
+ * Laid out again at every step of the slide instead, Food Truck's custom layouts redrew for every width on the way, behind
+ * the page; kept at its old width and laid out at the end, the content only adjusted once the sidebar had gone. Where the
+ * blocks were is taken when the toggle is pressed; a change of `columnVisibility` from code slides the columns' tracks
+ * (Tools/styles.css). */
+const COLUMN_MORPH_MS = 300, COLUMN_MORPH_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)', COLUMN_MORPH_LIMIT = 120;
+class SplitColumnMorph {
   constructor(root, {window}) {
-    this.root = root; this.window = window;
-    this.widths = new WeakMap(); this.visibility = new WeakMap(); this.observed = new WeakSet();
-    // A column's settled width, kept for the slide that starts when the visibility changes: by then the page has laid it
-    // out at its new width.
-    this.observer = typeof window.ResizeObserver === 'function'
-      ? new window.ResizeObserver(entries => { for (const entry of entries) if (!entry.target.hasAttribute('data-column-sliding')) this.widths.set(entry.target, entry.target.offsetWidth); })
-      : null;
+    this.root = root; this.window = window; this.visibility = new WeakMap(); this.pending = new WeakMap();
+    this.abort = new window.AbortController();
+    root.addEventListener('click', event => {
+      const toggle = event.target?.closest?.('.navigation-sidebar-toggle');
+      const split = toggle?.closest('.navigation-split-view');
+      if (split) this.pending.set(split, {at: window.performance.now(), blocks: this.blocks(split)});
+    }, {capture: true, signal: this.abort.signal});
   }
-  needsSync(changes) {
-    return changes.everything || changes.touches('.navigation-split-view', ['data-column-visibility']) || changes.touches('.navigation-column');
+  needsSync(changes) { return changes.everything || changes.touches('.navigation-split-view', ['data-column-visibility']); }
+  /** The blocks of the columns shown: the elements below a column that are narrower than it, or that hold nothing more. */
+  blocks(split) {
+    const found = [];
+    const visit = (element, width) => {
+      for (const child of element.children) {
+        if (found.length >= COLUMN_MORPH_LIMIT) return;
+        if (child.classList.contains('navigation-sidebar-toggle')) continue;
+        // A grid's rows have no box of their own (`display: contents`): their cells are the blocks.
+        if (!child.getClientRects().length) { if (child.children.length && this.window.getComputedStyle(child).display === 'contents') visit(child, width); continue; }
+        const rect = child.getBoundingClientRect();
+        if (rect.width >= width * 0.85 && child.children.length) visit(child, width);
+        else found.push({element: child, rect});
+      }
+    };
+    for (const column of split.children) {
+      // The sidebar moves as one block (below); the columns beside it are taken apart.
+      if (!column.classList.contains('navigation-column') || column.hasAttribute('data-column-hidden') || column.classList.contains('navigation-sidebar')) continue;
+      const width = column.getBoundingClientRect().width;
+      visit(column, width);
+      // A screen's title is the stack's `::before`: it moves with the stack's edge.
+      for (const stack of column.querySelectorAll(':scope > .navigation-stack, :scope > .frame-box > .navigation-stack')) found.push({element: stack, rect: stack.getBoundingClientRect(), title: true});
+    }
+    found.push(...[...split.children].filter(child => child.classList.contains('navigation-sidebar')).map(sidebar => ({element: sidebar, rect: sidebar.getBoundingClientRect(), sidebar: true})));
+    return found;
   }
   sync() {
-    if (!this.observer) return;
     for (const split of this.root.querySelectorAll('.navigation-split-view')) {
-      const columns = [...split.children].filter(child => child.classList.contains('navigation-column'));
-      for (const column of columns) if (!this.observed.has(column)) { this.observed.add(column); this.observer.observe(column); }
       const now = split.getAttribute('data-column-visibility') || '', before = this.visibility.get(split);
       this.visibility.set(split, now);
-      if (before === undefined || before === now || this.window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) continue;
-      const sliding = [];
-      for (const column of columns) {
-        const width = this.widths.get(column);
-        if (column.hasAttribute('data-column-hidden') || !width) continue;
-        column.style.setProperty('width', `${width}px`, 'important');
-        column.style.setProperty('justify-self', 'start', 'important');
-        column.setAttribute('data-column-sliding', '');
-        sliding.push(column);
-      }
-      if (!sliding.length) continue;
-      let timer = 0;
-      const settle = () => {
-        split.removeEventListener('transitionend', ended);
-        this.window.clearTimeout(timer);
-        for (const column of sliding) {
-          column.style.removeProperty('width'); column.style.removeProperty('justify-self'); column.removeAttribute('data-column-sliding');
-        }
-      };
-      const ended = event => { if (event.target === split && event.propertyName === 'grid-template-columns') settle(); };
-      split.addEventListener('transitionend', ended);
-      // The slide's length and a frame (the stylesheet's transition), should no transitionend come.
-      timer = this.window.setTimeout(settle, 450);
+      if (before === undefined || before === now) continue;
+      const pending = this.pending.get(split); this.pending.delete(split);
+      if (!pending || this.window.performance.now() - pending.at > 2000 || this.window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) continue;
+      this.morph(split, pending.blocks);
     }
   }
-  dispose() { this.observer?.disconnect(); }
+  morph(split, blocks) {
+    // The tracks take their end at once: the blocks carry the motion.
+    split.style.setProperty('transition', 'none', 'important');
+    const options = {duration: COLUMN_MORPH_MS, easing: COLUMN_MORPH_EASING, composite: 'add'};
+    for (const {element, rect: was, title, sidebar} of blocks) {
+      if (!element.isConnected) continue;
+      const rect = element.getBoundingClientRect();
+      if (sidebar) {
+        // Out of its track or into it, over the content.
+        element.style.setProperty('z-index', '2');
+        const dx = was.left - rect.left;
+        if (Math.abs(dx) > 0.5) element.animate([{translate: `${dx}px 0px`}, {translate: '0px 0px'}], options).finished.then(() => element.style.removeProperty('z-index'), () => element.style.removeProperty('z-index'));
+        else element.style.removeProperty('z-index');
+        continue;
+      }
+      if (title) {
+        const dx = was.left - rect.left;
+        if (Math.abs(dx) > 0.5) element.animate([{translate: `${dx}px 0px`}, {translate: '0px 0px'}], {...options, pseudoElement: '::before'});
+        continue;
+      }
+      const dx = was.left + was.width / 2 - (rect.left + rect.width / 2), dy = was.top + was.height / 2 - (rect.top + rect.height / 2);
+      const x = rect.width > 0 ? was.width / rect.width : 1, y = rect.height > 0 ? was.height / rect.height : 1;
+      // A block as wide as its column with nothing below it (the header's drawing) stretches with it: moved alone it left
+      // the window's edge bare until the sidebar came over it.
+      const scales = Math.abs(x - 1) > 0.005 && x > 0.5 && x < 2 && y > 0.5 && y < 2;
+      if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5 && !scales) continue;
+      element.animate([{translate: `${dx}px ${dy}px`, ...(scales ? {scale: `${x} ${y}`} : {})}, {translate: '0px 0px', ...(scales ? {scale: '1 1'} : {})}], options);
+    }
+    // A block on its way passes outside the scroll view that holds it now (the detail starts at the sidebar's edge as
+    // soon as the sidebar is shown again): a scroll view at its start does not clip it meanwhile. One scrolled down keeps
+    // clipping, which keeps where it is scrolled.
+    const unclipped = new Set();
+    for (const {element} of blocks) {
+      for (let node = element.parentElement; node && node !== split; node = node.parentElement) {
+        if (unclipped.has(node) || node.scrollTop !== 0 || node.scrollLeft !== 0) continue;
+        const style = this.window.getComputedStyle(node);
+        if (style.overflowX !== 'visible' || style.overflowY !== 'visible') unclipped.add(node);
+      }
+    }
+    for (const node of unclipped) node.setAttribute('data-column-morph-unclip', '');
+    this.window.setTimeout(() => { for (const node of unclipped) node.removeAttribute('data-column-morph-unclip'); }, COLUMN_MORPH_MS + 50);
+    this.window.requestAnimationFrame(() => split.style.removeProperty('transition'));
+  }
+  dispose() { this.abort.abort(); }
 }
 
 import {TransitionHost, ScrollTransitionHost, MatchedGeometryHost, matchViewTransitionGeometry, SCROLL_TRANSITION_ATTRIBUTES} from './transition-host.js';
@@ -309,7 +357,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   resetCommitProfile();
   // Attributes the framework itself writes. Used only to bucket the commit profile; a new framework attribute
   // that is missing here is counted as 'other'.
-  const internalAttributes = new Set(['data-a11y-backend', 'data-a11y-children', 'data-a11y-hint', 'data-a11y-inert', 'data-a11y-traits', 'data-a11y-value', 'data-align-x', 'data-align-y', 'data-animation-timing', 'data-animation-transaction', 'data-animation-value', 'data-aspect-fill', 'data-aspect-ratio', 'data-avkit-fullscreen', 'data-avkit-keyboard-controls', 'data-avkit-picture-in-picture', 'data-can-seek', 'data-cell-kind', 'data-column-sliding', 'data-column-sliding', 'data-composition-length', 'data-content-overflow', 'data-control-action', 'data-control-argument', 'data-control-kind', 'data-control-slider', 'data-controlled-open', 'data-ctl-fullscreen', 'data-ctl-hidden', 'data-ctl-menu', 'data-ctl-pip', 'data-ctl-scrubbing', 'data-docs-drawer', 'data-docs-drawer-open', 'data-docs-part', 'data-docs-route', 'data-dom-view', 'data-dom-view-error', 'data-drag-source', 'data-draw-canvas', 'data-drop-target', 'data-drop-types', 'data-embedded-drag-text', 'data-embedded-event', 'data-embedded-event-id', 'data-embedded-events', 'data-embedded-mounted', 'data-embedded-node-id', 'data-embedded-prevent-events', 'data-embedded-scroll-anchor', 'data-embedded-scroll-id', 'data-embedded-scroll-scope', 'data-embedded-scroll-sequence', 'data-enter-animation', 'data-feature-css', 'data-feature-hint', 'data-fiber-event-appear', 'data-fiber-event-click', 'data-fiber-event-id', 'data-fiber-event-keyDown', 'data-fiber-event-task', 'data-fiber-id', 'data-field-chrome', 'data-file-exporter', 'data-file-exporter-content-type', 'data-file-exporter-filename', 'data-file-exporter-inline', 'data-file-exporter-key', 'data-file-exporter-presented', 'data-file-importer', 'data-file-importer-accept', 'data-file-importer-multiple', 'data-file-importer-presented', 'data-file-importer-types', 'data-file-mover', 'data-file-mover-count', 'data-file-mover-files', 'data-file-mover-presented', 'data-fixed-x', 'data-fixed-y', 'data-flexible-width', 'data-focus-enabled', 'data-frame-h', 'data-frame-max-w', 'data-frame-w', 'data-geometry-host', 'data-geometry-scaled', 'data-grid-tracks', 'data-headless-event-id', 'data-headless-media', 'data-headless-media-wishes', 'data-history-operations', 'data-host-managed', 'data-hover-bg', 'data-hover-disabled', 'data-hover-effect', 'data-hover-enabled', 'data-hover-fg', 'data-hover-group', 'data-hover-group-active', 'data-hover-group-behavior', 'data-hover-group-root', 'data-hover-has-filter', 'data-hover-has-opacity', 'data-hover-lifts', 'data-hover-rules', 'data-hover-shadow', 'data-hover-source', 'data-hover-stroke', 'data-hover-underline', 'data-image-error', 'data-image-paint', 'data-image-preload', 'data-image-ratio', 'data-image-ready', 'data-ime-composing', 'data-inset-edge', 'data-keep-lazy-axis', 'data-keep-lazy-index', 'data-keep-lazy-lanes', 'data-keep-lazy-revision', 'data-keep-secure-id', 'data-keyboard-shortcut', 'data-label-follows', 'data-layout-alignment', 'data-layout-gap', 'data-layout-hidden', 'data-layout-key', 'data-layout-kind', 'data-layout-leaf', 'data-layout-root', 'data-layout-schema', 'data-lazy-cell', 'data-lazy-index', 'data-lazy-owner', 'data-lazy-spacer', 'data-lazy-type', 'data-lift-target', 'data-list-row-hover-disabled', 'data-list-row-hover-effect', 'data-measurement-island', 'data-media-audio', 'data-media-command', 'data-media-intent', 'data-media-item', 'data-media-max-size', 'data-media-muted', 'data-media-observe', 'data-media-peak-bitrate', 'data-media-playing', 'data-media-rate', 'data-media-source', 'data-media-start', 'data-media-text', 'data-measuring', 'data-media-volume', 'data-mesh-gradient', 'data-native-layout', 'data-navigation-motion', 'data-nested-button', 'data-outline-group', 'data-padding-bottom', 'data-padding-leading', 'data-padding-top', 'data-padding-trailing', 'data-paste-accept', 'data-paste-available', 'data-paste-button', 'data-paste-types', 'data-photos-picker', 'data-photos-picker-accept', 'data-photos-picker-encoding', 'data-photos-picker-limit', 'data-photos-picker-multiple', 'data-photos-picker-presented', 'data-photos-picker-selection-behavior', 'data-player-id', 'data-player-state', 'data-position-x', 'data-position-y', 'data-presentation-host', 'data-press-tracking', 'data-primitive-trigger', 'data-relative-h', 'data-relative-w', 'data-route-prefetch', 'data-route-prefetch-key', 'data-row-align-y', 'data-row-spacing', 'data-runtime-error', 'data-size-h', 'data-size-w', 'data-spacer-min', 'data-swipe-action-edge', 'data-swipe-content', 'data-swipe-state', 'data-tab-mobile-backdrop', 'data-tab-unbuilt', 'data-tab-hides-bar', 'data-tab-mobile-toggle', 'data-tab-sidebar', 'data-tab-sidebar-header', 'data-tab-sidebar-toggle', 'data-timeline-animation-frame', 'data-timeline-cadence', 'data-timeline-id', 'data-timeline-interval', 'data-timeline-paused', 'data-timeline-view', 'data-toolbar-resolved', 'data-view-id', 'data-view-key', 'data-visible-shape', 'data-web-base-url', 'data-web-command', 'data-web-content', 'data-web-external-links', 'data-web-mount', 'data-web-mount-flag', 'data-web-mount-key', 'data-web-mount-token', 'data-web-source']);
+  const internalAttributes = new Set(['data-a11y-backend', 'data-a11y-children', 'data-a11y-hint', 'data-a11y-inert', 'data-a11y-traits', 'data-a11y-value', 'data-align-x', 'data-align-y', 'data-animation-timing', 'data-animation-transaction', 'data-animation-value', 'data-aspect-fill', 'data-aspect-ratio', 'data-avkit-fullscreen', 'data-avkit-keyboard-controls', 'data-avkit-picture-in-picture', 'data-can-seek', 'data-cell-kind', 'data-column-morph-unclip', 'data-composition-length', 'data-content-overflow', 'data-control-action', 'data-control-argument', 'data-control-kind', 'data-control-slider', 'data-controlled-open', 'data-ctl-fullscreen', 'data-ctl-hidden', 'data-ctl-menu', 'data-ctl-pip', 'data-ctl-scrubbing', 'data-docs-drawer', 'data-docs-drawer-open', 'data-docs-part', 'data-docs-route', 'data-dom-view', 'data-dom-view-error', 'data-drag-source', 'data-draw-canvas', 'data-drop-target', 'data-drop-types', 'data-embedded-drag-text', 'data-embedded-event', 'data-embedded-event-id', 'data-embedded-events', 'data-embedded-mounted', 'data-embedded-node-id', 'data-embedded-prevent-events', 'data-embedded-scroll-anchor', 'data-embedded-scroll-id', 'data-embedded-scroll-scope', 'data-embedded-scroll-sequence', 'data-enter-animation', 'data-feature-css', 'data-feature-hint', 'data-fiber-event-appear', 'data-fiber-event-click', 'data-fiber-event-id', 'data-fiber-event-keyDown', 'data-fiber-event-task', 'data-fiber-id', 'data-field-chrome', 'data-file-exporter', 'data-file-exporter-content-type', 'data-file-exporter-filename', 'data-file-exporter-inline', 'data-file-exporter-key', 'data-file-exporter-presented', 'data-file-importer', 'data-file-importer-accept', 'data-file-importer-multiple', 'data-file-importer-presented', 'data-file-importer-types', 'data-file-mover', 'data-file-mover-count', 'data-file-mover-files', 'data-file-mover-presented', 'data-fixed-x', 'data-fixed-y', 'data-flexible-width', 'data-focus-enabled', 'data-frame-h', 'data-frame-max-w', 'data-frame-w', 'data-geometry-host', 'data-geometry-scaled', 'data-grid-tracks', 'data-headless-event-id', 'data-headless-media', 'data-headless-media-wishes', 'data-history-operations', 'data-host-managed', 'data-hover-bg', 'data-hover-disabled', 'data-hover-effect', 'data-hover-enabled', 'data-hover-fg', 'data-hover-group', 'data-hover-group-active', 'data-hover-group-behavior', 'data-hover-group-root', 'data-hover-has-filter', 'data-hover-has-opacity', 'data-hover-lifts', 'data-hover-rules', 'data-hover-shadow', 'data-hover-source', 'data-hover-stroke', 'data-hover-underline', 'data-image-error', 'data-image-paint', 'data-image-preload', 'data-image-ratio', 'data-image-ready', 'data-ime-composing', 'data-inset-edge', 'data-keep-lazy-axis', 'data-keep-lazy-index', 'data-keep-lazy-lanes', 'data-keep-lazy-revision', 'data-keep-secure-id', 'data-keyboard-shortcut', 'data-label-follows', 'data-layout-alignment', 'data-layout-gap', 'data-layout-hidden', 'data-layout-key', 'data-layout-kind', 'data-layout-leaf', 'data-layout-root', 'data-layout-schema', 'data-lazy-cell', 'data-lazy-index', 'data-lazy-owner', 'data-lazy-spacer', 'data-lazy-type', 'data-lift-target', 'data-list-row-hover-disabled', 'data-list-row-hover-effect', 'data-measurement-island', 'data-media-audio', 'data-media-command', 'data-media-intent', 'data-media-item', 'data-media-max-size', 'data-media-muted', 'data-media-observe', 'data-media-peak-bitrate', 'data-media-playing', 'data-media-rate', 'data-media-source', 'data-media-start', 'data-media-text', 'data-measuring', 'data-media-volume', 'data-mesh-gradient', 'data-native-layout', 'data-navigation-motion', 'data-nested-button', 'data-outline-group', 'data-padding-bottom', 'data-padding-leading', 'data-padding-top', 'data-padding-trailing', 'data-paste-accept', 'data-paste-available', 'data-paste-button', 'data-paste-types', 'data-photos-picker', 'data-photos-picker-accept', 'data-photos-picker-encoding', 'data-photos-picker-limit', 'data-photos-picker-multiple', 'data-photos-picker-presented', 'data-photos-picker-selection-behavior', 'data-player-id', 'data-player-state', 'data-position-x', 'data-position-y', 'data-presentation-host', 'data-press-tracking', 'data-primitive-trigger', 'data-relative-h', 'data-relative-w', 'data-route-prefetch', 'data-route-prefetch-key', 'data-row-align-y', 'data-row-spacing', 'data-runtime-error', 'data-size-h', 'data-size-w', 'data-spacer-min', 'data-swipe-action-edge', 'data-swipe-content', 'data-swipe-state', 'data-tab-mobile-backdrop', 'data-tab-unbuilt', 'data-tab-hides-bar', 'data-tab-mobile-toggle', 'data-tab-sidebar', 'data-tab-sidebar-header', 'data-tab-sidebar-toggle', 'data-timeline-animation-frame', 'data-timeline-cadence', 'data-timeline-id', 'data-timeline-interval', 'data-timeline-paused', 'data-timeline-view', 'data-toolbar-resolved', 'data-view-id', 'data-view-key', 'data-visible-shape', 'data-web-base-url', 'data-web-command', 'data-web-content', 'data-web-external-links', 'data-web-mount', 'data-web-mount-flag', 'data-web-mount-key', 'data-web-mount-token', 'data-web-source']);
   function attributeBucket(name) {
     if (internalAttributes.has(name) || name.startsWith('data-fiber-event-')) return 'internal';
     if (name === 'style' || name === 'class') return name;
@@ -1854,7 +1902,9 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   function holdUnfitReaders(added) {
     const now = performance.now();
     for (const element of added) {
-      if (!element.hasAttribute('data-geometry-reader') || !element.hasAttribute('data-geometry-rendered')) continue;
+      // Only a reader drawn for a guess: one drawn for what the page measured (an element a commit made again) shows at
+      // once, scaled to its box if that has changed since (`scaleUnfitReaders`), not blank through the motion around it.
+      if (!element.hasAttribute('data-geometry-reader') || !element.hasAttribute('data-geometry-rendered') || !element.hasAttribute('data-geometry-guess')) continue;
       if (!element.hasAttribute(MEASURING)) element.setAttribute(MEASURING, '');
       fitting.set(element, now);
     }
@@ -1964,7 +2014,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   if (typeof SWIFTUIWEB_HAS_MEDIA === 'undefined' || SWIFTUIWEB_HAS_MEDIA) plugins.push(new MediaHost(root, {dispatchNamed, dispatchHeadless, window}));
   // Divider drag and keys for HSplitView and VSplitView: the panes move here and report their settled positions to Swift.
   if (typeof SWIFTUIWEB_HAS_SPLIT_VIEWS === 'undefined' || SWIFTUIWEB_HAS_SPLIT_VIEWS) plugins.push(new SplitViewHost(root, {dispatchNamed, window}));
-  plugins.push(new SplitColumnSlide(root, {window}));
+  plugins.push(new SplitColumnMorph(root, {window}));
 
   function syncTimelines() {
     if (typeof api.timeline_tick !== 'function' || !markerSeen('timeline')) return;

@@ -15,10 +15,13 @@ struct GeometryReaderRenderedSizeTests {
     // Not measured yet, and no enclosing size to go by: drawn at zero.
     var reader = try #require(tree.findNode(withEvent: "geometry"))
     #expect(reader.attributes["data-geometry-rendered"] == "0,0")
+    // Drawn for a guess: the page holds it until it is drawn for its box.
+    #expect(reader.attributes["data-geometry-guess"] == "true")
     // Measured: drawn again for the box the page reported.
     tree.dispatch(event: "geometry", value: "0,0,320.5,200", on: reader)
     reader = try #require(tree.findNode(withEvent: "geometry", in: tree.renderNode))
     #expect(reader.attributes["data-geometry-rendered"] == "320.5,200")
+    #expect(reader.attributes["data-geometry-guess"] == nil)
   }
 
   @Test
