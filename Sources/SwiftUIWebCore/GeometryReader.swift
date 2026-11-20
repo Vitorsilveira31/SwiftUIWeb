@@ -109,6 +109,7 @@ public nonisolated struct GeometryReader<Content: View>: View, _OwnerBoundaryCon
     let ownerToken = context._renderOwnerToken
     if let ownerToken { context._renderOwnerRegistry?._markAliasable(ownerToken) }
     let invalidationStore = context.stateStore
+    let readerPath = context._fiberPath
     let store = self.store
     let access = _GeometryProxyAccess()
     var measurement = store.latest
@@ -120,6 +121,9 @@ public nonisolated struct GeometryReader<Content: View>: View, _OwnerBoundaryCon
     if measurement.size.width > 0 || measurement.size.height > 0 { contentContext.environment._geometryHint = measurement.size }
     let child = content(GeometryProxy(measurement: measurement, access: access))._render(in: contentContext)
     store.rendered = measurement
+    // The size this node's content is drawn for: a measurement reaching it while the reader has since been drawn for another
+    // size reached a node that is no longer the reader's drawing, though the page still shows it.
+    let drawnSize = measurement.size
     // The size the content was drawn for. With Swift in a worker the page shows a reader it has just inserted only once
     // it is drawn for the size the layout gives it (Tools/embedded-dom.js): the first evaluation runs at the enclosing
     // reader's size or the window's, and showed a page at sizes it never has (Food Truck's donuts at 560 points).
@@ -138,10 +142,16 @@ public nonisolated struct GeometryReader<Content: View>: View, _OwnerBoundaryCon
       store.latest = next
       store.hasHostMeasurement = true
       let rendered = store.rendered
-      let visible = next.size != rendered.size
+      // Shown although the reader was drawn again since: a remembered render above brought this node back (a custom
+      // Layout renders its subviews again to measure them, under other owners), and Food Truck's tiles showed donuts
+      // drawn for 23 points in 155-point boxes, which the page measured again and again in vain.
+      let stale = drawnSize != rendered.size
+      let visible = stale || next.size != rendered.size
         || ((store.readsPosition || access.readsPosition) && next != rendered)
       guard visible else { return }
       store.rendered = next
+      // What the views above remembered holds this reader as it was drawn.
+      if stale || next.size != rendered.size { invalidationStore._forgetViews(above: readerPath) }
       if let ownerToken { invalidationStore._ownerObservationDidChange(ownerToken) }
     })
     node.children = child.isEmpty ? [] : [child]

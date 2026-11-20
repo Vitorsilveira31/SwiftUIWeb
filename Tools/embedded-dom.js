@@ -256,7 +256,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   resetCommitProfile();
   // Attributes the framework itself writes. Used only to bucket the commit profile; a new framework attribute
   // that is missing here is counted as 'other'.
-  const internalAttributes = new Set(['data-a11y-backend', 'data-a11y-children', 'data-a11y-hint', 'data-a11y-inert', 'data-a11y-traits', 'data-a11y-value', 'data-align-x', 'data-align-y', 'data-animation-timing', 'data-animation-transaction', 'data-animation-value', 'data-aspect-fill', 'data-aspect-ratio', 'data-avkit-fullscreen', 'data-avkit-keyboard-controls', 'data-avkit-picture-in-picture', 'data-can-seek', 'data-cell-kind', 'data-composition-length', 'data-content-overflow', 'data-control-action', 'data-control-argument', 'data-control-kind', 'data-control-slider', 'data-controlled-open', 'data-ctl-fullscreen', 'data-ctl-hidden', 'data-ctl-menu', 'data-ctl-pip', 'data-ctl-scrubbing', 'data-docs-drawer', 'data-docs-drawer-open', 'data-docs-part', 'data-docs-route', 'data-dom-view', 'data-dom-view-error', 'data-drag-source', 'data-draw-canvas', 'data-drop-target', 'data-drop-types', 'data-embedded-drag-text', 'data-embedded-event', 'data-embedded-event-id', 'data-embedded-events', 'data-embedded-mounted', 'data-embedded-node-id', 'data-embedded-prevent-events', 'data-embedded-scroll-anchor', 'data-embedded-scroll-id', 'data-embedded-scroll-scope', 'data-embedded-scroll-sequence', 'data-enter-animation', 'data-feature-css', 'data-feature-hint', 'data-fiber-event-appear', 'data-fiber-event-click', 'data-fiber-event-id', 'data-fiber-event-keyDown', 'data-fiber-event-task', 'data-fiber-id', 'data-field-chrome', 'data-file-exporter', 'data-file-exporter-content-type', 'data-file-exporter-filename', 'data-file-exporter-inline', 'data-file-exporter-key', 'data-file-exporter-presented', 'data-file-importer', 'data-file-importer-accept', 'data-file-importer-multiple', 'data-file-importer-presented', 'data-file-importer-types', 'data-file-mover', 'data-file-mover-count', 'data-file-mover-files', 'data-file-mover-presented', 'data-fixed-x', 'data-fixed-y', 'data-flexible-width', 'data-focus-enabled', 'data-frame-h', 'data-frame-max-w', 'data-frame-w', 'data-geometry-host', 'data-grid-tracks', 'data-headless-event-id', 'data-headless-media', 'data-headless-media-wishes', 'data-history-operations', 'data-host-managed', 'data-hover-bg', 'data-hover-disabled', 'data-hover-effect', 'data-hover-enabled', 'data-hover-fg', 'data-hover-group', 'data-hover-group-active', 'data-hover-group-behavior', 'data-hover-group-root', 'data-hover-has-filter', 'data-hover-has-opacity', 'data-hover-lifts', 'data-hover-rules', 'data-hover-shadow', 'data-hover-source', 'data-hover-stroke', 'data-hover-underline', 'data-image-error', 'data-image-paint', 'data-image-preload', 'data-image-ratio', 'data-image-ready', 'data-ime-composing', 'data-inset-edge', 'data-keep-lazy-axis', 'data-keep-lazy-index', 'data-keep-lazy-lanes', 'data-keep-lazy-revision', 'data-keep-secure-id', 'data-keyboard-shortcut', 'data-label-follows', 'data-layout-alignment', 'data-layout-gap', 'data-layout-hidden', 'data-layout-key', 'data-layout-kind', 'data-layout-leaf', 'data-layout-root', 'data-layout-schema', 'data-lazy-cell', 'data-lazy-index', 'data-lazy-owner', 'data-lazy-spacer', 'data-lazy-type', 'data-lift-target', 'data-list-row-hover-disabled', 'data-list-row-hover-effect', 'data-measurement-island', 'data-media-audio', 'data-media-command', 'data-media-intent', 'data-media-item', 'data-media-max-size', 'data-media-muted', 'data-media-observe', 'data-media-peak-bitrate', 'data-media-playing', 'data-media-rate', 'data-media-source', 'data-media-start', 'data-media-text', 'data-measuring', 'data-media-volume', 'data-mesh-gradient', 'data-native-layout', 'data-navigation-motion', 'data-nested-button', 'data-outline-group', 'data-padding-bottom', 'data-padding-leading', 'data-padding-top', 'data-padding-trailing', 'data-paste-accept', 'data-paste-available', 'data-paste-button', 'data-paste-types', 'data-photos-picker', 'data-photos-picker-accept', 'data-photos-picker-encoding', 'data-photos-picker-limit', 'data-photos-picker-multiple', 'data-photos-picker-presented', 'data-photos-picker-selection-behavior', 'data-player-id', 'data-player-state', 'data-position-x', 'data-position-y', 'data-presentation-host', 'data-press-tracking', 'data-primitive-trigger', 'data-relative-h', 'data-relative-w', 'data-route-prefetch', 'data-route-prefetch-key', 'data-row-align-y', 'data-row-spacing', 'data-runtime-error', 'data-size-h', 'data-size-w', 'data-spacer-min', 'data-swipe-action-edge', 'data-swipe-content', 'data-swipe-state', 'data-tab-mobile-backdrop', 'data-tab-unbuilt', 'data-tab-hides-bar', 'data-tab-mobile-toggle', 'data-tab-sidebar', 'data-tab-sidebar-header', 'data-tab-sidebar-toggle', 'data-timeline-animation-frame', 'data-timeline-cadence', 'data-timeline-id', 'data-timeline-interval', 'data-timeline-paused', 'data-timeline-view', 'data-toolbar-resolved', 'data-view-id', 'data-view-key', 'data-visible-shape', 'data-web-base-url', 'data-web-command', 'data-web-content', 'data-web-external-links', 'data-web-mount', 'data-web-mount-flag', 'data-web-mount-key', 'data-web-mount-token', 'data-web-source']);
+  const internalAttributes = new Set(['data-a11y-backend', 'data-a11y-children', 'data-a11y-hint', 'data-a11y-inert', 'data-a11y-traits', 'data-a11y-value', 'data-align-x', 'data-align-y', 'data-animation-timing', 'data-animation-transaction', 'data-animation-value', 'data-aspect-fill', 'data-aspect-ratio', 'data-avkit-fullscreen', 'data-avkit-keyboard-controls', 'data-avkit-picture-in-picture', 'data-can-seek', 'data-cell-kind', 'data-composition-length', 'data-content-overflow', 'data-control-action', 'data-control-argument', 'data-control-kind', 'data-control-slider', 'data-controlled-open', 'data-ctl-fullscreen', 'data-ctl-hidden', 'data-ctl-menu', 'data-ctl-pip', 'data-ctl-scrubbing', 'data-docs-drawer', 'data-docs-drawer-open', 'data-docs-part', 'data-docs-route', 'data-dom-view', 'data-dom-view-error', 'data-drag-source', 'data-draw-canvas', 'data-drop-target', 'data-drop-types', 'data-embedded-drag-text', 'data-embedded-event', 'data-embedded-event-id', 'data-embedded-events', 'data-embedded-mounted', 'data-embedded-node-id', 'data-embedded-prevent-events', 'data-embedded-scroll-anchor', 'data-embedded-scroll-id', 'data-embedded-scroll-scope', 'data-embedded-scroll-sequence', 'data-enter-animation', 'data-feature-css', 'data-feature-hint', 'data-fiber-event-appear', 'data-fiber-event-click', 'data-fiber-event-id', 'data-fiber-event-keyDown', 'data-fiber-event-task', 'data-fiber-id', 'data-field-chrome', 'data-file-exporter', 'data-file-exporter-content-type', 'data-file-exporter-filename', 'data-file-exporter-inline', 'data-file-exporter-key', 'data-file-exporter-presented', 'data-file-importer', 'data-file-importer-accept', 'data-file-importer-multiple', 'data-file-importer-presented', 'data-file-importer-types', 'data-file-mover', 'data-file-mover-count', 'data-file-mover-files', 'data-file-mover-presented', 'data-fixed-x', 'data-fixed-y', 'data-flexible-width', 'data-focus-enabled', 'data-frame-h', 'data-frame-max-w', 'data-frame-w', 'data-geometry-host', 'data-geometry-scaled', 'data-grid-tracks', 'data-headless-event-id', 'data-headless-media', 'data-headless-media-wishes', 'data-history-operations', 'data-host-managed', 'data-hover-bg', 'data-hover-disabled', 'data-hover-effect', 'data-hover-enabled', 'data-hover-fg', 'data-hover-group', 'data-hover-group-active', 'data-hover-group-behavior', 'data-hover-group-root', 'data-hover-has-filter', 'data-hover-has-opacity', 'data-hover-lifts', 'data-hover-rules', 'data-hover-shadow', 'data-hover-source', 'data-hover-stroke', 'data-hover-underline', 'data-image-error', 'data-image-paint', 'data-image-preload', 'data-image-ratio', 'data-image-ready', 'data-ime-composing', 'data-inset-edge', 'data-keep-lazy-axis', 'data-keep-lazy-index', 'data-keep-lazy-lanes', 'data-keep-lazy-revision', 'data-keep-secure-id', 'data-keyboard-shortcut', 'data-label-follows', 'data-layout-alignment', 'data-layout-gap', 'data-layout-hidden', 'data-layout-key', 'data-layout-kind', 'data-layout-leaf', 'data-layout-root', 'data-layout-schema', 'data-lazy-cell', 'data-lazy-index', 'data-lazy-owner', 'data-lazy-spacer', 'data-lazy-type', 'data-lift-target', 'data-list-row-hover-disabled', 'data-list-row-hover-effect', 'data-measurement-island', 'data-media-audio', 'data-media-command', 'data-media-intent', 'data-media-item', 'data-media-max-size', 'data-media-muted', 'data-media-observe', 'data-media-peak-bitrate', 'data-media-playing', 'data-media-rate', 'data-media-source', 'data-media-start', 'data-media-text', 'data-measuring', 'data-media-volume', 'data-mesh-gradient', 'data-native-layout', 'data-navigation-motion', 'data-nested-button', 'data-outline-group', 'data-padding-bottom', 'data-padding-leading', 'data-padding-top', 'data-padding-trailing', 'data-paste-accept', 'data-paste-available', 'data-paste-button', 'data-paste-types', 'data-photos-picker', 'data-photos-picker-accept', 'data-photos-picker-encoding', 'data-photos-picker-limit', 'data-photos-picker-multiple', 'data-photos-picker-presented', 'data-photos-picker-selection-behavior', 'data-player-id', 'data-player-state', 'data-position-x', 'data-position-y', 'data-presentation-host', 'data-press-tracking', 'data-primitive-trigger', 'data-relative-h', 'data-relative-w', 'data-route-prefetch', 'data-route-prefetch-key', 'data-row-align-y', 'data-row-spacing', 'data-runtime-error', 'data-size-h', 'data-size-w', 'data-spacer-min', 'data-swipe-action-edge', 'data-swipe-content', 'data-swipe-state', 'data-tab-mobile-backdrop', 'data-tab-unbuilt', 'data-tab-hides-bar', 'data-tab-mobile-toggle', 'data-tab-sidebar', 'data-tab-sidebar-header', 'data-tab-sidebar-toggle', 'data-timeline-animation-frame', 'data-timeline-cadence', 'data-timeline-id', 'data-timeline-interval', 'data-timeline-paused', 'data-timeline-view', 'data-toolbar-resolved', 'data-view-id', 'data-view-key', 'data-visible-shape', 'data-web-base-url', 'data-web-command', 'data-web-content', 'data-web-external-links', 'data-web-mount', 'data-web-mount-flag', 'data-web-mount-key', 'data-web-mount-token', 'data-web-source']);
   function attributeBucket(name) {
     if (internalAttributes.has(name) || name.startsWith('data-fiber-event-')) return 'internal';
     if (name === 'style' || name === 'class') return name;
@@ -1700,7 +1700,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   const geometry = new GeometryHost(root, {dispatch: (element, name, value) => dispatchNamed(element, name, value), eventIdAttribute: EVENT_ID, eventsAttribute: EVENTS,
     // Measurements arrive after the frame's layout, outside the commit's batch: one batch per delivery, so Swift
     // publishes once for all of them.
-    batch: run => { api.batch_begin?.(); try { run(); } finally { api.batch_end?.(); } answerMeasurements(); revealFittingReaders(false); }});
+    batch: run => { api.batch_begin?.(); try { run(); } finally { api.batch_end?.(); } answerMeasurements(); scaleUnfitReaders(); revealFittingReaders(false); }});
   // A measurement reaches Swift after the frame's layout and before its paint (a ResizeObserver delivery). SwiftUI applies
   // what a view does with its size (`onGeometryChange`) before the first frame shows the view; here the answer is a
   // publication, which the frame after would show: for that one frame a dialog sized from its content filled the window.
@@ -1770,6 +1770,15 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   // donuts were drawn at the size of the whole card (the item fades in, so the wait does not show). Other content
   // inserted into a screen already shown is left alone: it would blink.
   const FITTING_LIMIT_MS = 250;
+  // A custom Layout places a new subview from a guess until the page has told it its proposal (a round trip more): Food
+  // Truck's new tile held donuts 560 points wide in a 245-point slot. Its readers wait until they are inside their slot too,
+  // a little longer at most; the slot fades in, so the wait does not show.
+  const FITTING_ITEM_LIMIT_MS = 350;
+  function insideItem(element) {
+    const item = element.closest('.layout-item');
+    if (!item) return true;
+    return element.offsetWidth <= item.offsetWidth + 1 && element.offsetHeight <= item.offsetHeight + 1;
+  }
   const SCREEN = '.navigation-root,.navigation-destination,.navigation-stack,[role="tabpanel"]';
   const SCREEN_CONTENT = '.navigation-root,.navigation-destination,.navigation-column,[role="tabpanel"]';
   function onNewScreen(element) {
@@ -1806,14 +1815,93 @@ export function mountEmbeddedBrowser(instance, options = {}) {
     for (const [element, since] of fitting) {
       if (!element.isConnected) { fitting.delete(element); continue; }
       oldest = Math.min(oldest, since);
-      if (allFit && !readerFits(element)) allFit = false;
+      if (allFit && !((readerFits(element) || scaledReaders.has(element)) && insideItem(element))) allFit = false;
     }
-    if (allFit || now - oldest >= FITTING_LIMIT_MS) {
-      for (const element of fitting.keys()) element.removeAttribute(MEASURING);
+    const limit = [...fitting.keys()].some(element => element.closest('.layout-item')) ? FITTING_ITEM_LIMIT_MS : FITTING_LIMIT_MS;
+    if (allFit || now - oldest >= limit) {
+      // Shown before Swift has drawn them for their box: drawn at a guess, they fit it whole rather than overflow it.
+      for (const element of fitting.keys()) { if (!allFit && !readerFits(element)) fitInto(element); element.removeAttribute(MEASURING); }
       fitting.clear();
       return;
     }
     if (fromFrame && !fittingFrame) fittingFrame = window.requestAnimationFrame(() => { fittingFrame = 0; revealFittingReaders(true); });
+  }
+  // A reader shown with content drawn for another size than its box (the window is being resized, a layout moved it to
+  // another slot, its new tile arrived drawn at a guess) shows that drawing scaled to its box until Swift draws it again:
+  // with Swift in a worker the answer is a round trip away, and meanwhile Food Truck's donuts overflowed their tiles, then
+  // snapped to size, at every step of a resize. SwiftUI draws a reader for its size in the same frame; the scale stands in
+  // for that frame. Only when the scale keeps the content's proportions (a reader that only widened is left alone: its
+  // content reflows in the browser) and only around content that measures nothing of its own, which the scale would skew.
+  const SCALED = 'data-geometry-scaled';
+  const MEASURED_INSIDE = '[data-geometry-reader],[data-geometry-change],[data-text-layout]';
+  // Only transforms, so nothing around the reader moves and nothing measured changes size: the content keeps the reader's box,
+  // and what it draws at the old size (its first child when that has the size, otherwise centred in it) is scaled from its
+  // corner and moved onto the box. What the content had inline before comes back after.
+  const SCALED_PROPERTIES = ['scale', 'translate', 'transform-origin'];
+  const scaledReaders = new Map();
+  function unscale(element) {
+    const content = element.firstElementChild, saved = scaledReaders.get(element);
+    if (content && saved?.content === content) {
+      for (const property of SCALED_PROPERTIES) {
+        // A commit may have written the property since: then it is Swift's, not ours.
+        if (content.style.getPropertyValue(property) !== saved.ours[property]) continue;
+        const [value, priority] = saved.previous[property];
+        if (value) content.style.setProperty(property, value, priority); else content.style.removeProperty(property);
+      }
+    }
+    element.removeAttribute(SCALED);
+    scaledReaders.delete(element);
+  }
+  function scaleUnfitReaders() {
+    for (const element of scaledReaders.keys()) if (!element.isConnected) scaledReaders.delete(element);
+    for (const element of geometry.observed) {
+      if (!element.hasAttribute('data-geometry-reader')) continue;
+      const rendered = element.getAttribute('data-geometry-rendered'), content = element.firstElementChild;
+      if (rendered === null || !content || !element.isConnected) { if (scaledReaders.has(element)) unscale(element); continue; }
+      const [width, height] = rendered.split(',').map(Number);
+      // Its layout size: a transform above it does not change what it is drawn for.
+      const boxWidth = element.offsetWidth, boxHeight = element.offsetHeight;
+      const fits = Math.abs(boxWidth - width) < 1 && Math.abs(boxHeight - height) < 1;
+      const x = width > 0 ? boxWidth / width : 1, y = height > 0 ? boxHeight / height : 1;
+      const scales = !fits && width > 0 && height > 0 && boxWidth > 0 && boxHeight > 0 && Math.abs(x / y - 1) < 0.1
+        && !content.querySelector(MEASURED_INSIDE);
+      if (!scales) {
+        if (scaledReaders.has(element) && !(element.getAttribute(SCALED) === 'fit' && !fits)) unscale(element);
+        continue;
+      }
+      scale(element, content, width, height, x, y, 0, 0, '');
+    }
+  }
+  function scale(element, content, width, height, x, y, left, top, how) {
+    let saved = scaledReaders.get(element);
+    if (saved && saved.content !== content) { unscale(element); saved = undefined; }
+    if (!saved) {
+      saved = {content, previous: {}, ours: {}};
+      for (const property of SCALED_PROPERTIES) saved.previous[property] = [content.style.getPropertyValue(property), content.style.getPropertyPriority(property)];
+      scaledReaders.set(element, saved);
+    }
+    // Where the drawing for the old size sits in the content, in the content's own coordinates.
+    const drawing = content.firstElementChild;
+    let originX = (content.offsetWidth - width) / 2, originY = (content.offsetHeight - height) / 2;
+    if (drawing && Math.abs(drawing.offsetWidth - width) < 1 && Math.abs(drawing.offsetHeight - height) < 1 && drawing.offsetParent === content.offsetParent) {
+      originX = drawing.offsetLeft - content.offsetLeft; originY = drawing.offsetTop - content.offsetTop;
+    }
+    // A point p of the content lands at origin + translate + scale × (p − origin): the drawing's corner lands at (left, top).
+    const values = {scale: `${x} ${y}`, 'transform-origin': `${originX}px ${originY}px`, translate: `${left - originX}px ${top - originY}px`};
+    for (const property of SCALED_PROPERTIES) {
+      content.style.setProperty(property, values[property], 'important');
+      saved.ours[property] = content.style.getPropertyValue(property);
+    }
+    element.setAttribute(SCALED, how);
+  }
+  // Content drawn for a box of other proportions, shown at once: it keeps its proportions and fits inside the box, centred.
+  function fitInto(element) {
+    const rendered = element.getAttribute('data-geometry-rendered'), content = element.firstElementChild;
+    if (rendered === null || !content || content.querySelector(MEASURED_INSIDE)) return;
+    const [width, height] = rendered.split(',').map(Number);
+    if (!(width > 0 && height > 0)) return;
+    const boxWidth = element.offsetWidth, boxHeight = element.offsetHeight, fit = Math.min(boxWidth / width, boxHeight / height);
+    if (fit > 0) scale(element, content, width, height, fit, fit, (boxWidth - width * fit) / 2, (boxHeight - height * fit) / 2, 'fit');
   }
   // AVPlayer state rendered by Swift, applied to the <video>/<audio> elements after each commit.
   if (typeof SWIFTUIWEB_HAS_MEDIA === 'undefined' || SWIFTUIWEB_HAS_MEDIA) plugins.push(new MediaHost(root, {dispatchNamed, dispatchHeadless, window}));
@@ -2379,11 +2467,20 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   // it draws finishes loading.
   const canvasPainted=new WeakMap(), canvasImages=new Map(), colorProbe=document.createElement('span');
   colorProbe.style.display='none';
+  // What each canvas's colors resolved to, under the color scheme they were resolved in. Resolving one inserts a probe
+  // in the canvas and reads its style: at every frame of an animated canvas (Food Truck's sky, drawn with asset colors)
+  // that recalculated the page's style, and the inserted probe made the layout pass run again over the whole page.
+  let canvasColors=new WeakMap();
   function canvasColor(canvas, value) {
     // Canvas 2D accepts plain colors but ignores light-dark(), var() and currentcolor: resolve those through the DOM.
-  if (!/light-dark\(|var\(|currentcolor/i.test(value)) return value;
+    if (!/light-dark\(|var\(|currentcolor/i.test(value)) return value;
+    const scheme=(document.documentElement.getAttribute('data-color-scheme')||'')+'|'+(canvas.closest('[data-color-scheme]')?.getAttribute('data-color-scheme')||'');
+    let known=canvasColors.get(canvas);
+    if (!known||known.scheme!==scheme) { known={scheme,colors:new Map()}; canvasColors.set(canvas,known); }
+    const cached=known.colors.get(value); if (cached!==undefined) return cached;
     canvas.appendChild(colorProbe); colorProbe.style.color=''; colorProbe.style.color=value;
-    const resolved=getComputedStyle(colorProbe).color; colorProbe.remove(); return resolved||value;
+    const resolved=getComputedStyle(colorProbe).color||value; colorProbe.remove();
+    known.colors.set(value,resolved); return resolved;
   }
   function canvasImage(url, canvas) {
     let entry=canvasImages.get(url);

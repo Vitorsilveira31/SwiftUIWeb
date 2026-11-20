@@ -2936,7 +2936,11 @@ package final class FiberTree {
         if let oldToken = fiber.renderOwnerToken, oldToken != newNode._renderOwnerToken {
           renderOwnerRegistry._remove(oldToken)
         }
-        releaseChildren(of: fiber)
+        // The descendants go too, but not the state of a view the new node still holds at the same place: an ancestor
+        // can be replaced while what it wraps stays (Food Truck's tile overlay), and its GeometryReaders lost what the
+        // page had measured for them, drawing their donuts at the size of the whole page.
+        let kept = stateScopePaths(in: newNode)
+        for child in fiber.children { releaseSubtree(child, preservingStateScopes: kept) }
       }
       updateFiber(fiber, with: newNode)
       fiber.children = makeChildren(of: fiber, node: newNode)

@@ -45,6 +45,9 @@ await runSuite(async () => {
         });
         assert.ok(claimed, "the CSS layout takes the shelf");
       }
+      // A frame first: the lazy row's `content-visibility: auto` skips its cards until a rendering update finds them on
+      // screen, and a hit test before that (a loaded machine reached it first) lands on the scroll view.
+      await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
       const measured = await page.evaluate(() => Object.fromEntries(["empty-background", "empty-overlay", "shown-background", "shown-overlay"].map((id) => {
         const card = document.getElementById(id), r = card.getBoundingClientRect(), w = card.parentElement.getBoundingClientRect();
         const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
