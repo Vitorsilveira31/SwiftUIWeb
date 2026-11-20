@@ -24,6 +24,15 @@ for (const k of ['w', 'h', 'min-w', 'min-h', 'ideal-w', 'ideal-h', 'max-w', 'max
 for (const k of ['top', 'leading', 'bottom', 'trailing']) STYLE_ATTRIBUTES.add('data-padding-' + k);
 export const ownsCssLayoutAttribute = name => name === 'data-cl' || name.startsWith('data-cl-');
 export const affectsCssLayout = name => STYLE_ATTRIBUTES.has(name);
+/** The attributes whose change never moves a box: what a canvas draws, how an image loads, a piece kept hidden until it is
+ * measured (`visibility`), what assistive technologies read, the mapper's own blocks. Any other attribute that changes inside
+ * an island can change the size the browser gives an element CSS lays out (what a user-defined Layout is offered, the size of a
+ * subview it reads), though the mapper does not analyse it: an inline style (a font size), an image's source, a disclosure that
+ * opens, and the many the framework stylesheet sizes controls and chrome by (`data-field-chrome`, `data-tab-bar-hidden`). A text
+ * field's value is what it shows, not its box. Food Truck's animated header rewrites only its canvas on every frame. */
+const PAINT_ATTRIBUTES = new Set(['data-canvas-commands', 'data-canvas-fingerprint', 'data-measuring', 'fetchpriority', 'loading', 'decoding',
+  'aria-label', 'aria-live', 'aria-description', 'title', 'data-tooltip']);
+const affectsLayoutSize = (name, target) => !PAINT_ATTRIBUTES.has(name) && !ownsCssLayoutAttribute(name) && !(name === 'value' && target.localName === 'input');
 /** The layers an element holds besides its own (`data-layout-wrap`, outermost first): `kind;name=value;...` separated by `|`.
  * A layer's field names are the attribute names it would have on an element of its own, without `data-`. */
 const parseLayers = text => text.split('|').map(part => {
@@ -301,6 +310,10 @@ export class CssLayout {
     this.fits = new Set(); // the ViewThatFits elements of the islands, whose candidate the page selects (`chooseFits`)
     this.ideals = new WeakMap(); // ViewThatFits candidate -> its ideal size ({ width it was measured at, w, h })
     this.layouts = new Set(); // the wrappers of user-defined Layouts whose proposal and subview sizes the page reports (`reportLayouts`)
+    // Whether something that can change what a user-defined Layout is offered, or the sizes of its subviews, changed since
+    // `reportLayouts` last probed them (`invalidateLayouts`); `probedLayouts` are the wrappers it probed then.
+    this.layoutsStale = true;
+    this.probedLayouts = [];
     this.containers = new Set(); // the containers whose length a containerRelativeFrame below reads (`updateContainers`)
     this.assigned = new WeakSet();
     this.stats = { analysed: 0, assigned: 0, rules: 0, unsupported: {}, nodes: 0, selectsMeasured: 0 };
@@ -357,6 +370,9 @@ export class CssLayout {
     // no part in the layout.
     this.sheet.insertRule(`[data-cl]:is(${HIDDEN}):not([data-navigation-motion="covered"]){display:none !important}`, 0);
   }
+  /** Something outside what the mapper observes changed and can change what a user-defined Layout is offered or its
+   * subviews' sizes (a DOM change the host laid out, a resize, fonts): `reportLayouts` probes them again. */
+  invalidateLayouts() { this.layoutsStale = true; }
   /** Records a mutation inside an island: the element and its ancestors are analysed again. */
   mark(element, root) {
     for (let e = element; e; e = e.parentElement) {
@@ -390,6 +406,7 @@ export class CssLayout {
   claimRoot(root, proposal) {
     const previous = this.roots.get(root);
     if (!previous || previous.key !== proposal.key) {
+      this.layoutsStale = true;
       this.roots.set(root, proposal);
       // What takes part can depend on the container (a collapsed rail hides parts of a slot's content): from scratch.
       if (previous) for (const e of [root, ...root.querySelectorAll('*')]) this.cache.delete(e);
@@ -416,6 +433,7 @@ export class CssLayout {
   /** Stops styling an island CSS can no longer lay out (something it cannot express appeared in it): its elements lose
    * their blocks (the host then reports the root as laid out by nothing). */
   release(island) {
+    this.layoutsStale = true;
     if (this.roots.get(island)?.height === 'cell') island.parentElement?.removeAttribute('data-cl-host');
     this.roots.delete(island);
     if (!this.islands.has(island)) return;
@@ -446,6 +464,9 @@ export class CssLayout {
   }
   /** A mutation record inside an island: only what can change CSS layout marks anything. */
   note(record, target, island) {
+    // A text, an element or a layout attribute that changes inside an island can change what a Layout is offered or the size
+    // of one of its subviews, though only some of them change a block (the browser lays a text out).
+    if (record.type !== 'attributes' || (affectsLayoutSize(record.attributeName, target) && record.oldValue !== target.getAttribute(record.attributeName))) this.layoutsStale = true;
     // What a <select> shows sizes it (`sizeSelects`): the text of its options and which one is selected.
     const labelsSelect = target.localName === 'option' && (record.type === 'characterData' || record.attributeName === 'selected');
     if (labelsSelect) { if (record.type === 'attributes' && record.oldValue === target.getAttribute('selected')) return; }
@@ -457,7 +478,7 @@ export class CssLayout {
   }
   /** Analyses and styles every island with pending changes. */
   flush() {
-    for (const island of this.islands) if (!island.isConnected) { this.islands.delete(island); this.pending.delete(island); }
+    for (const island of this.islands) if (!island.isConnected) { this.islands.delete(island); this.pending.delete(island); this.layoutsStale = true; }
     this.released = [];
     this.style();
     // Each pass (a patch, a resize of the window) selects the candidate of every ViewThatFits for what it is offered now.
@@ -499,7 +520,7 @@ export class CssLayout {
     box.remove();
     measured.forEach(([select, key], i) => {
       this.selectWidths.set(select, key);
-      if (select.style.getPropertyValue('--sl-select-w') !== widths[i]) select.style.setProperty('--sl-select-w', widths[i]);
+      if (select.style.getPropertyValue('--sl-select-w') !== widths[i]) { select.style.setProperty('--sl-select-w', widths[i]); this.layoutsStale = true; }
     });
   }
   /** Caps every text leaf CSS lays out at the width of the lines it draws, as SwiftUI's Text sizes itself (see the
@@ -513,7 +534,7 @@ export class CssLayout {
     let candidates = [...this.document.querySelectorAll('[data-layout-leaf="text"]')].filter(text =>
       text.isConnected && !text.hasAttribute('data-layout-wrap') && text.hasAttribute('data-cl'));
     // A font shrink comes before the lines are measured: a text that now fits is measured as the text it is.
-    for (const text of candidates) this.shrinkToFit(text);
+    for (const text of candidates) { const size = text.style.fontSize; this.shrinkToFit(text); if (text.style.fontSize !== size) this.layoutsStale = true; }
     for (let round = 0; round < 3 && candidates.length; round++) {
       // Read every width first (one layout), then write.
       const found = [];
@@ -528,6 +549,8 @@ export class CssLayout {
       candidates = found.length ? candidates.filter(text => !capped.has(text)) : [];
     }
     for (const [text] of this.textWidths) if (!capped.has(text)) text.style.removeProperty('--sl-text-w');
+    // A cap that moved changes the size of the views around the text, a subview of a Layout among them.
+    if (capped.size !== this.textWidths.size || [...capped].some(([text, width]) => this.textWidths.get(text) !== width)) this.layoutsStale = true;
     this.textWidths = capped;
   }
   /** SwiftUI lays a screen of a NavigationStack out in its safe area, below the navigation bar, and draws the bar over it.
@@ -584,14 +607,14 @@ export class CssLayout {
     for (const e of this.document.querySelectorAll('[data-cl-under-bar]')) if (!writes.some(([written]) => written === e)) writes.push([e, null, null]);
     for (const scroll of this.document.querySelectorAll('[data-cl-scroll-inset]')) if (!insets.some(([kept]) => kept === scroll)) insets.push([scroll, null]);
     for (const [scroll, length] of insets) {
-      if (length == null) { scroll.removeAttribute('data-cl-scroll-inset'); scroll.style.removeProperty('--sl-scroll-inset'); continue; }
-      if (scroll.style.getPropertyValue('--sl-scroll-inset') !== length) scroll.style.setProperty('--sl-scroll-inset', length);
+      if (length == null) { scroll.removeAttribute('data-cl-scroll-inset'); scroll.style.removeProperty('--sl-scroll-inset'); this.layoutsStale = true; continue; }
+      if (scroll.style.getPropertyValue('--sl-scroll-inset') !== length) { scroll.style.setProperty('--sl-scroll-inset', length); this.layoutsStale = true; }
       if (!scroll.hasAttribute('data-cl-scroll-inset')) scroll.setAttribute('data-cl-scroll-inset', '');
     }
     for (const [e, length, place] of writes) {
-      if (length == null) { e.removeAttribute('data-cl-under-bar'); e.style.removeProperty('--sl-under-bar'); continue; }
-      if (e.style.getPropertyValue('--sl-under-bar') !== length) e.style.setProperty('--sl-under-bar', length);
-      if (e.getAttribute('data-cl-under-bar') !== place) e.setAttribute('data-cl-under-bar', place);
+      if (length == null) { e.removeAttribute('data-cl-under-bar'); e.style.removeProperty('--sl-under-bar'); this.layoutsStale = true; continue; }
+      if (e.style.getPropertyValue('--sl-under-bar') !== length) { e.style.setProperty('--sl-under-bar', length); this.layoutsStale = true; }
+      if (e.getAttribute('data-cl-under-bar') !== place) { e.setAttribute('data-cl-under-bar', place); this.layoutsStale = true; }
     }
   }
   /** SwiftUI's minimumScaleFactor: a one-line text wider than its box is drawn at the font size that fits it, but not below
@@ -694,6 +717,8 @@ export class CssLayout {
   /** Analyses and styles the islands with pending changes. */
   style() {
     if (this.pending.size === 0) return;
+    // A block it writes can change what a Layout is offered (whoever styles: a pass, a ViewThatFits choice, the oracle).
+    this.layoutsStale = true;
     for (const island of this.pending) {
       // Something CSS cannot express appeared in it: the host reports it (`released`).
       if (!this.claim(island)) { this.release(island); this.released.push(island); continue; }
@@ -751,7 +776,7 @@ export class CssLayout {
       candidates.forEach((c, i) => { if (i === chosen) c.setAttribute('data-fit-selected', 'true'); else c.removeAttribute('data-fit-selected'); });
       this.mark(fit, island); this.pending.add(island); changed = true;
     });
-    if (changed) this.style();
+    if (changed) { this.layoutsStale = true; this.style(); }
     return changed;
   }
   /** Reads what each ViewThatFits in `entries` is offered on its `probe` axes: all of them laid out at once as views that
@@ -807,7 +832,13 @@ export class CssLayout {
         if (island && held.read !== layoutRead(e)) { this.mark(e, island); this.pending.add(island); stale = true; }
       }
     }
-    if (stale) this.style();
+    if (stale) { this.layoutsStale = true; this.style(); }
+    // Nothing that can change a Layout's proposal or the sizes of its subviews changed since they were probed: what was
+    // reported then still holds (and the host reports a value only when it changes).
+    const boxes = [...this.layouts];
+    if (!this.layoutsStale && boxes.length === this.probedLayouts.length && boxes.every((box, i) => box === this.probedLayouts[i])) return;
+    this.layoutsStale = false;
+    this.probedLayouts = boxes;
     for (const box of this.layouts) {
       const node = this.cache.get(box);
       if (!node?.layout || !node.prop || !this.islandOf(box) || !box.getClientRects().length) continue;
@@ -927,8 +958,8 @@ export class CssLayout {
       writes.push([e, w, h]);
     }
     for (const [e, w, h] of writes) for (const [name, value] of [['--sl-cw', w], ['--sl-ch', h]]) {
-      if (value == null) { if (e.style.getPropertyValue(name)) e.style.removeProperty(name); }
-      else if (e.style.getPropertyValue(name) !== value) e.style.setProperty(name, value);
+      if (value == null) { if (e.style.getPropertyValue(name)) { e.style.removeProperty(name); this.layoutsStale = true; } }
+      else if (e.style.getPropertyValue(name) !== value) { e.style.setProperty(name, value); this.layoutsStale = true; }
     }
   }
   /** The ideal size of each candidate of `entry` (SwiftUI's: proposed nothing on the axes the ViewThatFits chooses along, its

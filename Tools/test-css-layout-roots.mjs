@@ -328,7 +328,45 @@ await runSuite(async () => {
       // Swift changes what the page reads while the box is detached (a patch that moves a subtree): only its parent is noted.
       const parent = box.parentElement; box.remove(); box.setAttribute("data-layout-content-width", "150"); box.style.width = "150px"; parent.append(box);
       css.mark(parent, app); css.pending.add(app); css.flush();
-      return { ...shown, moved: box.getBoundingClientRect().width };
+      const moved = box.getBoundingClientRect().width;
+      // A pass in which nothing the Layout depends on changed probes nothing: no style is written, nothing is reported.
+      const writes = [], observer = new MutationObserver((records) => writes.push(...records));
+      observer.observe(document.body, { attributes: true, subtree: true, attributeFilter: ["style"] });
+      let from = reports.length;
+      css.flush();
+      observer.takeRecords().forEach((r) => writes.push(r));
+      const idle = { reports: reports.length - from, writes: writes.length };
+      // A text in a subview changes (the browser lays it out: no block changes): the sizes are measured again.
+      const t1 = document.getElementById("t1"), ideal = document.getElementById("ideal");
+      t1.firstChild.data = "Ideal, and longer";
+      from = reports.length;
+      css.note({ type: "characterData", target: t1.firstChild }, t1, ideal);
+      css.flush();
+      const grown = reports.slice(from).find((r) => r[0] === "sizes")?.[2].split(";")[0];
+      // A disclosure in a subview opens (the browser lays out what it shows): measured again too.
+      t1.setAttribute("open", "");
+      from = reports.length;
+      css.note({ type: "attributes", attributeName: "open", oldValue: null }, t1, ideal);
+      css.flush();
+      const opened = reports.slice(from).filter((r) => r[0] === "sizes").length;
+      // An attribute the framework stylesheet sizes a control by (a TextEditor's chrome) changes: measured again.
+      t1.setAttribute("data-field-chrome", "hidden");
+      from = reports.length;
+      css.note({ type: "attributes", attributeName: "data-field-chrome", oldValue: null }, t1, ideal);
+      css.flush();
+      const chrome = reports.slice(from).filter((r) => r[0] === "sizes").length;
+      // A canvas redraws (Food Truck's header, every frame): its box does not move, nothing is probed.
+      t1.setAttribute("data-canvas-commands", "[1]");
+      from = reports.length;
+      css.note({ type: "attributes", attributeName: "data-canvas-commands", oldValue: "[0]" }, t1, ideal);
+      css.flush();
+      const redrawn = reports.length - from;
+      // Something the mapper does not observe changed (the host saw it): probed again.
+      from = reports.length;
+      css.invalidateLayouts(); css.flush();
+      const invalidated = reports.slice(from).filter((r) => r[0] === "proposal").length;
+      observer.disconnect();
+      return { ...shown, moved, idle, grown, opened, chrome, redrawn, invalidated };
     });
     assert.deepEqual([custom.ok, custom.items, custom.refused], [true, [true, true, true], {}], "a user-defined Layout and its subviews are CSS's");
     assert.deepEqual([custom.box[2], custom.box[3]], [200, 80], "the Layout is the size Swift gave it");
@@ -337,6 +375,37 @@ await runSuite(async () => {
     assert.ok(custom.wrap[2] <= 60 && custom.wrap[3] > custom.ideal[3] * 1.5, "offered a width, a subview wraps at it (and is laid out so again once measured at the other proposals)");
     assert.deepEqual(custom.fill, [80, 40, 120, 40], "a subview that fills takes its proposal, pinned by its bottom trailing corner");
     assert.equal(custom.moved, 150, "a Layout whose size changed while it was detached is laid out again");
+    assert.deepEqual(custom.idle, { reports: 0, writes: 0 }, "a pass that changed nothing a Layout depends on probes nothing");
+    assert.ok(Number(custom.grown?.split(":")[1].split(",")[0]) > custom.ideal[2], `a text that changed in a subview is measured again (${custom.grown})`);
+    assert.equal(custom.opened, 1, "a disclosure that opened in a subview is measured again");
+    assert.equal(custom.chrome, 1, "so is a subview whose chrome the stylesheet sizes changed");
+    assert.equal(custom.redrawn, 0, "a canvas that redraws probes nothing");
+    assert.equal(custom.invalidated, 1, "and a change the host reports probes the Layout again");
+    // A TextEditor in a Layout subview loses its chrome (`.scrollContentBackground(.hidden)`: `data-field-chrome="plain"`): the
+    // stylesheet drops its padding, border and minimum height, and the size the page reports is the new one.
+    const editor = await page.evaluate(() => {
+      document.body.innerHTML = `<div id="ed-app" data-layout-kind="frame" data-frame-max-w="inf" data-frame-max-h="inf" data-align-x="0" data-align-y="0">
+        <div id="ed-box" class="layout-box" data-layout-proposal="true" data-layout-content-width="300" data-layout-content-height="200" style="position:relative;width:300px;height:200px">
+          <div id="ed-item" class="layout-item" data-layout-child-proposal="240," style="position:absolute;left:0;top:0;--layout-anchor-x:0%;--layout-anchor-y:0%;width:1px;height:1px"><textarea id="editor" class="text-area" data-control-kind="text-editor">Notes</textarea></div>
+        </div></div>`;
+      document.adoptedStyleSheets = [];
+      const reports = [], css = new CssLayout(document, { onProposal() {}, onLayoutSizes: (e, v) => reports.push(v) });
+      const item = document.getElementById("ed-item"), field = document.getElementById("editor");
+      const ok = [css.claimRoot(document.getElementById("ed-app"), { def: { x: true, y: true }, ax: 0.5, height: "100dvh", key: "window" }),
+        css.claimRoot(item, { def: { x: true, y: false }, ax: 0, height: "auto", key: "item10", item: true })];
+      css.flush();
+      const size = () => { const r = item.getBoundingClientRect(); return [Math.round(r.width * 64) / 64, Math.round(r.height * 64) / 64]; };
+      const before = { box: size(), report: reports.at(-1) };
+      field.setAttribute("data-field-chrome", "plain");
+      const from = reports.length;
+      css.note({ type: "attributes", attributeName: "data-field-chrome", oldValue: null }, field, item);
+      css.flush();
+      return { ok, before, after: { box: size(), report: reports.at(-1) }, reported: reports.length - from };
+    });
+    assert.deepEqual(editor.ok, [true, true], "a TextEditor in a Layout subview is CSS's");
+    assert.ok(editor.after.box[1] < editor.before.box[1], `without its chrome the editor is shorter (${JSON.stringify(editor)})`);
+    assert.equal(editor.reported, 1, "the change of its chrome measures the subview again");
+    assert.equal(editor.after.report, `240,:${editor.after.box[0]},${editor.after.box[1]}`, "and the page reports the size it has now");
     assert.deepEqual(custom.reports.find((r) => r[0] === "proposal")?.slice(1), ["box", 1000, 700], "the Layout is told what it is offered: the window, through the stack that hugs its content");
     const sizes = custom.reports.find((r) => r[0] === "sizes")?.[2].split(";");
     assert.deepEqual([sizes.length, sizes[2]], [3, "120,40:120,40|200,60:200,60|90,:90,0"], "and the size each subview took at its proposal, then at each other proposal the Layout asked it about");

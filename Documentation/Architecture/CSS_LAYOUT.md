@@ -241,6 +241,12 @@ can pin a centre without knowing it. After each layout pass (`reportLayouts`) th
   `.unspecified` for an ideal size, or the height it is offered before it places the subview at the height that answers), and
   the mapper lays the item out at each one as it lays it out at the placed proposal (`measureAsks`: the item is out of the
   flow, so nothing else moves), reads it, and puts it back.
+A pass in which nothing a Layout depends on changed probes nothing (`layoutsStale`): the mapper probes again after a change
+it notes in an island (a text, an element, any attribute but those that only paint, such as a canvas's drawing), after it
+styled an island, chose a ViewThatFits candidate or rewrote a container length, a text cap, a font shrink or a bar inset, and
+when the host reports what it does not observe (`invalidateLayouts`: a DOM change outside the islands, a resize, fonts, a
+global attribute, a control's input, the page's scroll view moving). Food Truck's animated header commits every frame and
+changes none of that: the probe wrote about 20,000 styles a second there before.
 Swift re-renders when either changes, as before: one render for a new proposal, one for the sizes it brings. Until the page has
 measured a proposal, Swift answers it from its estimate; a proposal the Layout asks about first after a render is measured
 after the next one.

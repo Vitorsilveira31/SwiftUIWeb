@@ -119,4 +119,22 @@ for (const [name, change] of cases) {
   assert.equal(layout.changed, true);
 }
 
+// A pass something asked for (a sidebar the host toggled, whose attribute the CSS layout does not read) probes the user-defined
+// Layouts again, though the pass that runs from the frame finds nothing scheduled any more.
+{
+  const { layout } = host();
+  let frame = null, invalidated = 0;
+  layout.window.requestAnimationFrame = (callback) => { frame = callback; return 3; };
+  layout.options = {};
+  layout.onError = (error) => { throw error; };
+  layout.css.invalidateLayouts = () => { invalidated++; };
+  layout.css.layouts.add({});
+  layout.mutations.disconnect = () => {};
+  layout.observeMutations = () => {};
+  layout.roots = () => { throw new Error("stop after the scan started"); };
+  layout.schedule();
+  assert.throws(() => frame(), /stop after the scan started/);
+  assert.ok(invalidated > 0, "a scheduled pass probes the Layouts again");
+}
+
 console.log("PASS layout pass skipped when nothing changed; every invalidation still runs it");
