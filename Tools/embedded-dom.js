@@ -1020,7 +1020,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
     const covered = old.getAttribute('data-navigation-motion') === 'covered';
     // The density descriptor the page gives a catalog image drawn for a denser screen is the page's, not Swift's.
     const keepsDensity = old.localName === 'img' && densityOf(next.getAttribute('src')) > 1 && !next.hasAttribute('srcset');
-    const skip = name => (keepsDensity && name === 'srcset') || name === 'style' || name === 'data-enter-animation' || name === 'data-navigation-motion' || name === 'data-scrolled' || (covered && name === 'inert') || ownsLayoutAttribute(name) || (nativeDetails && name === 'open') || (hostOwns !== null && hostOwns(name)) || (isIcon && (name === 'data-lucide' || name === 'data-lucide-fallback'));
+    const skip = name => (keepsDensity && (name === 'srcset' || name === 'sizes')) || name === 'style' || name === 'data-enter-animation' || name === 'data-navigation-motion' || name === 'data-scrolled' || (covered && name === 'inert') || ownsLayoutAttribute(name) || (nativeDetails && name === 'open') || (hostOwns !== null && hostOwns(name)) || (isIcon && (name === 'data-lucide' || name === 'data-lucide-fallback'));
     // Backwards over the live list, so a removal does not shift the attributes still to visit.
     const current = old.attributes;
     for (let index = current.length - 1; index >= 0; index--) {
@@ -1127,6 +1127,8 @@ export function mountEmbeddedBrowser(instance, options = {}) {
         if (element.localName === 'details' && name === 'open') return true;
         // The image paint host writes the geometry of a pattern and its image, and the background of the other elements.
         if (element.hasAttribute('data-image-paint') && (name === 'width' || name === 'height')) return true;
+        // The density descriptor of a catalog image drawn for a denser screen is the page's (the density plugin).
+        if (element.localName === 'img' && (name === 'srcset' || name === 'sizes') && densityOf(element.getAttribute('src')) > 1) return true;
         if (element.hasAttribute('data-symbol') && (name === 'data-lucide' || name === 'data-lucide-fallback')) return true;
         // The image pipeline (Tools/image-pipeline.js) writes the load hints, the size, the readiness and the ratio of an image.
         if (name === 'data-image-ratio' || (element.localName === 'img' && (PIPELINE_IMAGE_HINTS.has(name) || name === 'sizes' || name === 'width' || name === 'height' || name === 'data-image-ready' || name === 'data-image-error'))) return true;
@@ -2043,15 +2045,31 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   // Divider drag and keys for HSplitView and VSplitView: the panes move here and report their settled positions to Swift.
   if (typeof SWIFTUIWEB_HAS_SPLIT_VIEWS === 'undefined' || SWIFTUIWEB_HAS_SPLIT_VIEWS) plugins.push(new SplitViewHost(root, {dispatchNamed, window}));
   plugins.push(new SplitColumnMorph(root, {window}));
-  // An image whose file was drawn for a denser screen (`Name@2x.png`, Tools/compile-assets.mjs) says so (`srcset`): it lays
-  // out and draws at its size in points, with twice the pixels.
+  // An image whose file was drawn for a denser screen (`catalog-assets/@2x/`, Tools/compile-assets.mjs) lays out at its
+  // size in points on every screen. A width descriptor says so (`<pixels>w` with `sizes` its width in points): with an
+  // `x` descriptor alone a 1x screen would take `src` as an implicit 1x candidate and show the file at twice its size.
+  // The file's width is read once (a probe of the same URL, from the cache); until then the `x` descriptor is right on a
+  // dense screen.
+  const catalogImageWidths = new Map();
+  let densityStale = false;
   plugins.push({
-    needsSync: changes => changes.everything || changes.touches('img', ['src']),
+    needsSync: changes => densityStale || changes.everything || changes.touches('img', ['src']),
     sync() {
+      densityStale = false;
       for (const image of root.querySelectorAll('img[src*="catalog-assets/@2x/"],img[src*="catalog-assets/@3x/"]')) {
+        const src=image.getAttribute('src'), density=densityOf(src); if (density<=1) continue;
         // A candidate's URL cannot hold a space or a comma unescaped (catalog names do: "1 Small Clouds").
-        const src=image.getAttribute('src'), density=densityOf(src), wanted=density>1?`${src.replace(/[\s,]/g,c=>encodeURIComponent(c))} ${density}x`:null;
-        if (wanted && image.getAttribute('srcset')!==wanted) image.setAttribute('srcset',wanted);
+        const url=src.replace(/[\s,]/g,c=>encodeURIComponent(c)), width=catalogImageWidths.get(src);
+        if (width===undefined) {
+          catalogImageWidths.set(src,null);
+          const probe=new Image();
+          probe.onload=()=>{ catalogImageWidths.set(src,probe.naturalWidth||null); densityStale=true; schedule(); };
+          probe.src=src;
+        }
+        const known=catalogImageWidths.get(src);
+        const srcset=known?`${url} ${known}w`:`${url} ${density}x`, sizes=known?`${known/density}px`:null;
+        if (image.getAttribute('srcset')!==srcset) image.setAttribute('srcset',srcset);
+        if (sizes===null) image.removeAttribute('sizes'); else if (image.getAttribute('sizes')!==sizes) image.setAttribute('sizes',sizes);
       }
     },
   });

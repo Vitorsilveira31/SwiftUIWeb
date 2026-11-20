@@ -2648,10 +2648,10 @@
     display: none;
   }
 
+  /* The columns meet, as on iPad: no gap and no divider line between the sidebar and what follows it. */
   .navigation-split-view {
     display: grid;
     min-height: 0px;
-    gap: calc(var(--spacing) * 4);
   }
 
   .navigation-split-view[data-column-count="2"] {
@@ -5487,12 +5487,6 @@
     min-height: 0;
   }
 
-  .navigation-split-view .navigation-sidebar + .navigation-content,
-  .navigation-split-view .navigation-sidebar + .navigation-detail {
-    border-left-style: solid;
-    border-left-width: 1px;
-    border-color: var(--color-swu-border);
-  }
 
   
   
@@ -5573,20 +5567,19 @@
    column is hidden once its track has closed. Shown again, it slides back the same way. The tracks of both states have
    the same kinds, so the browser interpolates them. */
 .navigation-split-view {
-  transition: grid-template-columns var(--navigation-column-slide), column-gap var(--navigation-column-slide);
+  transition: grid-template-columns var(--navigation-column-slide);
 }
 .navigation-split-view > .navigation-column { transition: visibility 0s; }
 .navigation-split-view > .navigation-column[data-column-hidden="true"] { visibility: hidden; transition: visibility 0s 0.3s; }
 .navigation-split-view[data-column-count="2"] > .navigation-sidebar { justify-self: end; width: var(--navigation-sidebar-width, 320px); }
-.navigation-split-view[data-column-count="2"][data-column-visibility="detailOnly"] { grid-template-columns: 0px minmax(0, 1fr); column-gap: 0px; }
+.navigation-split-view[data-column-count="2"][data-column-visibility="detailOnly"] { grid-template-columns: 0px minmax(0, 1fr); }
 .navigation-split-view[data-column-count="3"] > .navigation-sidebar[data-column-hidden="true"] { justify-self: end; width: 240px; }
 .navigation-split-view[data-column-count="3"] > .navigation-content[data-column-hidden="true"] { justify-self: end; width: 280px; }
 .navigation-split-view[data-column-count="3"][data-column-visibility="doubleColumn"] {
   grid-template-columns: minmax(0px, 0px) minmax(180px, 280px) minmax(0, 1fr);
 }
-.navigation-split-view[data-column-count="3"][data-column-visibility="doubleColumn"] > .navigation-content { margin-inline-start: calc(var(--spacing) * -4); }
 .navigation-split-view[data-column-count="3"][data-column-visibility="detailOnly"] {
-  grid-template-columns: minmax(0px, 0px) minmax(0px, 0px) minmax(0, 1fr); column-gap: 0px;
+  grid-template-columns: minmax(0px, 0px) minmax(0px, 0px) minmax(0, 1fr);
 }
 .navigation-split-view > .navigation-sidebar {
   padding-block-start: 3.5rem;

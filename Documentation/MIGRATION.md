@@ -119,6 +119,10 @@ nested in a private type, or a state declared inside an `#if` in the view, is st
 
 ### Looks that changed
 
+- **A NavigationSplitView's columns meet** (visual change to the base rules `.navigation-split-view`, which put a
+  16-pixel gap between the columns, and `.navigation-sidebar + .navigation-detail`, which drew a 1-pixel divider). As on
+  iPad, the detail starts at the sidebar's edge: Food Truck's header and cards sat 17 pixels away from the sidebar,
+  behind a grey line. An application that wants the space pads the detail (`.padding(.leading, 16)`).
 - **A `Canvas` has no border or rounded corners** (visual change to the base rule `.draw-canvas`, which drew a 1-pixel
   border in the border colour and `--radius-lg` corners). A `Canvas` is what its renderer draws, as in SwiftUI: Food
   Truck's animated header showed a frame and rounded corners the iPad does not. Before, a canvas over a card showed a
