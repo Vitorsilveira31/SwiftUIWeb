@@ -2,6 +2,8 @@
 //
 // The iPad version of Food Truck schedules a local notification when donuts go in the oven (OrderDetailView). A browser
 // build has no notification service for it, so the request is refused with a message the order screen prints.
+// Only the browser build compiles it; the Xcode target has Apple's own.
+#if WEB
 import Foundation
 
 final class UNMutableNotificationContent {
@@ -40,3 +42,4 @@ final class UNUserNotificationCenter {
         completion?(UNNotificationUnavailable())
     }
 }
+#endif

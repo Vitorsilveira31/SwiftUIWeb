@@ -2,6 +2,8 @@
 //
 // Apple's DetailedMapView wraps `MKMapView` in a UIKit/AppKit view controller, which has no counterpart in a browser.
 // This is the same view (same parameters, same non-interactive map) drawn with the framework's MapKit `Map`.
+// Only the browser build compiles it; the Xcode target has Apple's own.
+#if WEB
 import CoreLocation
 import MapKit
 import SwiftUI
@@ -21,3 +23,4 @@ struct DetailedMapView: View {
         .padding(.top, topSafeAreaInset)
     }
 }
+#endif
