@@ -1828,6 +1828,9 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   }
   function syncGeometryReaders() {
     const added = geometry.sync();
+    // A commit that drew a scaled reader for its box needs no measurement to arrive: its scale goes now, or the drawing,
+    // right for its box, shows scaled down until the next measurement (Food Truck's tiles, after an order).
+    if (scaledReaders.size || scaledContents.size) scaleUnfitReaders();
     if (!added.length) return;
     if (commitChanges.everything) { if (swiftInWorker()) holdUnfitReaders(added); return; }
     if (!swiftInWorker()) {
@@ -1946,24 +1949,39 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   // corner and moved onto the box. What the content had inline before comes back after.
   const SCALED_PROPERTIES = ['scale', 'translate', 'transform-origin'];
   const scaledReaders = new Map();
-  function unscale(element) {
-    const content = element.firstElementChild, saved = scaledReaders.get(element);
-    if (content && saved?.content === content) {
-      for (const property of SCALED_PROPERTIES) {
-        // A commit may have written the property since: then it is Swift's, not ours.
-        if (content.style.getPropertyValue(property) !== saved.ours[property]) continue;
-        const [value, priority] = saved.previous[property];
-        if (value) content.style.setProperty(property, value, priority); else content.style.removeProperty(property);
-      }
+  // The content a scale was put on, with what it had before: a commit can move a reader's content into another reader
+  // element, and the scale must leave with the content, not with the element (Food Truck's tiles kept donuts at 0.43 of
+  // their size, drawn for their box, once an order moved them).
+  const scaledContents = new Map();
+  function restore(content) {
+    const saved = scaledContents.get(content); if (!saved) return;
+    for (const property of SCALED_PROPERTIES) {
+      // A commit may have written the property since: then it is Swift's, not ours.
+      if (content.style.getPropertyValue(property) !== saved.ours[property]) continue;
+      const [value, priority] = saved.previous[property];
+      if (value) content.style.setProperty(property, value, priority); else content.style.removeProperty(property);
     }
+    scaledContents.delete(content);
+  }
+  function unscale(element) {
+    const saved = scaledReaders.get(element);
+    if (saved) restore(saved.content);
+    if (element.firstElementChild) restore(element.firstElementChild);
     element.removeAttribute(SCALED);
     scaledReaders.delete(element);
   }
   function scaleUnfitReaders() {
-    for (const element of scaledReaders.keys()) if (!element.isConnected) scaledReaders.delete(element);
+    for (const [element, saved] of scaledReaders) if (!element.isConnected || element.firstElementChild !== saved.content) unscale(element);
+    // Content whose reader no longer holds it scaled (a tile leaving with its removal transition is no longer measured).
+    for (const content of [...scaledContents.keys()]) {
+      if (!content.isConnected) { scaledContents.delete(content); continue; }
+      if (scaledReaders.get(content.parentElement)?.content !== content) restore(content);
+    }
     for (const element of geometry.observed) {
       if (!element.hasAttribute('data-geometry-reader')) continue;
       const rendered = element.getAttribute('data-geometry-rendered'), content = element.firstElementChild;
+      // Content scaled under another reader element than this one (a commit moved it here) is not this one's to keep.
+      if (content && scaledContents.has(content) && scaledReaders.get(element)?.content !== content) restore(content);
       if (rendered === null || !content || !element.isConnected) { if (scaledReaders.has(element)) unscale(element); continue; }
       const [width, height] = rendered.split(',').map(Number);
       // Its layout size: a transform above it does not change what it is drawn for.
@@ -1983,9 +2001,10 @@ export function mountEmbeddedBrowser(instance, options = {}) {
     let saved = scaledReaders.get(element);
     if (saved && saved.content !== content) { unscale(element); saved = undefined; }
     if (!saved) {
-      saved = {content, previous: {}, ours: {}};
-      for (const property of SCALED_PROPERTIES) saved.previous[property] = [content.style.getPropertyValue(property), content.style.getPropertyPriority(property)];
+      saved = scaledContents.get(content) ?? {content, previous: {}, ours: {}};
+      if (!scaledContents.has(content)) for (const property of SCALED_PROPERTIES) saved.previous[property] = [content.style.getPropertyValue(property), content.style.getPropertyPriority(property)];
       scaledReaders.set(element, saved);
+      scaledContents.set(content, saved);
     }
     // Where the drawing for the old size sits in the content, in the content's own coordinates.
     const drawing = content.firstElementChild;
@@ -3704,9 +3723,20 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   }};
   const sendValue=value=>sendEventValue(encoder.encode(value));
   const reportedProposals=new WeakMap(), reportedSizes=new WeakMap();
+  // Whether the layout Swift drew was laid out for the proposal `w`,`h` (`data-layout-offered`): one whose state Swift made
+  // again went back to the proposal it inherits, though the page had sent its own, which it sends again then, with the
+  // sizes of the subviews.
+  const offeredAxis=value=>value===''?null:Number(value);
+  const laidOutFor=(element,w,h)=>{
+    const offered=element.getAttribute('data-layout-offered'); if(offered===null)return true;
+    const [ow,oh]=offered.split(',').map(offeredAxis);
+    const same=(a,b)=>a===null||b===null?a===b:Math.abs(a-b)<0.5;
+    return same(ow,w)&&same(oh,h);
+  };
   layout = new SemanticLayoutHost(root,{onError:report,onProposal:(element,w,h)=>{
     const value=(w===null?'':w)+','+(h===null?'':h);
-    if(reportedProposals.get(element)===value)return;
+    if(reportedProposals.get(element)===value&&!laidOutFor(element,w,h))reportedSizes.delete(element);
+    else if(reportedProposals.get(element)===value)return;
     reportedProposals.set(element,value);
     dispatchNamed(element,'layoutproposal',value);
   },onLayoutSizes:(element,value)=>{

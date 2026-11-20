@@ -5552,27 +5552,9 @@
   .responsive-regular {
     display: none !important;
   }
-
-  .navigation-split-view {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .navigation-sidebar {
-    border-right-style: solid;
-    border-right-width: 0px;
-    border-bottom-style: solid;
-    border-bottom-width: 1px;
-  }
-
-  .navigation-split-view .navigation-content,
-  .navigation-split-view .navigation-detail {
-    border-top-style: solid;
-    border-top-width: 1px;
-    border-left-style: solid;
-    border-left-width: 0px;
-    border-color: var(--color-swu-border);
-  }
+  /* No rule for NavigationSplitView: as on iPad, its columns stay side by side at every regular width (the detail's own
+     content adapts to its width), and a compact window shows one column at a time (the compact rules below). Stacked
+     here, Food Truck's detail went under its sidebar between 700 and 960 pixels. */
 }
 
 /* The sidebar of a NavigationSplitView, as iPadOS draws it: 320 points wide (or the width the sidebar's content asks for,

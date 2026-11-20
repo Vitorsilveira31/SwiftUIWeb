@@ -830,7 +830,15 @@ export class CssLayout {
             if (framed || node.kind === 'aspect' || (s?.fill && node.def?.[a])) continue;
             if (!raised.has(e)) raised.set(e, e.getAttribute('style'));
             // The root takes its container's length (the window: `100dvh`), a subview of a Layout the proposal it was placed with.
-            e.style.setProperty(a === 'x' ? 'width' : 'height', proposed ? px(proposed[a === 'x' ? 0 : 1] ?? 0) : a === 'y' && root && root.height !== 'cell' ? root.height : '100%', 'important');
+            let length = proposed ? px(proposed[a === 'x' ? 0 : 1] ?? 0) : a === 'y' && root && root.height !== 'cell' ? root.height : '100%';
+            // A frame takes its offer within its own bounds: Food Truck's cards sit in a `.frame(maxWidth: 1200)`, and taking
+            // the whole window there offered the donuts' Layout a column 87 points wider than the one it is shown in.
+            if (node.kind === 'frame') {
+              const max = num(node.attr(a === 'x' ? 'data-frame-max-w' : 'data-frame-max-h')), min = num(node.attr(a === 'x' ? 'data-frame-min-w' : 'data-frame-min-h'));
+              if (max != null && max < Infinity) length = `min(${length}, ${px(max)})`;
+              if (min != null && min > 0) length = `max(${length}, ${px(min)})`;
+            }
+            e.style.setProperty(a === 'x' ? 'width' : 'height', length, 'important');
           }
         }
       }
@@ -1091,6 +1099,13 @@ export class CssLayout {
       }
       node.cols = Math.max(0, ...rows.map(r => r.width));
       node.colFill = Array.from({ length: node.cols }, (_, i) => rows.some(r => r.kids.some(cell => cell.col === i && cell.span === 1 && cell.axis?.x?.fill && !cell.axis.x.soft)));
+      // A column whose cells all fill takes its share of the width, as SwiftUI's Grid gives flexible columns: what they hold
+      // now (a custom Layout drawn for the last width it was offered) is not a minimum, or the column grows with it and
+      // it with the column (Food Truck's cards, wider than the window once the sidebar was hidden).
+      node.colShare = Array.from({ length: node.cols }, (_, i) => {
+        const cells = rows.flatMap(r => r.kids.filter(cell => cell.col === i && cell.span === 1));
+        return cells.length > 0 && cells.every(cell => cell.axis?.x?.fill && !cell.axis.x.soft);
+      });
     }
     if (kind === 'gridrow') node.rowAy = num(a('data-row-align-y'));
     if (kind === 'table') node.tableAlign = [num(a('data-align-x'), .5), num(a('data-align-y'), .5)];
@@ -1100,7 +1115,7 @@ export class CssLayout {
     node.baseline = kind === 'hstack' && this.options.baseline === true && a('data-align-y') == null && a('data-layout-alignment') === 'baseline';
     node.explicitPriority = element.hasAttribute('data-layout-priority'); node.priority = num(a('data-layout-priority'), 0);
     node.spacing = element.classList.contains('searchable') ? 0 : num(a('data-layout-gap'), 8);
-    node.ctxKey = kind + '|' + node.kids.length + '|' + node.ax + '|' + node.ay + '|' + node.spacing + (node.baseline ? '|bl' : '') + (wrap ? '|L' + wrap : '') + (kind === 'grid' ? '|' + (a('data-grid-tracks') || '') : '') + (kind === 'table' ? '|' + node.cols + node.colFill.join('') : '') + (kind === 'gridrow' ? '|' + node.rowAy : '') + (kind === 'inset' ? '|' + (a('data-inset-edge') || 'bottom') : '') + (kind === 'navstack' ? '|' + node.bar.map(item => (item.shown ? item.side : '-')).join(',') + '|' + (element.getAttribute('data-navigation-title-display-mode') || '') : '');
+    node.ctxKey = kind + '|' + node.kids.length + '|' + node.ax + '|' + node.ay + '|' + node.spacing + (node.baseline ? '|bl' : '') + (wrap ? '|L' + wrap : '') + (kind === 'grid' ? '|' + (a('data-grid-tracks') || '') : '') + (kind === 'table' ? '|' + node.cols + node.colFill.join('') + node.colShare.join('') : '') + (kind === 'gridrow' ? '|' + node.rowAy : '') + (kind === 'inset' ? '|' + (a('data-inset-edge') || 'bottom') : '') + (kind === 'navstack' ? '|' + node.bar.map(item => (item.shown ? item.side : '-')).join(',') + '|' + (element.getAttribute('data-navigation-title-display-mode') || '') : '');
     node.ctxKeyBase = node.ctxKey;
     if (kind === 'table') for (const row of node.kids) if (row.kind === 'gridrow') { row.tableAlign = node.tableAlign; row.colAlign = node.colAlign; row.ctxKey = row.ctxKeyBase + '|T' + node.tableAlign.join(',') + '|C' + row.kids.map(cell => cell.span + ':' + (cell.element.getAttribute('data-grid-cell-anchor') ?? '') + ':' + (cell.element.getAttribute('data-grid-unsized-axes') ?? '')).join(',') + '/' + node.colAlign.join(','); }
     // A canvas is its own frame boundary (the drawing surface is never wrapped), so its frame has no child element: as
@@ -1389,7 +1404,7 @@ export class CssLayout {
     else if (k === 'table') {
       // Without GridRows there are no columns: the children are stacked, each as wide as it wants.
       push('display', 'grid');
-      push('grid-template-columns', n.cols ? Array.from({ length: n.cols }, (_, i) => n.colFill[i] ? 'minmax(max-content,1fr)' : 'minmax(0,max-content)').join(' ') : 'minmax(0,max-content)');
+      push('grid-template-columns', n.cols ? Array.from({ length: n.cols }, (_, i) => n.colShare[i] ? 'minmax(0,1fr)' : n.colFill[i] ? 'minmax(max-content,1fr)' : 'minmax(0,max-content)').join(' ') : 'minmax(0,max-content)');
       push('column-gap', px(n.spacing)); push('row-gap', px(num(e.getAttribute('data-row-spacing'), 8))); push('align-content', 'start');
     } else if (k === 'gridrow') { push('display', 'contents'); return d; }
     // A text leaf keeps the display its Swift view gave it (`-webkit-box` clamps the lines of a `lineLimit`).

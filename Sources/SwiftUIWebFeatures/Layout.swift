@@ -275,11 +275,17 @@ fileprivate struct _LayoutPass {
   #if hasFeature(Embedded)
   wrapper.attributes["data-layout-proposal"] = "true"
   if let store {
+    // The proposal this pass was laid out for, as the page reported it (empty where it reported none): the page sends its
+    // proposal again when this is not what it measures, as a layout whose state was made again (its element kept) had
+    // gone back to the proposal it inherits and the page, which had already sent its own, never sent it again.
+    func axis(_ value: CGFloat?) -> String { value.map { _layoutNumber($0) } ?? "" }
+    wrapper.attributes["data-layout-offered"] = axis(store.rendered.width) + "," + axis(store.rendered.height)
     let ownerToken = context._renderOwnerToken
     let invalidationStore = context.stateStore
     wrapper.events["layoutproposal"] = _EventHandler(name: "layoutproposal", action: { rawValue in
       let next = _parseProposal(rawValue)
-      guard next != store.reported else { return }
+      // Sent again although known (`data-layout-offered`): laid out for another, it is laid out again.
+      guard next != store.reported || next != store.rendered else { return }
       store.reported = next
       if next != store.rendered, let ownerToken { invalidationStore._ownerObservationDidChange(ownerToken) }
     })

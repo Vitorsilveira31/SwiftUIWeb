@@ -2,6 +2,8 @@
 //
 // Apple's ShowTopDonutsIntent is an App Intent for Siri and Shortcuts, which a browser has neither of. The iPad version's
 // Top 5 shows it as a Siri tip (`SiriTipView`); this is the intent as the tip needs it: its timeframe and its phrase.
+// Only the browser build compiles it; the Xcode target has Apple's own.
+#if WEB
 import AppIntents
 import FoodTruckKit
 
@@ -23,3 +25,4 @@ private extension Timeframe {
         }
     }
 }
+#endif
