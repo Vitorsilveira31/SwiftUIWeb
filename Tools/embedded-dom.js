@@ -1738,7 +1738,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
       });
       return;
     }
-    holdUnfitReaders(added.filter(element => onNewScreen(element)));
+    holdUnfitReaders(added.filter(element => onNewScreen(element) || element.closest('.layout-item') !== null));
     for (const element of added) {
       let piece = null;
       for (const node of commitChanges.added) if (node.isConnected && node.contains(element) && (!piece || node.contains(piece))) piece = node;
@@ -1764,9 +1764,11 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   // SwiftUI draws a reader once, for its size. So the content of a reader inserted with a size other than its box's
   // (`data-geometry-rendered`) stays hidden (`data-measuring`: its box keeps its place in the layout, so the page around it
   // does not move) until a commit draws it for its box, at most `FITTING_LIMIT_MS`; a reader already shown is never hidden
-  // again. The check runs where the measurements are taken, after the frame's layout and before its paint. Only the readers
-  // of a screen the commit brought (the first page, a navigation's screen, a tab's panel) wait: content inserted into a
-  // screen already shown (Food Truck's new orders) would blink.
+  // again. The check runs where the measurements are taken, after the frame's layout and before its paint. The readers of
+  // a screen the commit brought (the first page, a navigation's screen, a tab's panel) wait, and the ones inside the items
+  // of a custom Layout, which draws its subviews before it places them: Food Truck's new order arrives as a tile whose
+  // donuts were drawn at the size of the whole card (the item fades in, so the wait does not show). Other content
+  // inserted into a screen already shown is left alone: it would blink.
   const FITTING_LIMIT_MS = 250;
   const SCREEN = '.navigation-root,.navigation-destination,.navigation-stack,[role="tabpanel"]';
   const SCREEN_CONTENT = '.navigation-root,.navigation-destination,.navigation-column,[role="tabpanel"]';
