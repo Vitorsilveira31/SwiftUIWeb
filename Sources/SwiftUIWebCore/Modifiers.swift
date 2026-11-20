@@ -2204,6 +2204,19 @@ private func _shapeRadius<S: Shape>(_ shape: S) -> String {
   return "0"
 }
 
+private struct _ContainerShapeRadiusKey: EnvironmentKey {
+  static var defaultValue: String? { nil }
+}
+
+extension EnvironmentValues {
+  /// The corner radius (CSS) of the shape the nearest `containerShape(_:)` above declares, nil without one: a background
+  /// without a shape fills it.
+  package var _containerShapeRadius: String? {
+    get { self[_ContainerShapeRadiusKey.self] }
+    set { self[_ContainerShapeRadiusKey.self] = newValue }
+  }
+}
+
 /// The corner radius of `shape` in CSS, for `containerShape(_:)` to hand its descendants' `ContainerRelativeShape`.
 package func _containerShapeRadius<S: Shape>(_ shape: S) -> String {
   if shape is ContainerRelativeShape { return "var(--container-shape-radius, 0px)" }
@@ -2401,10 +2414,10 @@ package nonisolated struct ShapeStyleBackgroundModifier<Style: ShapeStyle>: View
     node.attributes["data-background-style"] = style._swiftUIWebCSSValue
     // SwiftUI fills a background without a shape in the container's shape (`containerShape(_:)`): Food Truck's cards,
     // `.background()` in a Grid that declares a 12-point rounded rectangle, are rounded. Without one it is the box.
-    // Over clipped content (a background or overlay wrapper), the clip's radius is the fallback, so a shadow on the
-    // wrapper still follows the clip when no container declares a shape.
-    if node.styles["border-radius"] == nil {
-      node.styles["border-radius"] = "var(--container-shape-radius, \(_wrappedClippedRadius(of: node) ?? "0px"))"
+    // Only under a `containerShape`: elsewhere the view keeps its own corners (a button's from the stylesheet, a clip's
+    // for a shadow on a wrapper over clipped content).
+    if node.styles["border-radius"] == nil, let radius = context.environment._containerShapeRadius {
+      node.styles["border-radius"] = radius
     }
     _applyMaterialBackdrop(style, to: node)
   }

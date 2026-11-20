@@ -128,7 +128,8 @@ nested in a private type, or a state declared inside an `#if` in the view, is st
 - **`containerShape(_:)` shapes the views below it.** `ContainerRelativeShape` was a rectangle; it now takes the
   corner radius of the nearest `containerShape`, and a `.background()` without a shape fills that shape, as in SwiftUI
   (Food Truck's cards, `.background()` in a Grid that declares a 12-point rounded rectangle, are rounded). Without a
-  `containerShape` above them both keep a rectangle, and a background over clipped content keeps the clip's corners.
+  `containerShape` above them, `ContainerRelativeShape` is a rectangle and a background leaves the view's own corners
+  alone (a button's, a clip's).
 - **Catalog images use their 2x file.** An image set with a universal 2x file is copied to `catalog-assets/@2x/` and
   drawn at its size in points (`srcset`, and canvas images and image paints scaled by its density): images are as
   sharp as on a Retina screen and keep their size. A set with only a 1x file is unchanged.

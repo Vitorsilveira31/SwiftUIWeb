@@ -175,6 +175,10 @@ public extension View {
   /// Sets the shape `ContainerRelativeShape` takes in the views below: its corner radius, which the page inherits
   /// (`--container-shape-radius`). Food Truck's cards clip to it and are rounded by the Grid's 12-point rectangle.
   nonisolated func containerShape<T: InsettableShape>(_ shape: T) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_SemanticCompatibilityModifier(attributes: ["data-container-shape": "true"], styles: ["--container-shape-radius": _containerShapeRadius(shape)]))
+    let radius = _containerShapeRadius(shape)
+    return modifier(_SemanticCompatibilityModifier(
+      attributes: ["data-container-shape": "true"], styles: ["--container-shape-radius": radius],
+      environment: { $0._containerShapeRadius = radius }
+    ))
   }
 }

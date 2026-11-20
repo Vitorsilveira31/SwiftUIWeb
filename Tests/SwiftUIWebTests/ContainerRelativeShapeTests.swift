@@ -27,4 +27,16 @@ struct ContainerRelativeShapeTests {
     #expect(html.contains("var(--container-shape-radius, 0px)"), "\(html)")
     #expect(!html.contains("--container-shape-radius:"), "\(html)")
   }
+
+  @Test
+  func aBackgroundWithoutAShapeTakesTheContainersCornersOnlyUnderAContainerShape() {
+    let inside = StaticHTMLFiberRenderer().render(
+      VStack { Text("Card").background() }.containerShape(RoundedRectangle(cornerRadius: 12))
+    )
+    #expect(inside.contains("border-radius: 12px"), "\(inside)")
+    // Elsewhere a component keeps the corners its stylesheet gives it (a button with a clear background).
+    let outside = StaticHTMLFiberRenderer().render(Button("Save") {}.background(.clear))
+    #expect(!outside.contains("border-radius: var(--container-shape-radius"), "\(outside)")
+    #expect(!outside.contains("border-radius: 0px"), "\(outside)")
+  }
 }
