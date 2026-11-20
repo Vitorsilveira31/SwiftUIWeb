@@ -776,7 +776,7 @@ struct CorePublicViewContractTests {
     let enabledTree = FiberTree(ColorPicker(selection: binding, label: { Text("Accent color") }))
     let input = try #require(enabledTree.findNode(withEvent: "change"))
     #expect(input.attributes["type"] == "color")
-    #expect(input.attributes["value"] == "#007aff")
+    #expect(input.attributes["value"] == "#0088ff")
     enabledTree.dispatch(event: "input", value: "#123456", on: input)
     #expect(selection.cssValue == "#123456")
 

@@ -15,7 +15,7 @@ import SwiftUIWebHTML
 struct ShapePaintColorTests {
   private static let colorForms: [(name: String, color: Color)] = [
     ("named", Color.red),
-    ("hex", Color("#00C7BE")),
+    ("hex", Color("#00C8B3")),
     ("rgb", Color(red: 0.1, green: 0.2, blue: 0.3)),
     ("css variable", Color("var(--accent)")),
     ("light-dark", Color("light-dark(#ff0000, #0000ff)")),

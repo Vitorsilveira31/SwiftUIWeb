@@ -156,8 +156,8 @@ async function checkSwiftUIParityFixture(page, url, report) {
     report.checks.push({ name: `parity-${name}`, status: "PASS" });
   };
 
-  // Color.red and .blue are Apple's light-mode system colors (#FF3B30, #007AFF).
-  check("background-color-value-and-member", g.bgColor === "rgb(255, 59, 48)" && g.bgMember === "rgb(0, 122, 255)", g);
+  // Color.red and .blue are Apple's light-mode system colors (#FF383C, #0088FF).
+  check("background-color-value-and-member", g.bgColor === "rgb(255, 56, 60)" && g.bgMember === "rgb(0, 136, 255)", g);
   check("background-gradient-paint", g.bgGradient.startsWith("linear-gradient"), g.bgGradient);
   check("overlay-view-top-trailing", near(g.badge.x + g.badge.w, g.base.x + g.base.w) && near(g.badge.y, g.base.y), g);
   check("overlay-paint-covers-bounds", near(g.dimLayer.w, g.dim.w) && near(g.dimLayer.h, g.dim.h), g);

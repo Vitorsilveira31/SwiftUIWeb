@@ -138,7 +138,7 @@ struct AppleCompatibilityRenderingTests {
 
   @Test
   func nsColorSystemValuesResolveToLightAndDarkCSS() {
-    #expect(NSColor.controlAccentColor.css == "light-dark(#007AFF, #0A84FF)")
+    #expect(NSColor.controlAccentColor.css == "light-dark(#0088FF, #0091FF)")
     let all: [NSColor] = [
       .windowBackgroundColor, .controlBackgroundColor, .textBackgroundColor,
       .underPageBackgroundColor, .labelColor, .secondaryLabelColor,
@@ -154,7 +154,7 @@ struct AppleCompatibilityRenderingTests {
     let uiHTML = FiberTree(Text("Tint").background(Color(uiColor: .systemGray5))).renderNode.htmlDescription
     _expectTrue(uiHTML.contains("light-dark(#E5E5EA, #2C2C2E)"), uiHTML)
     let nsHTML = FiberTree(Text("Tint").background(Color(nsColor: .controlAccentColor))).renderNode.htmlDescription
-    _expectTrue(nsHTML.contains("light-dark(#007AFF, #0A84FF)"), nsHTML)
+    _expectTrue(nsHTML.contains("light-dark(#0088FF, #0091FF)"), nsHTML)
   }
 }
 

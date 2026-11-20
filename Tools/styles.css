@@ -5433,7 +5433,7 @@
     height: 1.25rem;
     display: inline-flex;
     justify-content: center;
-    color: var(--tint-color, var(--color-swu-primary));
+    color: var(--list-item-tint, var(--tint-color, var(--color-swu-primary)));
   }
 
   .navigation-split-view .navigation-content,

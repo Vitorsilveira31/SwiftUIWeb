@@ -56,3 +56,16 @@ struct ContainerRelativeShapeTests {
     #expect(html.contains("border-radius: 12px"), "\(html)")
   }
 }
+
+/// `listItemTint(_:)` tints a row's icon over the app's tint, as Food Truck's grey city rows on iPad.
+@Suite
+@MainActor
+struct ListItemTintTests {
+  @Test
+  func aRowCarriesItsTintForItsIcon() {
+    let html = StaticHTMLFiberRenderer().render(
+      List { Label("Cupertino", systemImage: "building.2").listItemTint(.secondary) }
+    )
+    #expect(html.contains("--list-item-tint: \(Color.secondary.cssValue)"), "\(html)")
+  }
+}

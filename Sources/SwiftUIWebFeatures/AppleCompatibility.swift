@@ -88,7 +88,7 @@ public struct NSColor: Hashable, Sendable {
   public static let quaternaryLabelColor = NSColor(light: "rgb(0 0 0 / 0.1)", dark: "rgb(255 255 255 / 0.1)")
   public static let separatorColor = NSColor(light: "rgb(0 0 0 / 0.1)", dark: "rgb(255 255 255 / 0.1)")
   public static let gridColor = NSColor(light: "#E6E6E6", dark: "#3B3B3B")
-  public static let controlAccentColor = NSColor(light: "#007AFF", dark: "#0A84FF")
+  public static let controlAccentColor = NSColor(light: "#0088FF", dark: "#0091FF")
   public static let lightGray = NSColor(light: "#AAAAAA", dark: "#AAAAAA")
   public static let gray = NSColor(light: "#808080", dark: "#808080")
   public static let darkGray = NSColor(light: "#555555", dark: "#555555")

@@ -119,6 +119,13 @@ nested in a private type, or a state declared inside an `#if` in the view, is st
 
 ### Looks that changed
 
+- **`listItemTint(_:)` tints a list row's icon** (it had no effect): Food Truck's city rows in the sidebar,
+  `.listItemTint(.secondary)`, have grey icons, as on iPad. It now returns `some View`, as in SwiftUI.
+- **System colors are Apple's current palette** (iOS 26 and macOS 26): `Color.indigo` is `#6155F5` (dark `#6D7CFF`),
+  `.blue` `#0088FF`, `.red` `#FF383C`, `.orange` `#FF8D28`, `.purple` `#CB30E0`, `.mint`, `.teal`, `.cyan`, `.brown`
+  and the dark yellow and gray changed too, and so did the catalog references (`"reference": "systemIndigoColor"`) and
+  `UIColor.systemBlue`. Food Truck's indigo accent was a darker purple than on iPad. An application that wants the old
+  value writes it: `Color(red: 0.345, green: 0.337, blue: 0.839)` for the old indigo.
 - **A NavigationSplitView's columns meet** (visual change to the base rules `.navigation-split-view`, which put a
   16-pixel gap between the columns, and `.navigation-sidebar + .navigation-detail`, which drew a 1-pixel divider). As on
   iPad, the detail starts at the sidebar's edge: Food Truck's header and cards sat 17 pixels away from the sidebar,

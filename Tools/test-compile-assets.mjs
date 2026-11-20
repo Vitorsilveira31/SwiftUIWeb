@@ -183,9 +183,9 @@ describe("Accent color", () => {
       mkdirSync(set, { recursive: true });
       writeJson(join(set, "Contents.json"), { colors: [{ color: { platform: "universal", reference: "systemIndigoColor" } }] });
       const values = mod.compileAssets(root);
-      assert.deepEqual(plain(values), { AccentColor: "light-dark(#5856D6, #5E5CE6)" });
+      assert.deepEqual(plain(values), { AccentColor: "light-dark(#6155F5, #6D7CFF)" });
       const css = mod.render(values);
-      assert.match(css, /--asset-color-AccentColor: light-dark\(#5856D6, #5E5CE6\);/);
+      assert.match(css, /--asset-color-AccentColor: light-dark\(#6155F5, #6D7CFF\);/);
       assert.match(css, /--tint-color: var\(--asset-color-AccentColor\);/);
     });
   });

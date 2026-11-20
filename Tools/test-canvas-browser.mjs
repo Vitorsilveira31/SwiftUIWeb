@@ -119,9 +119,9 @@ await runSuite(async () => {
 
     // System colors, resolved for light mode (the fixture uses .red, .green and .blue).
     for (const [name, result, color] of [
-      ["framed height", framed, [255, 59, 48]],
+      ["framed height", framed, [255, 56, 60]],
       ["framed width and height", sized, [52, 199, 89]],
-      ["unframed", unframed, [0, 122, 255]],
+      ["unframed", unframed, [0, 136, 255]],
     ]) {
       const pixel = result.pixel;
       if (pixel === null || pixel.slice(0, 3).some((a, i) => Math.abs(a - color[i]) > 20) || pixel[3] < 250) {
@@ -161,7 +161,7 @@ await runSuite(async () => {
     }
     check("canvas follows a window resize and repaints its backing store");
 
-    // System colors resolve through light-dark(), so the drawing follows the color scheme. Dark system red is #FF453A.
+    // System colors resolve through light-dark(), so the drawing follows the color scheme. Dark system red is #FF4245.
     await page.emulateMedia({ colorScheme: "dark" });
     await page.waitForFunction(
       `(() => { const c = [...document.querySelectorAll('canvas[data-draw-canvas]')]
@@ -173,8 +173,8 @@ await runSuite(async () => {
     );
     const dark = await measure("Framed height");
     report.dark_framed_height = dark;
-    if (Math.max(...dark.pixel.slice(0, 3).map((a, i) => Math.abs(a - [255, 69, 58][i]))) > 4) {
-      throw new Error(`dark scheme did not repaint the canvas to #FF453A: ${JSON.stringify(dark)}`);
+    if (Math.max(...dark.pixel.slice(0, 3).map((a, i) => Math.abs(a - [255, 66, 69][i]))) > 4) {
+      throw new Error(`dark scheme did not repaint the canvas to #FF4245: ${JSON.stringify(dark)}`);
     }
     await page.emulateMedia({ colorScheme: "light" });
     await page.waitForFunction(
@@ -184,7 +184,7 @@ await runSuite(async () => {
         return Math.abs(p[0] - 255) <= 4 && Math.abs(p[1] - 59) <= 4 && Math.abs(p[2] - 48) <= 4; })()`,
       undefined,
       { timeout: 5000 },
-    ).catch(async (error) => { throw new Error(`light scheme did not repaint the canvas to #FF3B30: ${JSON.stringify(await measure("Framed height"))} ${JSON.stringify(await page.evaluate(() => ({ attr: document.documentElement.getAttribute("data-color-scheme"), dark: matchMedia("(prefers-color-scheme: dark)").matches, style: document.documentElement.style.colorScheme })))} (${error.message})`); });
+    ).catch(async (error) => { throw new Error(`light scheme did not repaint the canvas to #FF383C: ${JSON.stringify(await measure("Framed height"))} ${JSON.stringify(await page.evaluate(() => ({ attr: document.documentElement.getAttribute("data-color-scheme"), dark: matchMedia("(prefers-color-scheme: dark)").matches, style: document.documentElement.style.colorScheme })))} (${error.message})`); });
     check("canvas light-dark() colors repaint when the color scheme toggles");
 
     // A state update that switches a subtree's scheme repaints the canvases below it (and only them): dark system red there,
@@ -197,8 +197,8 @@ await runSuite(async () => {
     await page.waitForFunction(`(() => { const c = [...document.querySelectorAll('canvas[data-draw-canvas]')].find(c => c.previousElementSibling && c.previousElementSibling.textContent === 'Subtree scheme'); if (!c) return false; const p = c.getContext('2d').getImageData(c.width >> 1, c.height >> 1, 1, 1).data; return Math.abs(p[0] - 255) <= 4 && Math.abs(p[1] - 59) <= 4; })()`, undefined, { timeout: 5000 });
     await page.getByRole("button", { name: "Toggle subtree scheme", exact: true }).click();
     await page.waitForFunction(`(() => { const c = [...document.querySelectorAll('canvas[data-draw-canvas]')].find(c => c.previousElementSibling && c.previousElementSibling.textContent === 'Subtree scheme'); if (!c) return false; const p = c.getContext('2d').getImageData(c.width >> 1, c.height >> 1, 1, 1).data; return Math.abs(p[0] - 255) <= 4 && Math.abs(p[1] - 69) <= 4; })()`, undefined, { timeout: 5000 })
-      .catch(async () => { throw new Error(`a subtree switched to dark did not repaint its canvas to #FF453A: ${JSON.stringify(await pixelOf("Subtree scheme"))}`); });
-    assert.ok(near(await pixelOf("Framed height"), [255, 59, 48]), "the canvas outside the subtree keeps the page's scheme");
+      .catch(async () => { throw new Error(`a subtree switched to dark did not repaint its canvas to #FF4245: ${JSON.stringify(await pixelOf("Subtree scheme"))}`); });
+    assert.ok(near(await pixelOf("Framed height"), [255, 56, 60]), "the canvas outside the subtree keeps the page's scheme");
     await page.getByRole("button", { name: "Toggle subtree scheme", exact: true }).click();
     await page.waitForFunction(`(() => { const c = [...document.querySelectorAll('canvas[data-draw-canvas]')].find(c => c.previousElementSibling && c.previousElementSibling.textContent === 'Subtree scheme'); if (!c) return false; const p = c.getContext('2d').getImageData(c.width >> 1, c.height >> 1, 1, 1).data; return Math.abs(p[0] - 255) <= 4 && Math.abs(p[1] - 59) <= 4; })()`, undefined, { timeout: 5000 });
     check("a canvas repaints when its subtree's color scheme switches");

@@ -335,18 +335,18 @@ function hex2(number) {
  * same ones `Color.indigo` and its siblings use in the framework.
  */
 const SYSTEM_COLORS = new Map([
-  ["Red", ["#FF3B30", "#FF453A"]],
-  ["Orange", ["#FF9500", "#FF9F0A"]],
-  ["Yellow", ["#FFCC00", "#FFD60A"]],
+  ["Red", ["#FF383C", "#FF4245"]],
+  ["Orange", ["#FF8D28", "#FF9230"]],
+  ["Yellow", ["#FFCC00", "#FFD600"]],
   ["Green", ["#34C759", "#30D158"]],
-  ["Mint", ["#00C7BE", "#63E6E2"]],
-  ["Teal", ["#30B0C7", "#40C8E0"]],
-  ["Cyan", ["#32ADE6", "#64D2FF"]],
-  ["Blue", ["#007AFF", "#0A84FF"]],
-  ["Indigo", ["#5856D6", "#5E5CE6"]],
-  ["Purple", ["#AF52DE", "#BF5AF2"]],
+  ["Mint", ["#00C8B3", "#00DAC3"]],
+  ["Teal", ["#00C3D0", "#00D2E0"]],
+  ["Cyan", ["#00C0E8", "#3CD3FE"]],
+  ["Blue", ["#0088FF", "#0091FF"]],
+  ["Indigo", ["#6155F5", "#6D7CFF"]],
+  ["Purple", ["#CB30E0", "#DB34F2"]],
   ["Pink", ["#FF2D55", "#FF375F"]],
-  ["Brown", ["#A2845E", "#AC8E68"]],
+  ["Brown", ["#AC7F5E", "#B78A66"]],
 ]);
 
 /** CSS color of a color entry, or null when it has none. */
