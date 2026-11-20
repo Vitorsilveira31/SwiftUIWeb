@@ -119,14 +119,19 @@ export async function createWorkerInstance(module, { baseURL, secondary = null, 
       if (!batches.length && !behind()) sendWaiting();
       return;
     }
-    const key = measurementKey(message);
+    // A timeline's tick only says what time it is now: while Swift is behind, a newer tick replaces the one waiting, as a
+    // measurement does.
+    const key = name === 'timeline_tick' ? 'timeline' : measurementKey(message);
     if (key !== null && holding()) {
       waiting.delete(key);
       waiting.set(key, message);
       return;
     }
-    // An acknowledgement says nothing about the measurements and arrives with every commit: it passes them.
-    if (name !== 'publish_ack') { sendWaiting(); openBatches(); }
+    // An acknowledgement says nothing about the measurements and arrives with every commit, and a tick arrives at every
+    // frame of an animated timeline: both pass them. A tick that sent them on its way made Swift draw every width a
+    // sliding sidebar went through, one after the other, a second and a half behind the page (Food Truck's animated
+    // header ticks at every frame).
+    if (name !== 'publish_ack' && name !== 'timeline_tick') { sendWaiting(); openBatches(); }
     post(message);
   };
   /** The Swift side reported how many calls it has run; once it has run them all, what waited goes out. */

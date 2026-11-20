@@ -182,7 +182,9 @@ export const GEOMETRY_AXES = Object.freeze({axisMap, axisScales, turnedAxes});
 /** The measurement of a `TextRenderer`'s text arrives after the first screen (text-layout-host.js, which `useTextLayout` hands
  * to the host). A text found before is measured when it arrives. */
 export class GeometryHost {
-  constructor(root, {dispatch, eventIdAttribute, eventsAttribute, batch = run => run()}) {
+  constructor(root, {dispatch, eventIdAttribute, eventsAttribute, batch = run => run(), settled = () => true}) {
+    // Whether a view's box is its own yet (`embedded-dom.js`: a custom Layout's new subview first sits in a guess).
+    this.settled = settled;
     this.root = root; this.document = root.ownerDocument; this.window = this.document.defaultView;
     this.dispatch = dispatch; this.eventId = eventIdAttribute; this.events = eventsAttribute; this.batch = batch;
     this.observed = new Set(); this.sent = new WeakMap();
@@ -232,6 +234,10 @@ export class GeometryHost {
     // disclosure) has no geometry to report: keep the last measurement so
     // hiding and re-showing it does not re-render its whole subtree twice.
     if (element.getClientRects().length === 0) return;
+    // A box that is still a guess is not measured: Swift would draw for it, then again for the real one (a new tile's
+    // donuts drawn 722 points wide in a 163-point slot showed tiny until then). It is measured once it has settled, which
+    // resizes it.
+    if (!this.settled(element)) return;
     const id = element.getAttribute(this.eventId); if (!id) return;
     const names = (element.getAttribute(this.events) || '').split(',');
     const payload = measurementPayload(element, this.root);

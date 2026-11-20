@@ -97,7 +97,17 @@ package nonisolated struct LayoutContainer<L: Layout, Content: View>: View, _Own
     let previousScope = StateRuntime.scope
     StateRuntime.scope = StateScope(context: context, viewTag: "LayoutContainer")
     defer { StateRuntime.scope = previousScope }
-    let contentContext = context.child(_FiberKey("layout-content"))
+    var contentContext = context.child(_FiberKey("layout-content"))
+    // A GeometryReader among the subviews draws first for a guess, until the page has measured it: the size this layout is
+    // offered is the nearest one (the enclosing reader's, the window, was Food Truck's whole page for a donut in a tile).
+    #if hasFeature(Embedded)
+    let offered = _hostLayoutProposal(context._layoutProposal ?? .unspecified, store: proposalStore)
+    #else
+    let offered = context._layoutProposal ?? .unspecified
+    #endif
+    if let width = offered.width, let height = offered.height, width.isFinite, height.isFinite, width > 0, height > 0 {
+      contentContext.environment._geometryHint = CGSize(width: width, height: height)
+    }
     #if hasFeature(Embedded)
     // A built-in layout only collects its children, so a deep render hands them to the loop that drives the
     // pass instead of recursing (see `_RenderStaging`). A layout that runs in Swift needs them to measure.

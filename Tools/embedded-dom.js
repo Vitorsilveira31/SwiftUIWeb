@@ -7,6 +7,59 @@ import {AdaptiveTabShell} from './tab-shell.js';
 import {GeometryHost} from './geometry-host.js';
 import {MediaHost} from './media-host.js';
 import {SplitViewHost} from './split-view-host.js';
+
+/** A NavigationSplitView column hidden or shown slides as iPad slides it: the columns that stay keep the width they had
+ * (`data-column-sliding`) and ride on the edge of the one coming or going while its track opens or closes
+ * (Tools/styles.css), then take their new width at once. Laid out again at every step of the slide, Food Truck's
+ * detail stretched its cards frame by frame and its GeometryReaders redrew for every width on the way. */
+class SplitColumnSlide {
+  constructor(root, {window}) {
+    this.root = root; this.window = window;
+    this.widths = new WeakMap(); this.visibility = new WeakMap(); this.observed = new WeakSet();
+    // A column's settled width, kept for the slide that starts when the visibility changes: by then the page has laid it
+    // out at its new width.
+    this.observer = typeof window.ResizeObserver === 'function'
+      ? new window.ResizeObserver(entries => { for (const entry of entries) if (!entry.target.hasAttribute('data-column-sliding')) this.widths.set(entry.target, entry.target.offsetWidth); })
+      : null;
+  }
+  needsSync(changes) {
+    return changes.everything || changes.touches('.navigation-split-view', ['data-column-visibility']) || changes.touches('.navigation-column');
+  }
+  sync() {
+    if (!this.observer) return;
+    for (const split of this.root.querySelectorAll('.navigation-split-view')) {
+      const columns = [...split.children].filter(child => child.classList.contains('navigation-column'));
+      for (const column of columns) if (!this.observed.has(column)) { this.observed.add(column); this.observer.observe(column); }
+      const now = split.getAttribute('data-column-visibility') || '', before = this.visibility.get(split);
+      this.visibility.set(split, now);
+      if (before === undefined || before === now || this.window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) continue;
+      const sliding = [];
+      for (const column of columns) {
+        const width = this.widths.get(column);
+        if (column.hasAttribute('data-column-hidden') || !width) continue;
+        column.style.setProperty('width', `${width}px`, 'important');
+        column.style.setProperty('justify-self', 'start', 'important');
+        column.setAttribute('data-column-sliding', '');
+        sliding.push(column);
+      }
+      if (!sliding.length) continue;
+      let timer = 0;
+      const settle = () => {
+        split.removeEventListener('transitionend', ended);
+        this.window.clearTimeout(timer);
+        for (const column of sliding) {
+          column.style.removeProperty('width'); column.style.removeProperty('justify-self'); column.removeAttribute('data-column-sliding');
+        }
+      };
+      const ended = event => { if (event.target === split && event.propertyName === 'grid-template-columns') settle(); };
+      split.addEventListener('transitionend', ended);
+      // The slide's length and a frame (the stylesheet's transition), should no transitionend come.
+      timer = this.window.setTimeout(settle, 450);
+    }
+  }
+  dispose() { this.observer?.disconnect(); }
+}
+
 import {TransitionHost, ScrollTransitionHost, MatchedGeometryHost, matchViewTransitionGeometry, SCROLL_TRANSITION_ATTRIBUTES} from './transition-host.js';
 import {BinaryBuffer, BinaryFormatError, Builder, Handles, isEmptyUpdate, readPublication, rootHoverRules, sameBinary, scanRecords, compareDom} from './binary-publication.js';
 import {BINARY_OPS} from './binary-atoms.generated.js';
@@ -256,7 +309,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   resetCommitProfile();
   // Attributes the framework itself writes. Used only to bucket the commit profile; a new framework attribute
   // that is missing here is counted as 'other'.
-  const internalAttributes = new Set(['data-a11y-backend', 'data-a11y-children', 'data-a11y-hint', 'data-a11y-inert', 'data-a11y-traits', 'data-a11y-value', 'data-align-x', 'data-align-y', 'data-animation-timing', 'data-animation-transaction', 'data-animation-value', 'data-aspect-fill', 'data-aspect-ratio', 'data-avkit-fullscreen', 'data-avkit-keyboard-controls', 'data-avkit-picture-in-picture', 'data-can-seek', 'data-cell-kind', 'data-composition-length', 'data-content-overflow', 'data-control-action', 'data-control-argument', 'data-control-kind', 'data-control-slider', 'data-controlled-open', 'data-ctl-fullscreen', 'data-ctl-hidden', 'data-ctl-menu', 'data-ctl-pip', 'data-ctl-scrubbing', 'data-docs-drawer', 'data-docs-drawer-open', 'data-docs-part', 'data-docs-route', 'data-dom-view', 'data-dom-view-error', 'data-drag-source', 'data-draw-canvas', 'data-drop-target', 'data-drop-types', 'data-embedded-drag-text', 'data-embedded-event', 'data-embedded-event-id', 'data-embedded-events', 'data-embedded-mounted', 'data-embedded-node-id', 'data-embedded-prevent-events', 'data-embedded-scroll-anchor', 'data-embedded-scroll-id', 'data-embedded-scroll-scope', 'data-embedded-scroll-sequence', 'data-enter-animation', 'data-feature-css', 'data-feature-hint', 'data-fiber-event-appear', 'data-fiber-event-click', 'data-fiber-event-id', 'data-fiber-event-keyDown', 'data-fiber-event-task', 'data-fiber-id', 'data-field-chrome', 'data-file-exporter', 'data-file-exporter-content-type', 'data-file-exporter-filename', 'data-file-exporter-inline', 'data-file-exporter-key', 'data-file-exporter-presented', 'data-file-importer', 'data-file-importer-accept', 'data-file-importer-multiple', 'data-file-importer-presented', 'data-file-importer-types', 'data-file-mover', 'data-file-mover-count', 'data-file-mover-files', 'data-file-mover-presented', 'data-fixed-x', 'data-fixed-y', 'data-flexible-width', 'data-focus-enabled', 'data-frame-h', 'data-frame-max-w', 'data-frame-w', 'data-geometry-host', 'data-geometry-scaled', 'data-grid-tracks', 'data-headless-event-id', 'data-headless-media', 'data-headless-media-wishes', 'data-history-operations', 'data-host-managed', 'data-hover-bg', 'data-hover-disabled', 'data-hover-effect', 'data-hover-enabled', 'data-hover-fg', 'data-hover-group', 'data-hover-group-active', 'data-hover-group-behavior', 'data-hover-group-root', 'data-hover-has-filter', 'data-hover-has-opacity', 'data-hover-lifts', 'data-hover-rules', 'data-hover-shadow', 'data-hover-source', 'data-hover-stroke', 'data-hover-underline', 'data-image-error', 'data-image-paint', 'data-image-preload', 'data-image-ratio', 'data-image-ready', 'data-ime-composing', 'data-inset-edge', 'data-keep-lazy-axis', 'data-keep-lazy-index', 'data-keep-lazy-lanes', 'data-keep-lazy-revision', 'data-keep-secure-id', 'data-keyboard-shortcut', 'data-label-follows', 'data-layout-alignment', 'data-layout-gap', 'data-layout-hidden', 'data-layout-key', 'data-layout-kind', 'data-layout-leaf', 'data-layout-root', 'data-layout-schema', 'data-lazy-cell', 'data-lazy-index', 'data-lazy-owner', 'data-lazy-spacer', 'data-lazy-type', 'data-lift-target', 'data-list-row-hover-disabled', 'data-list-row-hover-effect', 'data-measurement-island', 'data-media-audio', 'data-media-command', 'data-media-intent', 'data-media-item', 'data-media-max-size', 'data-media-muted', 'data-media-observe', 'data-media-peak-bitrate', 'data-media-playing', 'data-media-rate', 'data-media-source', 'data-media-start', 'data-media-text', 'data-measuring', 'data-media-volume', 'data-mesh-gradient', 'data-native-layout', 'data-navigation-motion', 'data-nested-button', 'data-outline-group', 'data-padding-bottom', 'data-padding-leading', 'data-padding-top', 'data-padding-trailing', 'data-paste-accept', 'data-paste-available', 'data-paste-button', 'data-paste-types', 'data-photos-picker', 'data-photos-picker-accept', 'data-photos-picker-encoding', 'data-photos-picker-limit', 'data-photos-picker-multiple', 'data-photos-picker-presented', 'data-photos-picker-selection-behavior', 'data-player-id', 'data-player-state', 'data-position-x', 'data-position-y', 'data-presentation-host', 'data-press-tracking', 'data-primitive-trigger', 'data-relative-h', 'data-relative-w', 'data-route-prefetch', 'data-route-prefetch-key', 'data-row-align-y', 'data-row-spacing', 'data-runtime-error', 'data-size-h', 'data-size-w', 'data-spacer-min', 'data-swipe-action-edge', 'data-swipe-content', 'data-swipe-state', 'data-tab-mobile-backdrop', 'data-tab-unbuilt', 'data-tab-hides-bar', 'data-tab-mobile-toggle', 'data-tab-sidebar', 'data-tab-sidebar-header', 'data-tab-sidebar-toggle', 'data-timeline-animation-frame', 'data-timeline-cadence', 'data-timeline-id', 'data-timeline-interval', 'data-timeline-paused', 'data-timeline-view', 'data-toolbar-resolved', 'data-view-id', 'data-view-key', 'data-visible-shape', 'data-web-base-url', 'data-web-command', 'data-web-content', 'data-web-external-links', 'data-web-mount', 'data-web-mount-flag', 'data-web-mount-key', 'data-web-mount-token', 'data-web-source']);
+  const internalAttributes = new Set(['data-a11y-backend', 'data-a11y-children', 'data-a11y-hint', 'data-a11y-inert', 'data-a11y-traits', 'data-a11y-value', 'data-align-x', 'data-align-y', 'data-animation-timing', 'data-animation-transaction', 'data-animation-value', 'data-aspect-fill', 'data-aspect-ratio', 'data-avkit-fullscreen', 'data-avkit-keyboard-controls', 'data-avkit-picture-in-picture', 'data-can-seek', 'data-cell-kind', 'data-column-sliding', 'data-column-sliding', 'data-composition-length', 'data-content-overflow', 'data-control-action', 'data-control-argument', 'data-control-kind', 'data-control-slider', 'data-controlled-open', 'data-ctl-fullscreen', 'data-ctl-hidden', 'data-ctl-menu', 'data-ctl-pip', 'data-ctl-scrubbing', 'data-docs-drawer', 'data-docs-drawer-open', 'data-docs-part', 'data-docs-route', 'data-dom-view', 'data-dom-view-error', 'data-drag-source', 'data-draw-canvas', 'data-drop-target', 'data-drop-types', 'data-embedded-drag-text', 'data-embedded-event', 'data-embedded-event-id', 'data-embedded-events', 'data-embedded-mounted', 'data-embedded-node-id', 'data-embedded-prevent-events', 'data-embedded-scroll-anchor', 'data-embedded-scroll-id', 'data-embedded-scroll-scope', 'data-embedded-scroll-sequence', 'data-enter-animation', 'data-feature-css', 'data-feature-hint', 'data-fiber-event-appear', 'data-fiber-event-click', 'data-fiber-event-id', 'data-fiber-event-keyDown', 'data-fiber-event-task', 'data-fiber-id', 'data-field-chrome', 'data-file-exporter', 'data-file-exporter-content-type', 'data-file-exporter-filename', 'data-file-exporter-inline', 'data-file-exporter-key', 'data-file-exporter-presented', 'data-file-importer', 'data-file-importer-accept', 'data-file-importer-multiple', 'data-file-importer-presented', 'data-file-importer-types', 'data-file-mover', 'data-file-mover-count', 'data-file-mover-files', 'data-file-mover-presented', 'data-fixed-x', 'data-fixed-y', 'data-flexible-width', 'data-focus-enabled', 'data-frame-h', 'data-frame-max-w', 'data-frame-w', 'data-geometry-host', 'data-geometry-scaled', 'data-grid-tracks', 'data-headless-event-id', 'data-headless-media', 'data-headless-media-wishes', 'data-history-operations', 'data-host-managed', 'data-hover-bg', 'data-hover-disabled', 'data-hover-effect', 'data-hover-enabled', 'data-hover-fg', 'data-hover-group', 'data-hover-group-active', 'data-hover-group-behavior', 'data-hover-group-root', 'data-hover-has-filter', 'data-hover-has-opacity', 'data-hover-lifts', 'data-hover-rules', 'data-hover-shadow', 'data-hover-source', 'data-hover-stroke', 'data-hover-underline', 'data-image-error', 'data-image-paint', 'data-image-preload', 'data-image-ratio', 'data-image-ready', 'data-ime-composing', 'data-inset-edge', 'data-keep-lazy-axis', 'data-keep-lazy-index', 'data-keep-lazy-lanes', 'data-keep-lazy-revision', 'data-keep-secure-id', 'data-keyboard-shortcut', 'data-label-follows', 'data-layout-alignment', 'data-layout-gap', 'data-layout-hidden', 'data-layout-key', 'data-layout-kind', 'data-layout-leaf', 'data-layout-root', 'data-layout-schema', 'data-lazy-cell', 'data-lazy-index', 'data-lazy-owner', 'data-lazy-spacer', 'data-lazy-type', 'data-lift-target', 'data-list-row-hover-disabled', 'data-list-row-hover-effect', 'data-measurement-island', 'data-media-audio', 'data-media-command', 'data-media-intent', 'data-media-item', 'data-media-max-size', 'data-media-muted', 'data-media-observe', 'data-media-peak-bitrate', 'data-media-playing', 'data-media-rate', 'data-media-source', 'data-media-start', 'data-media-text', 'data-measuring', 'data-media-volume', 'data-mesh-gradient', 'data-native-layout', 'data-navigation-motion', 'data-nested-button', 'data-outline-group', 'data-padding-bottom', 'data-padding-leading', 'data-padding-top', 'data-padding-trailing', 'data-paste-accept', 'data-paste-available', 'data-paste-button', 'data-paste-types', 'data-photos-picker', 'data-photos-picker-accept', 'data-photos-picker-encoding', 'data-photos-picker-limit', 'data-photos-picker-multiple', 'data-photos-picker-presented', 'data-photos-picker-selection-behavior', 'data-player-id', 'data-player-state', 'data-position-x', 'data-position-y', 'data-presentation-host', 'data-press-tracking', 'data-primitive-trigger', 'data-relative-h', 'data-relative-w', 'data-route-prefetch', 'data-route-prefetch-key', 'data-row-align-y', 'data-row-spacing', 'data-runtime-error', 'data-size-h', 'data-size-w', 'data-spacer-min', 'data-swipe-action-edge', 'data-swipe-content', 'data-swipe-state', 'data-tab-mobile-backdrop', 'data-tab-unbuilt', 'data-tab-hides-bar', 'data-tab-mobile-toggle', 'data-tab-sidebar', 'data-tab-sidebar-header', 'data-tab-sidebar-toggle', 'data-timeline-animation-frame', 'data-timeline-cadence', 'data-timeline-id', 'data-timeline-interval', 'data-timeline-paused', 'data-timeline-view', 'data-toolbar-resolved', 'data-view-id', 'data-view-key', 'data-visible-shape', 'data-web-base-url', 'data-web-command', 'data-web-content', 'data-web-external-links', 'data-web-mount', 'data-web-mount-flag', 'data-web-mount-key', 'data-web-mount-token', 'data-web-source']);
   function attributeBucket(name) {
     if (internalAttributes.has(name) || name.startsWith('data-fiber-event-')) return 'internal';
     if (name === 'style' || name === 'class') return name;
@@ -1700,7 +1753,9 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   const geometry = new GeometryHost(root, {dispatch: (element, name, value) => dispatchNamed(element, name, value), eventIdAttribute: EVENT_ID, eventsAttribute: EVENTS,
     // Measurements arrive after the frame's layout, outside the commit's batch: one batch per delivery, so Swift
     // publishes once for all of them.
-    batch: run => { api.batch_begin?.(); try { run(); } finally { api.batch_end?.(); } answerMeasurements(); scaleUnfitReaders(); revealFittingReaders(false); }});
+    batch: run => { api.batch_begin?.(); try { run(); } finally { api.batch_end?.(); } answerMeasurements(); scaleUnfitReaders(); revealFittingReaders(false); },
+    // A reader still held for its first drawing (`holdUnfitReaders`) whose box is not yet inside its slot.
+    settled: element => !element.hasAttribute(MEASURING) || insideItem(element)});
   // A measurement reaches Swift after the frame's layout and before its paint (a ResizeObserver delivery). SwiftUI applies
   // what a view does with its size (`onGeometryChange`) before the first frame shows the view; here the answer is a
   // publication, which the frame after would show: for that one frame a dialog sized from its content filled the window.
@@ -1815,7 +1870,9 @@ export function mountEmbeddedBrowser(instance, options = {}) {
     for (const [element, since] of fitting) {
       if (!element.isConnected) { fitting.delete(element); continue; }
       oldest = Math.min(oldest, since);
-      if (allFit && !((readerFits(element) || scaledReaders.has(element)) && insideItem(element))) allFit = false;
+      // A tile's reader shows once drawn for its box: scaled from a guess (the whole page, the whole card), its drawing
+      // showed huge or tiny for a few frames.
+      if (allFit && !(insideItem(element) && (readerFits(element) || (scaledReaders.has(element) && !element.closest('.layout-item'))))) allFit = false;
     }
     const limit = [...fitting.keys()].some(element => element.closest('.layout-item')) ? FITTING_ITEM_LIMIT_MS : FITTING_LIMIT_MS;
     if (allFit || now - oldest >= limit) {
@@ -1907,6 +1964,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   if (typeof SWIFTUIWEB_HAS_MEDIA === 'undefined' || SWIFTUIWEB_HAS_MEDIA) plugins.push(new MediaHost(root, {dispatchNamed, dispatchHeadless, window}));
   // Divider drag and keys for HSplitView and VSplitView: the panes move here and report their settled positions to Swift.
   if (typeof SWIFTUIWEB_HAS_SPLIT_VIEWS === 'undefined' || SWIFTUIWEB_HAS_SPLIT_VIEWS) plugins.push(new SplitViewHost(root, {dispatchNamed, window}));
+  plugins.push(new SplitColumnSlide(root, {window}));
 
   function syncTimelines() {
     if (typeof api.timeline_tick !== 'function' || !markerSeen('timeline')) return;
