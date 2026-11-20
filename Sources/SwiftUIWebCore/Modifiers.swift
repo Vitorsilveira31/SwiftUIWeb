@@ -1070,9 +1070,9 @@ public extension ContainerRelativeShape {
   }
 }
 
-/// Matches SwiftUI's container-relative shape spelling.  CSS uses the
-/// container's own box, so this is represented as a rounded rectangle with a
-/// zero radius marker rather than a browser-specific shape object.
+/// SwiftUI's container-relative shape: the shape of the nearest container that declares one (`containerShape(_:)`), drawn
+/// in the view's own box. CSS rounds the box with the corner radius that container hands down
+/// (`--container-shape-radius`); without one it is a rectangle.
 public struct ContainerRelativeShape: Shape, Hashable, Sendable {
   public typealias Body = Never
   public init() {}
@@ -2194,7 +2194,15 @@ private func _shapeRadius<S: Shape>(_ shape: S) -> String {
   if shape is Circle || shape is Capsule || shape is DefaultGlassEffectShape { return "9999px" }
   if let rounded = shape as? RoundedRectangle { return "\(max(0, rounded.cornerRadius - rounded._insetAmount).clean)px" }
   if let uneven = shape as? UnevenRoundedRectangle { return uneven._cssBorderRadius }
+  // The shape of the nearest container that declares one (`containerShape`), as the page inherits it.
+  if shape is ContainerRelativeShape { return "var(--container-shape-radius, 0px)" }
   return "0"
+}
+
+/// The corner radius of `shape` in CSS, for `containerShape(_:)` to hand its descendants' `ContainerRelativeShape`.
+package func _containerShapeRadius<S: Shape>(_ shape: S) -> String {
+  if shape is ContainerRelativeShape { return "var(--container-shape-radius, 0px)" }
+  return _shapeRadius(shape)
 }
 
 /// CSS corner declarations for a CSS-realized shape boundary. Uneven
@@ -2386,6 +2394,9 @@ package nonisolated struct ShapeStyleBackgroundModifier<Style: ShapeStyle>: View
       _applyImagePaintMarkers(style, to: node)
     }
     node.attributes["data-background-style"] = style._swiftUIWebCSSValue
+    // SwiftUI fills a background without a shape in the container's shape (`containerShape(_:)`): Food Truck's cards,
+    // `.background()` in a Grid that declares a 12-point rounded rectangle, are rounded. Without one it is the box.
+    if node.styles["border-radius"] == nil { node.styles["border-radius"] = "var(--container-shape-radius, 0px)" }
     _applyMaterialBackdrop(style, to: node)
   }
 }
