@@ -5641,6 +5641,11 @@
 .navigation-split-view[data-sidebar-hidden] > .navigation-detail > .frame-box > .navigation-stack::before {
   padding-inline-start: 4.5rem;
 }
+/* A large title sits below the bar's row, where the toggle is: it keeps its place, as on iPad. */
+.navigation-split-view[data-sidebar-hidden] > .navigation-detail > .navigation-stack:is([data-navigation-title-display-mode="large"], [data-navigation-title-display-mode="automatic"][data-navigation-depth="0"])::before,
+.navigation-split-view[data-sidebar-hidden] > .navigation-detail > .frame-box > .navigation-stack:is([data-navigation-title-display-mode="large"], [data-navigation-title-display-mode="automatic"][data-navigation-depth="0"])::before {
+  padding-inline-start: revert-layer;
+}
 .navigation-split-view > .navigation-sidebar .list-view .navigation-link {
   padding-block: 0.75rem; padding-inline: 0.75rem; border-radius: 9999px; font-size: 1.0625rem;
 }

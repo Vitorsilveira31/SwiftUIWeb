@@ -113,7 +113,11 @@ public nonisolated struct GeometryReader<Content: View>: View, _OwnerBoundaryCon
     let store = self.store
     let access = _GeometryProxyAccess()
     var measurement = store.latest
-    if !store.hasHostMeasurement, measurement == .zero, let hint = context.environment._geometryHint {
+    // Until the page has measured it, the reader draws for the tightest size its renders were given: a view never exceeds
+    // what encloses it, so a smaller guess is a nearer one. A custom layout rendering its subviews with their proposal
+    // gives one (a donut's tile) after renders that only knew the whole page or the whole card.
+    if !store.hasHostMeasurement, let hint = context.environment._geometryHint,
+       measurement == .zero || (Double(hint.width) <= measurement.size.width && Double(hint.height) <= measurement.size.height) {
       measurement = _GeometryMeasurement(box: _GeometryBox(x: 0, y: 0, width: Double(hint.width), height: Double(hint.height)))
       store.latest = measurement
     }
