@@ -39,4 +39,20 @@ struct ContainerRelativeShapeTests {
     #expect(!outside.contains("border-radius: var(--container-shape-radius"), "\(outside)")
     #expect(!outside.contains("border-radius: 0px"), "\(outside)")
   }
+
+  @Test
+  func aContainerRelativeShapeDrawnOnItsOwnIsRoundedByTheContainer() {
+    let html = StaticHTMLFiberRenderer().render(
+      ZStack { ContainerRelativeShape().fill(Color.blue) }.containerShape(RoundedRectangle(cornerRadius: 12))
+    )
+    #expect(html.contains("border-radius: var(--container-shape-radius, 0px)"), "\(html)")
+  }
+
+  @Test
+  func aSecondBackgroundStillTakesTheContainersCorners() {
+    let html = StaticHTMLFiberRenderer().render(
+      VStack { Text("Card").background(Color.red).background(Color.blue) }.containerShape(RoundedRectangle(cornerRadius: 12))
+    )
+    #expect(html.contains("border-radius: 12px"), "\(html)")
+  }
 }

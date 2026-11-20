@@ -1092,7 +1092,15 @@ public extension Shape where Self == RoundedRectangle {
 public extension Shape {
   nonisolated func _render(in context: _RenderContext) -> _RenderNode {
     // A shape with animatable data draws the path of the data its animation has reached (`Animator.swift`).
-    guard Self._swiftUIWebAnimates else { return _filledWithForeground(_svgShapeNode(shape: self, context: context)) }
+    guard Self._swiftUIWebAnimates else {
+      let node = _filledWithForeground(_svgShapeNode(shape: self, context: context))
+      // The container's shape is only known to CSS (the inherited radius): its box is rounded and clipped to it.
+      if self is ContainerRelativeShape {
+        node.styles["border-radius"] = "var(--container-shape-radius, 0px)"
+        node.styles["overflow"] = "hidden"
+      }
+      return node
+    }
     nonisolated(unsafe) let shape = self
     return _assumeMainActor {
       AnyView(_ownerBoundaryOf: _AnimatedShape(shape: shape) { shape, context in
@@ -2378,6 +2386,11 @@ package nonisolated struct ShapeStyleBackgroundModifier<Style: ShapeStyle>: View
       let content = _backgroundContent(node)
       let original = content.content
       let background = _meshBackgroundNode(mesh, context: context.child(_FiberKey("background-mesh-gradient")))
+      // Under a `containerShape` the gradient fills that shape; the content is not clipped.
+      if let radius = context.environment._containerShapeRadius {
+        background.styles["border-radius"] = radius
+        background.styles["overflow"] = "hidden"
+      }
       node.kind = .element("div")
       node.text = nil
       node.attributes = content.attributes
@@ -2399,6 +2412,9 @@ package nonisolated struct ShapeStyleBackgroundModifier<Style: ShapeStyle>: View
         node.styles["background-color"] = _paintCSSValue(style)
       } else {
         node.styles["background-image"] = "\(innerLayer), \(layer(_paintCSSValue(style)))"
+      }
+      if node.styles["border-radius"] == nil, let radius = context.environment._containerShapeRadius {
+        node.styles["border-radius"] = radius
       }
       _applyMaterialBackdrop(style, to: node)
       return
