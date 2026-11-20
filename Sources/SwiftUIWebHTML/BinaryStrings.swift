@@ -189,44 +189,6 @@ final class BinaryStrings {
     atoms.index(bytes, count: count, hash: BinaryAtomTable.hash(bytes, count: count))
   }
 
-  /// What names a string from one publication to the next: its atom index, or the hash of its bytes.
-  func identity(of index: UInt32) -> UInt64 {
-    if Int(index) < atoms.count { return UInt64(index) }
-    let local = Int(index) - atoms.count
-    return arena.withUnsafeBufferPointer { arena in
-      BinaryHash.mix(BinaryHash.seed ^ (1 << 40), arena.baseAddress! + Int(starts[local]), count: Int(lengths[local]))
-    }
-  }
-
-  /// The bytes of one of this publication's own strings.
-  func ownBytes(at index: UInt32) -> [UInt8] {
-    let local = Int(index) - atoms.count
-    let start = Int(starts[local])
-    return Array(arena[start..<(start + Int(lengths[local]))])
-  }
-
-  /// Whether one of this publication's own strings is `bytes`.
-  func ownEquals(_ index: UInt32, _ bytes: [UInt8]) -> Bool {
-    let local = Int(index) - atoms.count
-    guard Int(lengths[local]) == bytes.count else { return false }
-    let start = Int(starts[local])
-    var offset = 0
-    while offset < bytes.count {
-      if arena[start + offset] != bytes[offset] { return false }
-      offset += 1
-    }
-    return true
-  }
-
-  /// The index of the string made of `bytes`, added when it is not an atom or there yet.
-  func internBytes(_ bytes: [UInt8]) -> UInt32 {
-    if bytes.isEmpty { return internEmpty() }
-    return bytes.withUnsafeBufferPointer { intern($0.baseAddress!, count: $0.count) }
-  }
-
-  /// The number of atoms: an index below it is an atom.
-  var atomCount: Int { atoms.count }
-
   /// The index of the empty string.
   func internEmpty() -> UInt32 {
     var zero: UInt8 = 0

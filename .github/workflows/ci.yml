@@ -19,18 +19,24 @@ env:
   WASM_SDK_CHECKSUM: "f07b7be3c586d92d7a07051fc6d303b87ebea67eadc40640ba59d5a8b79aa86d"
 
 # Every job runs on a GitHub-hosted runner: a public repository's pull requests come from forks, and a self-hosted
-# runner would run their code on the maintainer's machine. Only the newest run of a branch or pull request is kept.
+# runner would run their code on the maintainer's machine. A pull request keeps only its newest run. A run of main is
+# never cancelled midway: the next merge waits for it (of several waiting, GitHub keeps the newest). The nightly and
+# on-demand runs have groups of their own, so a merge on main no longer cancels the nightly run in progress.
 concurrency:
-  group: swiftuiweb-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: swiftuiweb-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # The tiers are the Makefile's: `make test` (no browser), `make browser-test` (what a pull request must pass) and the
 # nightly run (`example-test`, coverage, size and performance), which also runs on demand.
 jobs:
   test:
+    # The image the Apple job uses: `macos-15` often had no runner for these jobs ("The job was not acquired by Runner
+    # of type hosted even after multiple attempts"), which failed the run with nothing tested.
     name: Swift and tooling tests (macOS)
-    runs-on: macos-15
+    runs-on: xcode-27
     timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -85,10 +91,11 @@ jobs:
       - name: Install the compressors and the archive tools
         run: |
           apt-get update -qq
-          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq brotli zstd unzip make
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq brotli zstd unzip make curl
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: ./.github/actions/setup-binaryen
       - name: Trust the checkout
         # The container runs as root over a workspace the runner owns; `git ls-files` (architecture-audit) needs this.
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -141,6 +148,7 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE: "1"
           HOMEBREW_NO_INSTALL_CLEANUP: "1"
         run: for tool in brotli zstd; do command -v "$tool" >/dev/null || brew install "$tool"; done
+      - uses: ./.github/actions/setup-binaryen
       - run: make setup
       - run: make browser-test-setup
       - run: make webkit-browser-test security-browser-test layout-conformance css-layout-oracle
@@ -162,13 +170,15 @@ jobs:
       run:
         shell: bash
     steps:
-      - name: Install the compressors and the archive tools
+      # ffmpeg makes the clips the media suites play (Tools/test-avkit-controls-browser.mjs, test-media-worker-browser.mjs).
+      - name: Install the compressors, the archive tools and ffmpeg
         run: |
           apt-get update -qq
-          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq brotli zstd unzip make
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq brotli zstd unzip make curl ffmpeg
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: ./.github/actions/setup-binaryen
       - name: Trust the checkout
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: ./.github/actions/cache-lowering-tool
@@ -194,8 +204,10 @@ jobs:
     # Coverage, size and performance measure rather than pass or fail a change, so they run nightly and on demand.
     name: Coverage, size and performance (nightly)
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: macos-15
+    runs-on: xcode-27
     timeout-minutes: 120
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -215,6 +227,7 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE: "1"
           HOMEBREW_NO_INSTALL_CLEANUP: "1"
         run: for tool in brotli zstd; do command -v "$tool" >/dev/null || brew install "$tool"; done
+      - uses: ./.github/actions/setup-binaryen
       - run: make setup
       - run: make browser-test-setup
       - name: Instrumented core and BrowserIO coverage

@@ -1,0 +1,41 @@
+name: Install Binaryen
+description: Install a pinned Binaryen release (wasm-opt, wasm-split, wasm-as) from its GitHub release, checked by SHA-256
+inputs:
+  version:
+    description: The Binaryen release number (version_<n> on GitHub)
+    required: false
+    default: "133"
+runs:
+  using: composite
+  steps:
+    # A release app.wasm is optimized by wasm-opt and split by wasm-split (Tools/strip-wasm-release.sh,
+    # Tools/wasm-split-release.mjs). Without them the release build still succeeds, so the size budgets and the split
+    # suite measure a module nobody ships. The archives are static builds; each platform's SHA-256 is the one the release
+    # publishes beside it, written out here so a replaced asset fails the job.
+    - name: Install Binaryen ${{ inputs.version }}
+      shell: bash
+      env:
+        BINARYEN_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        case "${RUNNER_OS}-${RUNNER_ARCH}" in
+          Linux-X64) platform=x86_64-linux; checksum=2dc9c7813f5375db93d96ead4b78222fcc3e2677bbb832297af4797782a37489 ;;
+          macOS-ARM64) platform=arm64-macos; checksum=ad66da82ac13f163e424b1643f16c6dfcccc98b5966296b43e52d3cab04f84a8 ;;
+          *) echo "No pinned Binaryen archive for ${RUNNER_OS}-${RUNNER_ARCH}" >&2; exit 1 ;;
+        esac
+        if [ "$BINARYEN_VERSION" != "133" ]; then
+          echo "The checksums above are Binaryen 133's: update them with the version" >&2
+          exit 1
+        fi
+        archive="$RUNNER_TEMP/binaryen.tar.gz"
+        curl -fsSL --retry 3 -o "$archive" \
+          "https://github.com/WebAssembly/binaryen/releases/download/version_${BINARYEN_VERSION}/binaryen-version_${BINARYEN_VERSION}-${platform}.tar.gz"
+        if command -v sha256sum >/dev/null; then
+          echo "${checksum}  ${archive}" | sha256sum -c -
+        else
+          echo "${checksum}  ${archive}" | shasum -a 256 -c -
+        fi
+        tar -xzf "$archive" -C "$RUNNER_TEMP"
+        rm -f "$archive"
+        echo "$RUNNER_TEMP/binaryen-version_${BINARYEN_VERSION}/bin" >> "$GITHUB_PATH"
+        "$RUNNER_TEMP/binaryen-version_${BINARYEN_VERSION}/bin/wasm-opt" --version

@@ -7,13 +7,15 @@ import Foundation
 @_spi(StorageTesting) import SwiftUIWebFeatures
 import SwiftUIWebBrowser
 
-@Suite(.serialized, .processGlobalState)
+/// Removes what the suite's tests install, inside the global-state gate after each test (`ProcessGlobalStateTrait`).
+/// A `deinit` would run whenever the instance is released, possibly while the next test holds the gate.
+@MainActor private func resetWebStorage() {
+  StorageRuntime.install(nil)
+}
+
+@Suite(.serialized, .processGlobalState(tearDown: resetWebStorage))
 @MainActor
 final class WebStorageTests {
-  deinit {
-    StorageRuntime.install(nil)
-  }
-
   @Test
   func testAppStorageReadsThroughAdapterOnceAndInvalidates() {
     var values: [String: String] = ["name": "Ada"]

@@ -4,9 +4,15 @@ import Testing
 @_spi(Renderer) import SwiftUIWebFiber
 @_spi(Renderer) import SwiftUIWeb
 
+/// Removes what the suite's tests install, inside the global-state gate after each test (`ProcessGlobalStateTrait`).
+/// A `deinit` would run whenever the instance is released, possibly while the next test holds the gate.
+@MainActor private func resetAnimatorReviewClock() {
+  _animationClockOverride = nil
+}
+
 /// Review findings on the Swift animator: `.animation(_:value:)` drives Swift-animated data without `withAnimation`,
 /// repeats of custom animations, and custom animations evaluated for the actual change.
-@Suite(.serialized, .processGlobalState)
+@Suite(.serialized, .processGlobalState(tearDown: resetAnimatorReviewClock))
 @MainActor
 final class AnimatorReviewTests {
   private nonisolated(unsafe) static var now = 0.0
@@ -15,8 +21,6 @@ final class AnimatorReviewTests {
     AnimatorReviewTests.now = 100
     _animationClockOverride = { AnimatorReviewTests.now }
   }
-
-  deinit { _animationClockOverride = nil }
 
   private func text(_ tree: FiberTree) -> String { tree.renderNode.htmlDescription }
 

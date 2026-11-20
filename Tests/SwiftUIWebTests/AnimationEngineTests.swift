@@ -3,9 +3,15 @@ import Testing
 @_spi(Renderer) import SwiftUIWebFiber
 @_spi(Renderer) import SwiftUIWeb
 
+/// Removes what the suite's tests install, inside the global-state gate after each test (`ProcessGlobalStateTrait`).
+/// A `deinit` would run whenever the instance is released, possibly while the next test holds the gate.
+@MainActor private func resetAnimationEngineClock() {
+  _animationClockOverride = nil
+}
+
 /// What Swift animates itself: curves evaluated in Swift, custom animations, transactions, and the `Animatable` data
 /// of views, modifiers, shapes and geometry effects rendered frame by frame.
-@Suite(.serialized, .processGlobalState)
+@Suite(.serialized, .processGlobalState(tearDown: resetAnimationEngineClock))
 @MainActor
 final class AnimationEngineTests {
   private nonisolated(unsafe) static var now = 0.0
@@ -14,8 +20,6 @@ final class AnimationEngineTests {
     AnimationEngineTests.now = 100
     _animationClockOverride = { AnimationEngineTests.now }
   }
-
-  deinit { _animationClockOverride = nil }
 
   // MARK: Curves
 

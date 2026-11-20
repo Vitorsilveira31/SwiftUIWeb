@@ -63,6 +63,11 @@ const pixels = (value) => (value === "none" ? [0, 0] : value.split(" ").map((par
 async function insertionAndSiblings(page, label) {
   const before = await page.evaluate(() => window.__byId("row-1").getBoundingClientRect().top);
   await click(page, "add");
+  // A debug (-Onone) app on a busy CI runner can take longer than the click's pause to insert the row: wait for it and
+  // its transition instead of reading an element that is not there yet. A row that never animates still fails below.
+  await page
+    .waitForFunction(() => window.__animationsOf(window.__transitionTarget("row-4")).length > 0, null, { timeout: 5_000 })
+    .catch(() => {});
   const row = await page.evaluateHandle(() => window.__transitionTarget("row-4"));
   const frames = await row.evaluate((element) => window.__keyframes(element));
   assert.equal(frames.length, 1, `${label}: the inserted row plays one transition`);
