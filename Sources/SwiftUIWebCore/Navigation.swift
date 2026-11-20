@@ -2038,12 +2038,20 @@ public enum NavigationSplitViewVisibility: Hashable, Sendable {
 /// A two- or three-column navigation container. It intentionally leaves
 /// selection and routing to the child SwiftUI views while providing semantic
 /// column landmarks and responsive visibility metadata to the HTML host.
+///
+/// As on iPad and the Mac, the sidebar has a toggle: a button at the top of the sidebar hides it, and the same button,
+/// at the leading end of the detail's bar, shows it again. The toggle writes the `columnVisibility` binding when the
+/// split view has one, and the split view's own state otherwise; the columns move with a view transition.
 public nonisolated struct NavigationSplitView<Sidebar: View, Content: View, Detail: View>: View {
   public typealias Body = Never
   let sidebar: Sidebar
   let content: Content
   let detail: Detail
   private let columnVisibility: Binding<NavigationSplitViewVisibility>?
+  /// The visibility the toggle changes when the split view has no `columnVisibility` binding.
+  @State(memberID: 905793620) private var ownVisibility = NavigationSplitViewVisibility.automatic
+  /// Marks the render the toggle asks for, which names the columns for the view transition that moves them.
+  @State(memberID: 905793621) private var toggleTransition = _SplitViewToggleTransition()
 
   public nonisolated init(
     @ViewBuilder sidebar: () -> Sidebar,
@@ -2090,7 +2098,8 @@ public nonisolated struct NavigationSplitView<Sidebar: View, Content: View, Deta
   }
 
   @MainActor public func _render(in context: _RenderContext) -> _RenderNode {
-    let visibility = columnVisibility?.wrappedValue ?? .automatic
+    let visibilityBinding = columnVisibility ?? $ownVisibility
+    let visibility = visibilityBinding.wrappedValue
     let node = _RenderNode.element("div")
     node.classes = ["navigation-split-view"]
     // NavigationSplitView is a proposal-driven CSS grid container. Mark the
@@ -2110,10 +2119,12 @@ public nonisolated struct NavigationSplitView<Sidebar: View, Content: View, Deta
     } else {
       node.children = [sidebarNode, contentNode, detailNode]
     }
-    // `navigationSplitViewColumnWidth` on a column's content sizes that column's track.
+    // `navigationSplitViewColumnWidth` on a column's content sizes that column's track. A hidden column has none: the
+    // grid places the columns that show in the tracks there are.
+    let hidden = hiddenColumns(visibility, count: node.children.count)
     var tracks: [String] = []
     var sized = false
-    for (index, column) in node.children.enumerated() {
+    for (index, column) in node.children.enumerated() where !hidden.contains(index) {
       let hints = column.children.first?.attributes ?? .init()
       if let ideal = hints["data-column-width-ideal"] {
         let low = hints["data-column-width-min"] ?? ideal
@@ -2125,8 +2136,72 @@ public nonisolated struct NavigationSplitView<Sidebar: View, Content: View, Deta
       }
     }
     if sized { node.styles["grid-template-columns"] = tracks.joined(separator: " ") }
-    applyVisibility(visibility, to: node.children)
+    for index in hidden { node.children[index].attributes["data-column-hidden"] = "true" }
+    addSidebarToggle(visibility: visibilityBinding, to: node)
     return node
+  }
+
+  /// The sidebar's toggle, at the top of the sidebar while it shows and at the leading end of the detail's bar while it
+  /// is hidden: one button, the split view's last child, which the stylesheet places (and hides where the split view is a
+  /// push navigation). It is never a column's child, so hiding the sidebar changes no column's children and the detail
+  /// keeps its views. The sidebar's `navigationTitle` is shown in a header at the top of the sidebar, as the iPad's
+  /// sidebar shows its title.
+  @MainActor private func addSidebarToggle(visibility: Binding<NavigationSplitViewVisibility>, to node: _RenderNode) {
+    guard let sidebarColumn = node.children.first, let detailColumn = node.children.last else { return }
+    let hidden = visibility.wrappedValue == .detailOnly
+    let transition = toggleTransition
+    if transition.pending {
+      // This render is the toggle's: naming the columns makes the browser move them with a view transition.
+      transition.pending = false
+      sidebarColumn.styles["view-transition-name"] = "navigation-split-sidebar"
+      detailColumn.styles["view-transition-name"] = "navigation-split-detail"
+    }
+    if hidden { node.attributes["data-sidebar-hidden"] = "true" }
+    let header = _RenderNode.element("div")
+    header.classes = ["navigation-sidebar-header"]
+    header.attributes["data-split-chrome"] = "true"
+    if let title = Self.navigationTitle(in: sidebarColumn) {
+      let titleNode = _RenderNode.element("div")
+      titleNode.classes = ["navigation-sidebar-title"]
+      titleNode.attributes["role"] = "heading"
+      titleNode.attributes["aria-level"] = "1"
+      titleNode.children = [.text(title)]
+      header.children = [titleNode]
+      sidebarColumn.attributes["data-sidebar-title"] = "true"
+    }
+    sidebarColumn.children.insert(header, at: 0)
+
+    let toggle = _RenderNode.element("button")
+    toggle.classes = ["navigation-sidebar-toggle"]
+    toggle.attributes["data-split-chrome"] = "true"
+    toggle.attributes["type"] = "button"
+    toggle.attributes["aria-label"] = hidden ? "Show Sidebar" : "Hide Sidebar"
+    toggle.attributes["aria-expanded"] = hidden ? "false" : "true"
+    let icon = _RenderNode.element("span")
+    icon.classes = ["navigation-sidebar-toggle-icon", "symbol-icon"]
+    icon.attributes["data-symbol"] = "sidebar.left"
+    icon.attributes["aria-hidden"] = "true"
+    toggle.children = [icon]
+    toggle.events["click"] = _EventHandler(name: "click", action: { _ in
+      transition.pending = true
+      withAnimation { visibility.wrappedValue = visibility.wrappedValue == .detailOnly ? .all : .detailOnly }
+    })
+    node.children.append(toggle)
+  }
+
+  /// The `navigationTitle` the sidebar's content declares: with no navigation stack in the column, the modifier leaves
+  /// it on the view it modifies, the column's root or a wrapper near it.
+  private static func navigationTitle(in column: _RenderNode) -> String? {
+    var level = column.children
+    for _ in 0..<4 {
+      var next: [_RenderNode] = []
+      for child in level {
+        if let title = child.attributes["data-navigation-title"], !title.isEmpty { return title }
+        next.append(contentsOf: child.children)
+      }
+      level = next
+    }
+    return nil
   }
 
   @MainActor private func column<Column: View>(
@@ -2156,15 +2231,20 @@ public nonisolated struct NavigationSplitView<Sidebar: View, Content: View, Deta
     return node
   }
 
-  private func applyVisibility(_ visibility: NavigationSplitViewVisibility, to columns: [_RenderNode]) {
+  /// The indices of the columns `visibility` hides, of `count` columns.
+  private func hiddenColumns(_ visibility: NavigationSplitViewVisibility, count: Int) -> [Int] {
     switch visibility {
-    case .automatic, .all: break
-    case .doubleColumn:
-      if columns.count == 3 { columns[1].attributes["data-column-hidden"] = "true" }
-    case .detailOnly:
-      for column in columns.dropLast() { column.attributes["data-column-hidden"] = "true" }
+    case .automatic, .all: return []
+    case .doubleColumn: return count == 3 ? [1] : []
+    case .detailOnly: return Array(0..<(count - 1))
     }
   }
+}
+
+/// Set by a split view's sidebar toggle for the render it causes (see `NavigationSplitView.addSidebarToggle`). A class
+/// kept in the split view's state: clearing the mark during that render changes no state, so it schedules no other.
+final class _SplitViewToggleTransition {
+  var pending = false
 }
 
 public extension View {

@@ -5503,6 +5503,50 @@
   }
 }
 
+/* The sidebar's toggle (NavigationSplitView), as on iPad: at the top of the sidebar, in a header that also shows the
+   sidebar's navigation title, while the sidebar shows; at the leading end of the detail's bar while it is hidden. The
+   header sits in the sidebar's top padding, so the sidebar's content keeps the rest of the column. */
+.navigation-split-view > .navigation-column { position: relative; }
+/* A column `columnVisibility` hides takes no track (the layer's sidebar rule would display it). */
+.navigation-split-view > .navigation-column[data-column-hidden="true"] { display: none; }
+.navigation-split-view[data-column-visibility="detailOnly"] { grid-template-columns: minmax(0, 1fr); }
+.navigation-split-view[data-column-count="3"][data-column-visibility="doubleColumn"] { grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); }
+.navigation-split-view { position: relative; }
+.navigation-sidebar-header {
+  position: absolute; inset-block-start: 48px; inset-inline: 0; z-index: 1;
+  padding-inline: calc(var(--spacing) * 2);
+}
+.navigation-sidebar-toggle {
+  position: absolute; inset-block-start: 6px; inset-inline-start: calc(var(--spacing) * 2); z-index: 30;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; padding: 0;
+  border: 0; border-radius: 8px; background: transparent; cursor: pointer;
+  color: var(--tint-color, var(--color-swu-primary)); font-size: 18px; line-height: 1;
+}
+.navigation-sidebar-toggle:hover { background: color-mix(in srgb, currentColor 12%, transparent); }
+.navigation-sidebar-toggle:focus-visible { outline: 2px solid var(--tint-color, var(--color-swu-primary)); outline-offset: 2px; }
+.navigation-sidebar-title {
+  padding-inline: calc(var(--spacing) * 2); padding-block-end: calc(var(--spacing) * 2);
+  font-size: var(--text-2xl); line-height: var(--text-2xl--line-height); font-weight: var(--font-weight-bold);
+  letter-spacing: var(--tracking-tight); color: var(--color-swu-foreground);
+}
+.navigation-split-view > .navigation-sidebar { padding-block-start: 48px; }
+.navigation-split-view > .navigation-sidebar[data-sidebar-title] { padding-block-start: calc(48px + var(--text-2xl--line-height) * var(--text-2xl) + var(--spacing) * 2); }
+/* The detail's title moves over for the toggle beside it. */
+.navigation-split-view[data-sidebar-hidden] > .navigation-detail > .navigation-stack::before,
+.navigation-split-view[data-sidebar-hidden] > .navigation-detail > .frame-box > .navigation-stack::before {
+  padding-inline-start: calc(var(--spacing) * 6 + 36px);
+}
+/* The toggle's view transition (the split view names its columns for that one commit): the sidebar slides out or in, and
+   the detail's box follows it while its content keeps its scale. */
+::view-transition-group(navigation-split-detail) { overflow: clip; }
+::view-transition-old(navigation-split-detail),
+::view-transition-new(navigation-split-detail) { height: 100%; width: auto; object-fit: none; object-position: left top; }
+::view-transition-old(navigation-split-sidebar):only-child { animation-name: swu-split-sidebar-out; }
+::view-transition-new(navigation-split-sidebar):only-child { animation-name: swu-split-sidebar-in; }
+@keyframes swu-split-sidebar-out { to { transform: translateX(-100%); } }
+@keyframes swu-split-sidebar-in { from { transform: translateX(-100%); } }
+
 /* A compact NavigationSplitView is a push navigation: the sidebar is the root and the detail replaces it (the host
    sets data-compact-detail when something in the sidebar is chosen; the back button clears it). */
 .compact-back { display: none; }
@@ -5514,6 +5558,9 @@
   .navigation-split-view[data-compact-detail] > .navigation-sidebar,
   .navigation-split-view[data-compact-detail] > .navigation-content { display: none; }
   .navigation-split-view[data-compact-detail] > .navigation-detail { display: flex; flex-direction: column; }
+  .navigation-split-view [data-split-chrome] { display: none; }
+  .navigation-split-view > .navigation-sidebar,
+  .navigation-split-view > .navigation-sidebar[data-sidebar-title] { padding-block-start: calc(var(--spacing) * 3); }
   .navigation-split-view .compact-back {
     display: flex; align-items: center; gap: 0.25rem; align-self: flex-start; min-height: 44px; padding: 0 0.75rem;
     border: 0; background: transparent; color: var(--tint-color, var(--color-swu-primary)); font: inherit; cursor: pointer;

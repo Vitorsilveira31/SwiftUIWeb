@@ -101,7 +101,7 @@ export class SemanticLayoutHost {
     for(const cell of this.root.querySelectorAll('td,th'))if(displayed(cell))for(const child of cell.children)if(child.hasAttribute('data-layout-kind'))roots.push(child);
     // NavigationSplitView is a CSS grid of columns, so the Swift content each column hosts is its own semantic root,
     // sized by the column the browser grid gives it.
-    for(const column of this.root.querySelectorAll('.navigation-column'))if(displayed(column)&&!column.hasAttribute('data-column-hidden'))for(const child of column.children)if(!child.hasAttribute('data-compact-back'))roots.push(child);
+    for(const column of this.root.querySelectorAll('.navigation-column'))if(displayed(column)&&!column.hasAttribute('data-column-hidden'))for(const child of column.children)if(!child.hasAttribute('data-compact-back')&&!child.hasAttribute('data-split-chrome'))roots.push(child);
     // The views a chart draws (custom axis labels, annotations) sit in the SVG foreignObjects the chart places; each is
     // its own semantic root, proposed its foreignObject's box.
     for(const box of this.root.querySelectorAll('.data-chart foreignObject > div'))if(displayed(box))for(const child of box.children)if(child.hasAttribute('data-layout-kind'))roots.push(child);
@@ -250,8 +250,9 @@ export class SemanticLayoutHost {
     // stylesheet hides there).
     if(parent.hasAttribute('data-tab-sidebar-content'))return parent.closest('[data-tab-sidebar-expanded="false"]')?{def:{x:true,y:false},ax:.5,height:'auto',key:'rail'}:{def:{x:true,y:false},ax:0,height:'auto',key:'slot'};
     // A NavigationSplitView column proposes its content its content box: the stylesheet makes the column a flex column
-    // whose height is definite (the split view's grid row). The compact back button is the stylesheet's.
-    if(parent.classList.contains('navigation-column')&&!element.hasAttribute('data-compact-back'))return native?{def:{x:true,y:false},ax:.5,height:'auto',key:'column-document'}:{def:{x:true,y:true},ax:.5,height:'100%',key:'column'};
+    // whose height is definite (the split view's grid row). The compact back button and the sidebar's toggle and header
+    // (`data-split-chrome`) are the stylesheet's.
+    if(parent.classList.contains('navigation-column')&&!element.hasAttribute('data-compact-back')&&!element.hasAttribute('data-split-chrome'))return native?{def:{x:true,y:false},ax:.5,height:'auto',key:'column-document'}:{def:{x:true,y:true},ax:.5,height:'100%',key:'column'};
     // A presentation's content proposes its root its content box (a popover's or an alert's grows with what it holds):
     // the mapper makes the content a one-cell grid, so only a content that holds the root alone.
     if(parent.classList.contains('presentation-content')&&parent.childElementCount===1)return {def:{x:true,y:true},ax:.5,height:'cell',key:'presentation'};
