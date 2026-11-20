@@ -26,8 +26,8 @@ export const ownsCssLayoutAttribute = name => name === 'data-cl' || name.startsW
 export const affectsCssLayout = name => STYLE_ATTRIBUTES.has(name);
 /** Whether an attribute can change the size the browser gives an element CSS lays out (what a user-defined Layout is offered,
  * the size of a subview it reads), though it is not one the mapper analyses: its inline style (a font size), what an image
- * or a media element shows, the proposals Swift asks a Layout's subviews about. */
-const SIZE_ATTRIBUTES = new Set(['style', 'src', 'srcset', 'width', 'height', 'data-layout-asks', 'data-layout-proposal']);
+ * or a media element shows, whether a disclosure is open, the proposals Swift asks a Layout's subviews about. */
+const SIZE_ATTRIBUTES = new Set(['style', 'src', 'srcset', 'width', 'height', 'open', 'data-layout-asks', 'data-layout-proposal']);
 const affectsLayoutSize = name => STYLE_ATTRIBUTES.has(name) || SIZE_ATTRIBUTES.has(name);
 /** The layers an element holds besides its own (`data-layout-wrap`, outermost first): `kind;name=value;...` separated by `|`.
  * A layer's field names are the attribute names it would have on an element of its own, without `data-`. */

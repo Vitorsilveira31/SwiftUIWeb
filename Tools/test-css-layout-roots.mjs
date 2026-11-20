@@ -343,12 +343,18 @@ await runSuite(async () => {
       css.note({ type: "characterData", target: t1.firstChild }, t1, ideal);
       css.flush();
       const grown = reports.slice(from).find((r) => r[0] === "sizes")?.[2].split(";")[0];
+      // A disclosure in a subview opens (the browser lays out what it shows): measured again too.
+      t1.setAttribute("open", "");
+      from = reports.length;
+      css.note({ type: "attributes", attributeName: "open", oldValue: null }, t1, ideal);
+      css.flush();
+      const opened = reports.slice(from).filter((r) => r[0] === "sizes").length;
       // Something the mapper does not observe changed (the host saw it): probed again.
       from = reports.length;
       css.invalidateLayouts(); css.flush();
       const invalidated = reports.slice(from).filter((r) => r[0] === "proposal").length;
       observer.disconnect();
-      return { ...shown, moved, idle, grown, invalidated };
+      return { ...shown, moved, idle, grown, opened, invalidated };
     });
     assert.deepEqual([custom.ok, custom.items, custom.refused], [true, [true, true, true], {}], "a user-defined Layout and its subviews are CSS's");
     assert.deepEqual([custom.box[2], custom.box[3]], [200, 80], "the Layout is the size Swift gave it");
@@ -359,6 +365,7 @@ await runSuite(async () => {
     assert.equal(custom.moved, 150, "a Layout whose size changed while it was detached is laid out again");
     assert.deepEqual(custom.idle, { reports: 0, writes: 0 }, "a pass that changed nothing a Layout depends on probes nothing");
     assert.ok(Number(custom.grown?.split(":")[1].split(",")[0]) > custom.ideal[2], `a text that changed in a subview is measured again (${custom.grown})`);
+    assert.equal(custom.opened, 1, "a disclosure that opened in a subview is measured again");
     assert.equal(custom.invalidated, 1, "and a change the host reports probes the Layout again");
     assert.deepEqual(custom.reports.find((r) => r[0] === "proposal")?.slice(1), ["box", 1000, 700], "the Layout is told what it is offered: the window, through the stack that hugs its content");
     const sizes = custom.reports.find((r) => r[0] === "sizes")?.[2].split(";");

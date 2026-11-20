@@ -2289,11 +2289,15 @@ private func _backgroundContent(_ node: _RenderNode) -> (content: _RenderNode, s
   let kind = element.kind, key = element.key, children = element._children, deferred = element._deferredChildren
   modify(element)
   guard element._renderOwnerToken == token else { return }
-  // The copy of the element the wrapper holds: its kind and the very children it had (a wrap shares them). A layer the
-  // modifier drew beside it renders under an owner of its own, or none.
-  let copies = element._children.filter {
-    $0 !== element && $0.kind == kind && $0._deferredChildren === deferred && $0._children.count == children.count &&
-      zip($0._children, children).allSatisfy { $0 === $1 }
+  // The copy of the element the wrapper holds: its kind and the very children it had (a wrap shares them), or, for children
+  // that were deferred, the ones they rendered into (a modifier that reads them makes them render before it copies). A layer
+  // the modifier drew beside it renders under an owner of its own, or none.
+  let same = { (lhs: [_RenderNode], rhs: [_RenderNode]) in lhs.count == rhs.count && zip(lhs, rhs).allSatisfy { $0 === $1 } }
+  let copies = element._children.filter { copy in
+    guard copy !== element, copy.kind == kind else { return false }
+    if copy._deferredChildren === deferred, same(copy._children, children) { return true }
+    guard let deferred, deferred.finished, copy._deferredChildren == nil else { return false }
+    return same(copy._children, deferred.nodes)
   }
   guard let content = copies.first(where: { $0._renderOwnerToken == token }) ?? copies.first(where: { $0._renderOwnerToken == nil }) else { return }
   content._renderOwnerToken = token

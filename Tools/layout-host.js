@@ -159,9 +159,9 @@ export class SemanticLayoutHost {
     if(!requested&&this.unchangedSincePass()){this.metrics.passesSkipped++;this.metrics.unlaid=this.unlaid.size;completed=true;return;}
     this.unlaid=new Set();
     // What the mapper does not observe and can change what a user-defined Layout is offered or its subviews' sizes: a DOM change
-    // outside its islands, a resize, fonts, a global attribute, a control's input (`schedule`). The mapper probes the Layouts
-    // again only then, or after a change it noted itself (`reportLayouts`).
-    if(requested||this.changed||this.windowResized||!this.passed||this.passed.epoch!==this.epoch||this.passed.resizedAt!==this.resizedAt)this.css.invalidateLayouts?.();
+    // outside its islands, a resize, fonts, a global attribute (and what asked for a pass through `schedule`). The mapper probes
+    // the Layouts again only then, or after a change it noted itself (`reportLayouts`).
+    if(this.changed||this.windowResized||!this.passed||this.passed.epoch!==this.epoch||this.passed.resizedAt!==this.resizedAt)this.css.invalidateLayouts?.();
     this.documentScroll.begin();
     // The CSS of the islands the mapper already holds goes in
     // before the first read below: the analysis reads attributes only, so the patch and the CSS are recalculated by one
@@ -197,7 +197,7 @@ export class SemanticLayoutHost {
       this.mutations.takeRecords();this.changed=false;this.windowResized=false;
       if(!completed)this.passed=null;
       this.updating=false;
-      if(this.updateRequested){this.updateRequested=false;this.schedule();}
+      if(this.updateRequested){this.updateRequested=false;this.schedulePass();}
     }
   }
   /** Hands the mapper the semantic roots CSS can lay out whole and returns them; a root it cannot is reported. A mutation
@@ -314,10 +314,15 @@ export class SemanticLayoutHost {
   // A control's input event schedules a pass while the host is about to commit the publication that event
   // causes, and the commit runs its own pass. When that commit is pending in this frame the scheduled pass waits
   // a frame; the commit's pass then cancels it (`update`), so a keystroke or a slider step costs one pass, not two.
-  schedule(){if(!this.scheduled&&!this.disposed)this.scheduled=this.window.requestAnimationFrame(()=>this.runScheduled());}
+  // What asks for a pass here changed something the page's records do not show (fonts, a resize, a global attribute, a control's
+  // input, a sidebar the host toggled): the user-defined Layouts are probed again at that pass. The pass that runs from the frame
+  // finds nothing scheduled any more (`runScheduled`), so the request cannot wait for it to tell.
+  schedule(){this.css?.invalidateLayouts?.();this.schedulePass();}
+  // A pass put off to the next frame (a commit arrived while one ran, or one is pending): what it is for shows in the records.
+  schedulePass(){if(!this.scheduled&&!this.disposed)this.scheduled=this.window.requestAnimationFrame(()=>this.runScheduled());}
   runScheduled(){
     this.scheduled=0;
-    if(this.options.commitPending?.()){this.schedule();return;}
+    if(this.options.commitPending?.()){this.schedulePass();return;}
     try{this.update();}catch(e){this.onError(e);}
   }
   get pending(){return this.scheduled!==0;}
