@@ -5,7 +5,7 @@ enum SiteLinks {
   static let repository = URL(string: "https://github.com/Vitorsilveira31/SwiftUIWeb")
 
   /// The latest release, the version the getting-started manifest asks for. Update it with each release.
-  static let release = "0.1.29"
+  static let release = "0.1.30"
 
   /// The address of a page of the site, in a language. A link to it is taken by the browser host and shown through
   /// `onOpenURL` without reloading the page, and it is a real link: it opens in a new tab, and Back returns to the page before.
