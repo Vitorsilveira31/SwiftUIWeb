@@ -97,7 +97,7 @@ struct Sidebar: View {
             }
         }
         .navigationTitle("Food Truck")
-        #if os(macOS)
+        #if (os(macOS) && !WEB)
         .navigationSplitViewColumnWidth(min: 200, ideal: 200)
         #endif
     }

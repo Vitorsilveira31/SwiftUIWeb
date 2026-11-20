@@ -87,7 +87,7 @@ struct UnlockFeatureExpandedView: View {
                     .padding(.horizontal, 10)
             }
             .buttonStyle(.borderedProminent)
-            #if os(iOS)
+            #if (os(iOS) || WEB)
             .buttonBorderShape(.capsule)
             #endif
         }
@@ -129,7 +129,7 @@ struct UnlockFeatureSimpleView: View {
                     .padding(2)
             }
             .buttonStyle(.borderedProminent)
-            #if os(iOS)
+            #if (os(iOS) || WEB)
             .buttonBorderShape(.capsule)
             #endif
         }

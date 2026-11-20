@@ -25,7 +25,7 @@ struct SocialFeedPlusSettings: View {
                     EmptyView()
                 }
             }
-            #if os(iOS)
+            #if (os(iOS) || WEB)
             Section {
                 NavigationLink {
                     StoreSupportView()
@@ -45,7 +45,7 @@ struct SocialFeedPlusSettings: View {
         }
         .navigationTitle("Manage Social Feed+")
         .toolbar {
-            #if os(iOS)
+            #if (os(iOS) || WEB)
             let placement = ToolbarItemPlacement.navigationBarTrailing
             #else
             let placement = ToolbarItemPlacement.cancellationAction
@@ -55,7 +55,7 @@ struct SocialFeedPlusSettings: View {
                     dismiss()
                 } label: {
                     Label("Dismiss", systemImage: "xmark")
-                        #if os(macOS)
+                        #if (os(macOS) && !WEB)
                         .labelStyle(.titleOnly)
                         #endif
                 }
@@ -73,7 +73,7 @@ struct SocialFeedPlusSettings: View {
 
 struct SubscriptionStatusView: View {
     var controller: StoreSubscriptionController
-    #if os(iOS)
+    #if (os(iOS) || WEB)
     @State private var manageSubscriptionIsPresented = false
     #else
     @Environment(\.openURL) private var openURL
@@ -120,7 +120,7 @@ struct SubscriptionStatusView: View {
                     .foregroundColor(.secondary)
             }
             Button("Manage subscription") {
-                #if os(iOS)
+                #if (os(iOS) || WEB)
                 manageSubscriptionIsPresented = true
                 #else
                 if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
@@ -128,7 +128,7 @@ struct SubscriptionStatusView: View {
                 }
                 #endif
             }
-            #if os(iOS)
+            #if (os(iOS) || WEB)
             .manageSubscriptionsSheet(isPresented: $manageSubscriptionIsPresented)
             #endif
         }

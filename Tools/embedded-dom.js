@@ -1,7 +1,7 @@
 import {writeEventValue, readSecureBytes, concatBytes} from './event-value.js';
 import {SemanticLayoutHost, ownsLayoutStyle, ownsLayoutAttribute} from './layout-host.js';
 import {CssLayout} from './css-layout.js';
-import {FocusCoordinator, ScrollCoordinator, KeyboardShortcutCoordinator, HistoryCoordinator} from './host-interactions.js';
+import {FocusCoordinator, ScrollCoordinator, KeyboardShortcutCoordinator, HistoryCoordinator, isDeepLinkPath} from './host-interactions.js';
 import {takeFirstPaint} from './first-paint-host.js';
 import {AdaptiveTabShell} from './tab-shell.js';
 import {GeometryHost} from './geometry-host.js';
@@ -3530,7 +3530,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
       if (sheet.style.getPropertyValue('--presentation-detent-height') !== height) sheet.style.setProperty('--presentation-detent-height', height);
     }
   }});
-  historyHost = new HistoryCoordinator(root,{window,ack:seq=>api.history_ack?.(seq),restore:key=>{sendValue(key);api.history_restore?.();schedule();},onPop:()=>{locationTabRestoreKey=null;locationTabRestoreView=null;restoreTabSelectionFromLocation({dispatch:false});openPathAddress();},onRoot:()=>{locationTabRestoreKey=null;locationTabRestoreView=null;locationStale=true;restoreRootTabSelections();},onLocation:()=>{sendValue(window.location.href);api.history_location?.();const host=root.querySelector('[data-open-url-handler]');if(host)dispatchNamed(host,'openURL',window.location.href);}});
+  historyHost = new HistoryCoordinator(root,{window,ack:seq=>api.history_ack?.(seq),restore:key=>{sendValue(key);api.history_restore?.();schedule();},onPop:()=>{locationTabRestoreKey=null;locationTabRestoreView=null;restoreTabSelectionFromLocation({dispatch:false});openPathAddress();},onRoot:()=>{locationTabRestoreKey=null;locationTabRestoreView=null;locationStale=true;restoreRootTabSelections();},onLocation:()=>{sendValue(window.location.href);api.history_location?.();const host=root.querySelector('[data-open-url-handler]');if(host&&isDeepLinkPath(window.location.pathname))dispatchNamed(host,'openURL',window.location.href);}});
   for(const factory of options.plugins||[])plugins.push(factory(root,{dispatchNamed,window,document}));
   session.layoutMetrics=layout.metrics;
   // Arrives with the other hosts of deferred-hosts.js.

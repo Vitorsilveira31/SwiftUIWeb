@@ -16,13 +16,13 @@ struct OrdersView: View {
     @State private var selection: Set<Order.ID> = []
     @State private var completedOrder: Order?
     
-    #if os(iOS)
+    #if (os(iOS) || WEB)
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.editMode) private var editMode
     #endif
     
     var displayAsList: Bool {
-        #if os(iOS)
+        #if (os(iOS) || WEB)
         return sizeClass == .compact
         #else
         return false
@@ -125,7 +125,7 @@ struct OrdersView: View {
         }
         .disabled(selection.isEmpty)
         
-        #if os(iOS)
+        #if (os(iOS) || WEB)
         if editMode?.wrappedValue.isEditing == false {
             Button("Select") {
                 editMode?.wrappedValue = .active

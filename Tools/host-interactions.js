@@ -322,6 +322,13 @@ export class KeyboardShortcutCoordinator {
   dispose(){this.abort.abort();if(this.window.__keyboardShortcutTrace===this.trace)delete this.window.__keyboardShortcutTrace;}
 }
 
+/** Whether an address path is a deep link, which reaches `onOpenURL` as a URL launch does on Apple platforms: a path past
+ * the site's root. The root, with or without `index.html`, is a plain launch, for which Apple calls no `onOpenURL` (Food
+ * Truck's handler turned it into an order that does not exist). The same rule as Swift's `_embeddedIsDeepLink`. */
+export function isDeepLinkPath(path) {
+  return !(path === '' || path === '/' || path === '/index.html');
+}
+
 export class HistoryCoordinator {
   constructor(root,{restore,ack,onLocation=()=>{},onPop=()=>{},onRoot=()=>{},window=root.ownerDocument.defaultView}){
     this.root=root;this.window=window;this.restore=restore;this.ack=ack;this.onLocation=onLocation;this.onPop=onPop;this.onRoot=onRoot;this.last=0;this.waiting=false;this.queue=[];this.bases=new Map();this.hydrated=false;this.hydrating=false;this.abort=new window.AbortController();

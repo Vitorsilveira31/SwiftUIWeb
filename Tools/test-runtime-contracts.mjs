@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {resolveRequest,isLoopbackHost} from './dev-server-policy.mjs';
 import {minify} from './build-styles.mjs';
 import {ownsLayoutAttribute} from './layout-host.js';
-import {FocusCoordinator,ScrollCoordinator,HistoryCoordinator} from './host-interactions.js';
+import {FocusCoordinator,ScrollCoordinator,HistoryCoordinator,isDeepLinkPath} from './host-interactions.js';
 import {PresentationCoordinator} from './presentation-host.js';
 import {shareContent} from './transfer-host.js';
 import {GeometryHost} from './geometry-host.js';
@@ -88,6 +88,10 @@ await test('deep links hydrate once and do not duplicate the current URL',()=>{
   const adapter=new HistoryCoordinator(root,{window:w,onLocation:()=>locations++,ack:n=>acks.push(n)});
   operations=[{sequence:1,kind:'push',path:'/navigation/detail/2?tab=work',depth:1,oldDepth:0,key:'one',rootKey:'root',adapter:'stack'}];adapter.sync();
   assert.equal(locations,1);assert.equal(entries.length,1);assert.equal(w.location.pathname,'/navigation/detail/2');assert.equal(w.location.search,'?tab=work');assert.deepEqual(acks,[1]);adapter.dispose();
+});
+await test('the site root is a plain launch, an address past it a deep link that reaches onOpenURL',()=>{
+  for (const root of ['', '/', '/index.html']) assert.equal(isDeepLinkPath(root),false,root);
+  for (const link of ['/orders/1204', '/navigation/detail/2', '/index.html/x']) assert.equal(isDeepLinkPath(link),true,link);
 });
 await test('reload replays the current URL even when history state survived',()=>{
   const w=new EventTarget();w.AbortController=AbortController;w.location=new URL('https://example.test/?tab-selection=scope%3Awi-fi');let entries=[{url:w.location.href,state:{swuiNavigation:{adapter:'old',key:'old',depth:1}}}],entry=0,locations=0,acks=[];

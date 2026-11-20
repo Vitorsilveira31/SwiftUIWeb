@@ -33,7 +33,7 @@ struct OrdersTable: View {
             TableColumn("Donuts", value: \.totalSales) { order in
                 Text(order.totalSales.formatted())
                     .monospacedDigit()
-                    #if os(macOS)
+                    #if (os(macOS) && !WEB)
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .foregroundStyle(.secondary)
                     #endif
@@ -41,14 +41,14 @@ struct OrdersTable: View {
             
             TableColumn("Status", value: \.status) { order in
                 order.status.label
-                    #if os(macOS)
+                    #if (os(macOS) && !WEB)
                     .foregroundStyle(.secondary)
                     #endif
             }
             
             TableColumn("Date", value: \.creationDate) { order in
                 Text(order.formattedDate)
-                    #if os(macOS)
+                    #if (os(macOS) && !WEB)
                     .foregroundStyle(.secondary)
                     #endif
             }

@@ -16,7 +16,7 @@ struct OrderRow: View {
             let iconShape = RoundedRectangle(cornerRadius: 4, style: .continuous)
             DonutStackView(donuts: order.donuts)
                 .padding(2)
-                #if os(iOS)
+                #if (os(iOS) || WEB)
                 .frame(width: 40, height: 40)
                 #else
                 .frame(width: 20, height: 20)

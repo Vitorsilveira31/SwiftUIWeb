@@ -12,7 +12,7 @@ struct TruckView: View {
     @ObservedObject var model: FoodTruckModel
     @Binding var navigationSelection: Panel?
     
-    #if os(iOS)
+    #if (os(iOS) || WEB)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
 
@@ -46,7 +46,7 @@ struct TruckView: View {
                 }
             }
         }
-        #if os(iOS)
+        #if (os(iOS) || WEB)
         .background(Color(uiColor: .systemGroupedBackground))
         #else
         .background(.quaternary.opacity(0.5))
@@ -89,7 +89,7 @@ struct TruckView: View {
     
     var cardNavigation: TruckCardHeaderNavigation {
         let useNavigationLink: Bool = {
-            #if os(iOS)
+            #if (os(iOS) || WEB)
             return sizeClass == .compact
             #else
             return false

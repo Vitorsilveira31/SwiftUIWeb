@@ -20,7 +20,7 @@ struct WidthThresholdReader<Content: View>: View {
     var dynamicTypeThreshold: DynamicTypeSize = .xxLarge
     @ViewBuilder var content: (WidthThresholdProxy) -> Content
     
-    #if os(iOS)
+    #if (os(iOS) || WEB)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
     @Environment(\.dynamicTypeSize) private var dynamicType
@@ -37,7 +37,7 @@ struct WidthThresholdReader<Content: View>: View {
     }
                 
     func isCompact(width: Double) -> Bool {
-        #if os(iOS)
+        #if (os(iOS) || WEB)
         if sizeClass == .compact {
             return true
         }
@@ -89,7 +89,7 @@ struct WidthThresholdReader_Previews: PreviewProvider {
             .dynamicTypeSize(.xxxLarge)
             .border(.quaternary)
         
-            #if os(iOS)
+            #if (os(iOS) || WEB)
             WidthThresholdReader { proxy in
                 Label {
                     Text("Manually Compact Size Class")
