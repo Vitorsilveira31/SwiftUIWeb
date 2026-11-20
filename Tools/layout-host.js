@@ -158,6 +158,10 @@ export class SemanticLayoutHost {
     // A commit whose patch wrote nothing the layout reads, with nothing scheduled, finds nothing to claim or to style.
     if(!requested&&this.unchangedSincePass()){this.metrics.passesSkipped++;this.metrics.unlaid=this.unlaid.size;completed=true;return;}
     this.unlaid=new Set();
+    // What the mapper does not observe and can change what a user-defined Layout is offered or its subviews' sizes: a DOM change
+    // outside its islands, a resize, fonts, a global attribute, a control's input (`schedule`). The mapper probes the Layouts
+    // again only then, or after a change it noted itself (`reportLayouts`).
+    if(requested||this.changed||this.windowResized||!this.passed||this.passed.epoch!==this.epoch||this.passed.resizedAt!==this.resizedAt)this.css.invalidateLayouts?.();
     this.documentScroll.begin();
     // The CSS of the islands the mapper already holds goes in
     // before the first read below: the analysis reads attributes only, so the patch and the CSS are recalculated by one
@@ -180,7 +184,10 @@ export class SemanticLayoutHost {
     // Its own writes are not records of the page.
     this.mutations.disconnect();
     // The page's scroll view follows the pass: which one it is, what sticks and how tall the chain stays.
+    const scroll=this.documentScroll.active,scrollKey=scroll?.key;
     try{this.css.fitTexts();this.css.extendUnderBars();this.documentScroll.sync();}finally{this.observeMutations();}
+    // The page's scroll view moved to the document or back, or what sticks there changed: the page is laid out anew.
+    if(this.documentScroll.active!==scroll||this.documentScroll.active?.key!==scrollKey)this.css.invalidateLayouts?.();
     this.metrics.passes++;
     this.metrics.unlaid=this.unlaid.size;
     this.passed={epoch:this.epoch,resizedAt:this.resizedAt};
@@ -276,8 +283,11 @@ export class SemanticLayoutHost {
   }
   /** Applies the CSS layout mapper's pending islands (its own `data-cl` writes are not recorded as mutations). */
   flushCss(){
-    if(!this.css.pending.size){this.css.flush();return;} // forgets islands that left the document
+    // A page with user-defined Layouts may probe them (`reportLayouts`), which writes styles and puts them back: not records of the page.
+    if(!this.css.pending.size&&!this.css.layouts.size){this.css.flush();return;} // forgets islands that left the document
     const t=this.performanceDiagnostics?performance.now():0;
+    // What the page wrote since the records were last taken (a claim) is collected before the observer lets it go.
+    this.collect(this.mutations.takeRecords());
     this.mutations.disconnect();
     try{this.css.flush();}finally{this.observeMutations();}
     // An island the mapper gave up (something it cannot express appeared in it) has no layout any more.

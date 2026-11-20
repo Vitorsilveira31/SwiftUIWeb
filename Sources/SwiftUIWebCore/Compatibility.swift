@@ -520,7 +520,7 @@ public nonisolated struct _SemanticCompatibilityModifier: ViewModifier {
   @MainActor public func _apply(to node: _RenderNode, context: inout _RenderContext) {
     if attributes["data-layout-kind"] == "aspect" {
       // On a Group/ForEach the ratio applies to each element, as in SwiftUI.
-      if node.kind == .fragment { for child in node.children where !child.isEmpty { _ = _semanticWrap(child, kind: "aspect") } }
+      if node.kind == .fragment { for child in node.children where !child.isEmpty { _modifyElement(child) { _semanticWrap($0, kind: "aspect") } } }
       else { _ = _semanticWrap(node, kind: "aspect") }
     }
     if let swipeContent {

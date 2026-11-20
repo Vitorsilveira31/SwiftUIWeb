@@ -550,7 +550,7 @@ package nonisolated struct StyleModifier: ViewModifier {
         if child.kind == .fragment {
           pending.append(contentsOf: child.children.reversed())
         } else {
-          _applyToElement(child, layers: layers)
+          _modifyElement(child) { _applyToElement($0, layers: layers) }
         }
       }
       return
@@ -2270,9 +2270,35 @@ private func _backgroundContent(_ node: _RenderNode) -> (content: _RenderNode, s
   guard node.kind == .fragment else { return false }
   for (index, child) in node.children.enumerated() where !child.isEmpty {
     var childContext = context.child(_FiberKey("element-\(index)"))
-    body(child, &childContext)
+    _modifyElement(child) { body($0, &childContext) }
   }
   return true
+}
+
+/// Applies `modify` to `element`, an element of a Group or a ForEach that a modifier on the group changes where it stands
+/// (`.aspectRatio` on a ForEach wraps each element in place). The modifier is outside the owner that rendered the element: what
+/// that owner returned is now the content the wrapper holds, and a pass that renders the owner again on its own (a state of
+/// the row changed) returns that content alone. With the token left on the wrapper, that pass reconciled the content
+/// against the wrapper: the content took the wrapper's place, the layers below it were replaced and the wrapper was lost
+/// (Food Truck's New Orders tiles, empty while their new GeometryReaders waited to be measured, each time an order arrived).
+/// The owner's token goes with the content, whose fiber that pass then finds, and so does the key the owner gives what it
+/// returns (the wrapper keeps it too, for its place among the elements): without it the pass took the content for another
+/// view, rekeyed.
+@MainActor func _modifyElement(_ element: _RenderNode, _ modify: (_RenderNode) -> Void) {
+  guard let token = element._renderOwnerToken else { return modify(element) }
+  let kind = element.kind, key = element.key, children = element._children, deferred = element._deferredChildren
+  modify(element)
+  guard element._renderOwnerToken == token else { return }
+  // The copy of the element the wrapper holds: its kind and the very children it had (a wrap shares them). A layer the
+  // modifier drew beside it renders under an owner of its own, or none.
+  let copies = element._children.filter {
+    $0 !== element && $0.kind == kind && $0._deferredChildren === deferred && $0._children.count == children.count &&
+      zip($0._children, children).allSatisfy { $0 === $1 }
+  }
+  guard let content = copies.first(where: { $0._renderOwnerToken == token }) ?? copies.first(where: { $0._renderOwnerToken == nil }) else { return }
+  content._renderOwnerToken = token
+  content.key = key
+  element._renderOwnerToken = nil
 }
 
 package nonisolated struct ShapeBackgroundModifier<Style: ShapeStyle, Clip: Shape>: ViewModifier {
@@ -2610,7 +2636,7 @@ package nonisolated struct BackgroundModifier<Background: View>: ViewModifier {
     if isListRowBackground, let card = Self.sectionCard(in: node) { decorate(card, key: "background", context: context); return }
     // On a Group/ForEach the background decorates each element, as in SwiftUI.
     if node.kind == .fragment {
-      for (index, child) in node.children.enumerated() where !child.isEmpty { decorate(child, key: "background-\(index)", context: context) }
+      for (index, child) in node.children.enumerated() where !child.isEmpty { _modifyElement(child) { decorate($0, key: "background-\(index)", context: context) } }
       return
     }
     decorate(node, key: "background", context: context)
@@ -2733,7 +2759,7 @@ package nonisolated struct OverlayModifier<Overlay: View>: ViewModifier {
   @MainActor package func _apply(to node: _RenderNode, context: inout _RenderContext) {
     // On a Group/ForEach the overlay decorates each element, as in SwiftUI.
     if node.kind == .fragment {
-      for (index, child) in node.children.enumerated() where !child.isEmpty { decorate(child, key: "overlay-\(index)", context: context) }
+      for (index, child) in node.children.enumerated() where !child.isEmpty { _modifyElement(child) { decorate($0, key: "overlay-\(index)", context: context) } }
       return
     }
     decorate(node, key: "overlay", context: context)

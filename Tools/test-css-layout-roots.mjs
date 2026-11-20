@@ -328,7 +328,27 @@ await runSuite(async () => {
       // Swift changes what the page reads while the box is detached (a patch that moves a subtree): only its parent is noted.
       const parent = box.parentElement; box.remove(); box.setAttribute("data-layout-content-width", "150"); box.style.width = "150px"; parent.append(box);
       css.mark(parent, app); css.pending.add(app); css.flush();
-      return { ...shown, moved: box.getBoundingClientRect().width };
+      const moved = box.getBoundingClientRect().width;
+      // A pass in which nothing the Layout depends on changed probes nothing: no style is written, nothing is reported.
+      const writes = [], observer = new MutationObserver((records) => writes.push(...records));
+      observer.observe(document.body, { attributes: true, subtree: true, attributeFilter: ["style"] });
+      let from = reports.length;
+      css.flush();
+      observer.takeRecords().forEach((r) => writes.push(r));
+      const idle = { reports: reports.length - from, writes: writes.length };
+      // A text in a subview changes (the browser lays it out: no block changes): the sizes are measured again.
+      const t1 = document.getElementById("t1"), ideal = document.getElementById("ideal");
+      t1.firstChild.data = "Ideal, and longer";
+      from = reports.length;
+      css.note({ type: "characterData", target: t1.firstChild }, t1, ideal);
+      css.flush();
+      const grown = reports.slice(from).find((r) => r[0] === "sizes")?.[2].split(";")[0];
+      // Something the mapper does not observe changed (the host saw it): probed again.
+      from = reports.length;
+      css.invalidateLayouts(); css.flush();
+      const invalidated = reports.slice(from).filter((r) => r[0] === "proposal").length;
+      observer.disconnect();
+      return { ...shown, moved, idle, grown, invalidated };
     });
     assert.deepEqual([custom.ok, custom.items, custom.refused], [true, [true, true, true], {}], "a user-defined Layout and its subviews are CSS's");
     assert.deepEqual([custom.box[2], custom.box[3]], [200, 80], "the Layout is the size Swift gave it");
@@ -337,6 +357,9 @@ await runSuite(async () => {
     assert.ok(custom.wrap[2] <= 60 && custom.wrap[3] > custom.ideal[3] * 1.5, "offered a width, a subview wraps at it (and is laid out so again once measured at the other proposals)");
     assert.deepEqual(custom.fill, [80, 40, 120, 40], "a subview that fills takes its proposal, pinned by its bottom trailing corner");
     assert.equal(custom.moved, 150, "a Layout whose size changed while it was detached is laid out again");
+    assert.deepEqual(custom.idle, { reports: 0, writes: 0 }, "a pass that changed nothing a Layout depends on probes nothing");
+    assert.ok(Number(custom.grown?.split(":")[1].split(",")[0]) > custom.ideal[2], `a text that changed in a subview is measured again (${custom.grown})`);
+    assert.equal(custom.invalidated, 1, "and a change the host reports probes the Layout again");
     assert.deepEqual(custom.reports.find((r) => r[0] === "proposal")?.slice(1), ["box", 1000, 700], "the Layout is told what it is offered: the window, through the stack that hugs its content");
     const sizes = custom.reports.find((r) => r[0] === "sizes")?.[2].split(";");
     assert.deepEqual([sizes.length, sizes[2]], [3, "120,40:120,40|200,60:200,60|90,:90,0"], "and the size each subview took at its proposal, then at each other proposal the Layout asked it about");
