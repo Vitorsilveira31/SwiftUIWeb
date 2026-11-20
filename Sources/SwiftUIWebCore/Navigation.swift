@@ -2131,6 +2131,8 @@ public nonisolated struct NavigationSplitView<Sidebar: View, Content: View, Deta
         let high = hints["data-column-width-max"] ?? ideal
         tracks.append("minmax(\(low)px, \(high)px)")
         sized = true
+        // The sidebar's width places its toggle at the sidebar's trailing end (the stylesheet's default is 320 points).
+        if index == 0 { node.styles["--navigation-sidebar-width"] = "\(ideal)px" }
       } else {
         tracks.append(index == node.children.count - 1 ? "minmax(0, 1fr)" : "minmax(180px, \(index == 0 && node.children.count == 3 ? 240 : 280)px)")
       }
