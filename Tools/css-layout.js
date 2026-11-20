@@ -348,6 +348,8 @@ export class CssLayout {
     this.sheet.insertRule('[data-cl][data-cl-under-bar="cell"]{margin-top:calc(-1 * var(--sl-under-bar)) !important;height:calc(100% + var(--sl-under-bar)) !important}', 0);
     this.sheet.insertRule('[data-cl][data-cl-under-bar="column"]{margin-top:calc(-1 * var(--sl-under-bar)) !important}', 0);
     this.sheet.insertRule('[data-cl][data-cl-under-bar="layer"]{top:calc(-1 * var(--sl-under-bar)) !important;height:calc(100% + var(--sl-under-bar)) !important}', 0);
+    // A screen's scroll view that runs under the bar starts its content below it (`extendUnderBars`).
+    this.sheet.insertRule('[data-cl][data-cl-scroll-inset]{padding-top:var(--sl-scroll-inset) !important;scroll-padding-top:var(--sl-scroll-inset) !important}', 0);
     // A ViewThatFits being probed (`probeFits`) shows no candidate.
     this.sheet.insertRule('.view-that-fits[data-fit-probe] > *{display:none !important}', 0);
     // A hidden tab or screen keeps its blocks, whose `display` would override the stylesheet's `display: none`.
@@ -553,6 +555,38 @@ export class CssLayout {
         const place = view.getComputedStyle(e).position === 'absolute' ? 'layer' : holder.display.endsWith('flex') && holder.flexDirection.startsWith('column') ? 'column' : 'cell';
         writes.push([e, px(bar), place]);
       } else if (e.hasAttribute('data-cl-under-bar')) writes.push([e, null, null]);
+    }
+    // A screen's scroll view runs under the bar too, as UIKit's does: its content starts below the bar (an inset of the
+    // bar's height) and scrolls under it, and what the content draws above its top shows behind the transparent bar (Food
+    // Truck's header, which bleeds 200 points up into the safe area). The scroll view is the screen's outermost vertical
+    // one and fills the screen; the outermost view between it and the screen grows, as a view that ignores the safe area.
+    const insets = [];
+    for (const screen of this.document.querySelectorAll('.navigation-root,.navigation-destination')) {
+      const stack = screen.parentElement;
+      if (!stack?.matches('.navigation-stack') || screen.getClientRects().length === 0) continue;
+      const scroll = [...screen.querySelectorAll('.scroll-view.scroll-vertical')].find(candidate => candidate.parentElement.closest('.scroll-view,.navigation-root,.navigation-destination') === screen);
+      if (!scroll || !scroll.hasAttribute('data-cl')) continue;
+      let outer = scroll;
+      while (outer.parentElement !== screen) outer = outer.parentElement;
+      if (!outer.hasAttribute('data-cl') || extended.some(view => view === outer || view.contains(outer) || outer.contains(view))) continue;
+      const bar = barOf(stack);
+      const applied = outer.hasAttribute('data-cl-under-bar') ? parseFloat(outer.style.getPropertyValue('--sl-under-bar')) || 0 : 0;
+      const box = screen.getBoundingClientRect(), own = scroll.getBoundingClientRect();
+      const fills = Math.abs(own.top + applied - box.top) <= 0.5 && Math.abs(own.bottom - box.bottom) <= 0.5;
+      if (bar > 0 && fills) {
+        const holder = view.getComputedStyle(outer.parentElement);
+        const place = view.getComputedStyle(outer).position === 'absolute' ? 'layer' : holder.display.endsWith('flex') && holder.flexDirection.startsWith('column') ? 'column' : 'cell';
+        writes.push([outer, px(bar), place]);
+        insets.push([scroll, px(bar)]);
+      }
+    }
+    // A view extended in an earlier pass that is no longer (the screen changed, or the scroll view no longer fills it).
+    for (const e of this.document.querySelectorAll('[data-cl-under-bar]')) if (!writes.some(([written]) => written === e)) writes.push([e, null, null]);
+    for (const scroll of this.document.querySelectorAll('[data-cl-scroll-inset]')) if (!insets.some(([kept]) => kept === scroll)) insets.push([scroll, null]);
+    for (const [scroll, length] of insets) {
+      if (length == null) { scroll.removeAttribute('data-cl-scroll-inset'); scroll.style.removeProperty('--sl-scroll-inset'); continue; }
+      if (scroll.style.getPropertyValue('--sl-scroll-inset') !== length) scroll.style.setProperty('--sl-scroll-inset', length);
+      if (!scroll.hasAttribute('data-cl-scroll-inset')) scroll.setAttribute('data-cl-scroll-inset', '');
     }
     for (const [e, length, place] of writes) {
       if (length == null) { e.removeAttribute('data-cl-under-bar'); e.style.removeProperty('--sl-under-bar'); continue; }

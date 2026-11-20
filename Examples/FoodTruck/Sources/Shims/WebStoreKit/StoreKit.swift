@@ -266,6 +266,14 @@ public extension View {
     sheet(isPresented: isPresented) { DemoManageSubscriptionsSheet(isPresented: isPresented) }
   }
 
+  /// The system's offer code sheet (the iPad version's "Redeem an Offer Code"), as a demonstration: there is no App Store
+  /// to check a code against, so the sheet says so and closes.
+  func offerCodeRedemption(
+    isPresented: Binding<Bool>, onCompletion: @escaping @MainActor (Result<Void, Error>) -> Void = { _ in }
+  ) -> some View {
+    sheet(isPresented: isPresented) { DemoOfferCodeSheet(isPresented: isPresented, onCompletion: onCompletion) }
+  }
+
   /// The system's refund request sheet, as a demonstration: confirming removes the purchase.
   func refundRequestSheet(
     for transactionID: UInt64, isPresented: Binding<Bool>,
@@ -352,5 +360,59 @@ public extension EnvironmentValues {
   var requestReview: RequestReviewAction {
     get { self[RequestReviewEnvironmentKey.self] }
     set { self[RequestReviewEnvironmentKey.self] = newValue }
+  }
+}
+
+// MARK: App Store messages
+
+/// A message the App Store asks the app to show (a price increase, a billing issue). No store sends one to a browser, so
+/// `messages` ends at once; the iPad version of Food Truck (`os(iOS)`) waits on it and finds none.
+public struct Message: Sendable {
+  public enum Reason: Hashable, Sendable { case generic, priceIncreaseConsent, billingIssue, winBackOffer }
+  public let reason: Reason
+  public static var messages: AsyncStream<Message> { AsyncStream { $0.finish() } }
+}
+
+/// Shows an App Store message (`displayStoreKitMessage`). There is none to show in a browser.
+public struct DisplayMessageAction: Sendable {
+  @MainActor public func callAsFunction(_ message: Message) throws {}
+}
+
+private enum DisplayStoreKitMessageEnvironmentKey: EnvironmentKey { static let defaultValue = DisplayMessageAction() }
+
+public extension EnvironmentValues {
+  var displayStoreKitMessage: DisplayMessageAction {
+    get { self[DisplayStoreKitMessageEnvironmentKey.self] }
+    set { self[DisplayStoreKitMessageEnvironmentKey.self] = newValue }
+  }
+}
+
+/// `offerCodeRedemption`'s sheet in the browser.
+struct DemoOfferCodeSheet: View {
+  @Binding var isPresented: Bool
+  let onCompletion: @MainActor (Result<Void, Error>) -> Void
+
+  var body: some View {
+    NavigationStack {
+      VStack(spacing: 12) {
+        Image(systemName: "giftcard")
+          .font(.system(size: 44))
+          .foregroundStyle(.tint)
+        Text("Offer codes are redeemed in the App Store.")
+          .font(.headline)
+        Text("This demonstration store has no codes to check.")
+          .foregroundStyle(.secondary)
+      }
+      .padding(32)
+      .navigationTitle("Redeem Code")
+      .toolbar {
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Done") {
+            isPresented = false
+            onCompletion(.success(()))
+          }
+        }
+      }
+    }
   }
 }

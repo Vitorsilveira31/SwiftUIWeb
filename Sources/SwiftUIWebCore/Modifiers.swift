@@ -2535,6 +2535,22 @@ package nonisolated struct SearchableModifier: ViewModifier {
       field.attributes["aria-disabled"] = "true"
     }
 
+    // In a navigation stack the field is an item of the bar, at its trailing end after the screen's own items, as iPadOS
+    // places an automatic search field (Food Truck's Orders and Donuts). The stack collects it with the screen's
+    // toolbars; when only the screen renders again, the field it placed stays and keeps the text the input holds.
+    if placement == .automatic, let navigation = context.navigationContext {
+      field.attributes["role"] = "searchbox"
+      let item = _RenderNode.element("div")
+      item.classes = ["toolbar-item", "search-toolbar-item"]
+      item.attributes["data-toolbar-placement"] = ToolbarItemPlacement.navigationBarTrailing.rawValue
+      item.children = [field]
+      let toolbar = _RenderNode.fragment()
+      toolbar.attributes["role"] = "toolbar"
+      toolbar.children = [item]
+      _renderRegistersWithAncestors()
+      if navigation.collectingToolbars { navigation.toolbarSink.append(toolbar) }
+      return
+    }
     node.kind = .element("div")
     node.text = nil
     node.attributes = ["role": "search", "data-searchable": "true"]
@@ -3632,14 +3648,16 @@ public struct Color: Hashable, Sendable {
 
   // The system palette is Apple's (light and dark values); the neutral and label colors are CSS system colors that follow the active `color-scheme` and therefore remain
   // environment-dependent without resolving a color during Swift rendering.
-  // `accentColor` also observes SwiftUIWeb's private tint variable when a
-  // `.tint` modifier is present, then falls back to the semantic primary.
-  public static let accentColor = Color("var(--tint-color, var(--color-swu-primary))")
+  /// The app's accent: its asset catalog's `AccentColor`, or the theme's primary without one. As in SwiftUI, a `.tint(_:)`
+  /// above a view does not change it (Food Truck's "Get Started" is `.tint(.white)` with an accent-colored label).
+  public static let accentColor = Color("var(--asset-color-AccentColor, var(--color-swu-primary))")
+  /// The tint where a view is drawn: the nearest `.tint(_:)` above it, or the app's accent (`--tint-color`).
+  package static let _currentTint = Color("var(--tint-color, var(--color-swu-primary))")
   package static let systemBackground = Color("var(--color-swu-background)")
   package static let secondarySystemBackground = Color("var(--color-swu-surface)")
   package static let tertiarySystemBackground = Color("var(--color-swu-card)")
-  package static let systemGroupedBackground = Color("var(--color-swu-background)")
-  package static let secondarySystemGroupedBackground = Color("var(--color-swu-surface)")
+  package static let systemGroupedBackground = Color("var(--color-swu-grouped-background)")
+  package static let secondarySystemGroupedBackground = Color("var(--color-swu-grouped-surface)")
   package static let tertiarySystemGroupedBackground = Color("var(--color-swu-card)")
   package static let separator = Color("var(--color-swu-border)")
   package static let opaqueSeparator = Color("var(--color-swu-border)")

@@ -321,7 +321,13 @@ struct _SVGChartRenderer: _ChartRenderer {
         let group = _RenderNode.element("g")
         group.attributes["transform"] = "translate(\(_chartNumber(entryX)), 0)"
         entryX += 16 + Double(item.0.count) * 7 + 14
-        let swatch = _RenderNode.element("rect"); swatch.attributes["x"] = "0"; swatch.attributes["y"] = "-9"; swatch.attributes["width"] = "12"; swatch.attributes["height"] = "12"; swatch.attributes["rx"] = "2"; swatch.styles["fill"] = item.1.cssValue
+        // A series with a symbol (`symbol(by:)`) shows its symbol, as Swift Charts' legend does; others a swatch.
+        let swatch: _RenderNode
+        if let index = env.symbolOrder.firstIndex(of: item.0) {
+          swatch = symbolNode(BasicChartSymbolShape.cycle[index % BasicChartSymbolShape.cycle.count], x: 6, y: -3, radius: 5, paint: item.1.cssValue, opacity: 1)
+        } else {
+          swatch = _RenderNode.element("rect"); swatch.attributes["x"] = "0"; swatch.attributes["y"] = "-9"; swatch.attributes["width"] = "12"; swatch.attributes["height"] = "12"; swatch.attributes["rx"] = "2"; swatch.styles["fill"] = item.1.cssValue
+        }
         let text = svgText(item.0, x: 16, y: 1, anchor: "start")
         group.children = [swatch, text]; legend.children.append(group)
       }
@@ -809,7 +815,8 @@ struct _SVGChartRenderer: _ChartRenderer {
       if let yAxis {
         nodes.append(contentsOf: customAxisNodes(yAxis, isX: false, env: env))
       } else {
-        let yValues = config.yAxis.values ?? (0..<5).map { index in yDomain.lower + (yDomain.upper - yDomain.lower) * Double(index) / 4 }
+        // Swift Charts' automatic marks: round values in the domain (which `domain(for:)` extends to round bounds).
+        let yValues = config.yAxis.values ?? _chartAxisValues(.automatic, lower: yDomain.lower, upper: yDomain.upper, isDate: false)
         for value in yValues {
           let fraction = (value - yDomain.lower) / max(yDomain.upper - yDomain.lower, 0.000001); let y = layout.top + layout.plotHeight - (yDomain.reversed ? 1 - fraction : fraction) * layout.plotHeight
           let grid = _RenderNode.element("line"); grid.attributes["x1"] = _chartNumber(layout.left); grid.attributes["x2"] = _chartNumber(layout.left + layout.plotWidth); grid.attributes["y1"] = _chartNumber(y); grid.attributes["y2"] = _chartNumber(y); grid.attributes["stroke"] = "currentColor"; grid.attributes["stroke-opacity"] = "0.12"; nodes.append(grid)
@@ -832,9 +839,7 @@ struct _SVGChartRenderer: _ChartRenderer {
         if xDomain.categoryMode {
           values = xDomain.categories.enumerated().map { (Double($0.offset), $0.element) }
         } else {
-          let numericValues = config.xAxis.values ?? (0..<5).map { index in
-            xDomain.lower + (xDomain.upper - xDomain.lower) * Double(index) / 4
-          }
+          let numericValues = config.xAxis.values ?? _chartAxisValues(.automatic, lower: xDomain.lower, upper: xDomain.upper, isDate: xDomain.isDate)
           values = numericValues.map { ($0, xDomain.isDate ? _chartDefaultDateLabel($0, range: xDomain.upper - xDomain.lower) : _chartNumber($0)) }
         }
         for (raw, labelValue) in values { let fraction = ((raw - xDomain.lower) / max(xDomain.upper - xDomain.lower, 0.000001)); let x = layout.left + (xDomain.reversed ? 1 - fraction : fraction) * layout.plotWidth; let label = svgText(labelValue, x: x, y: layout.top + layout.plotHeight + 18, anchor: "middle"); label.attributes["fill"] = "currentColor"; label.attributes["font-size"] = "11"; nodes.append(label) }
@@ -866,13 +871,24 @@ struct _SVGChartRenderer: _ChartRenderer {
       // edge, matching the default band scale used by Swift Charts.
       return _ChartDomain(lower: -0.5, upper: max(0.5, Double(categories.count) - 0.5), categories: categories, categoryMode: true, label: label, reversed: reversed)
     }
-    let nums = values.compactMap { value in value.numericValue }; let minValue = nums.min() ?? 0; let maxValue = nums.max() ?? 1; let padding = max((maxValue - minValue) * 0.08, 1)
+    let nums = values.compactMap { value in value.numericValue }; let minValue = nums.min() ?? 0; let maxValue = nums.max() ?? 1
+    let isDate = values.contains(where: { $0._isDate })
     // Bars grow from zero, so a y axis carrying bars includes it by default.
     let includesZero = automatic?.includesZero ?? (axis == .y && marks.contains(where: { $0.kind == .bar }))
-    var lower = minValue - padding
-    var upper = maxValue + padding
-    if includesZero { lower = min(lower, 0); upper = max(upper, 0); if minValue >= 0 { lower = 0 } }
-    return _ChartDomain(lower: lower, upper: upper, categories: [], categoryMode: false, label: label, isDate: values.contains(where: { $0._isDate }), reversed: reversed)
+    var lower = minValue
+    var upper = maxValue
+    if includesZero { lower = min(lower, 0); upper = max(upper, 0) }
+    // As Swift Charts does: a date domain is the data's extent, so a line runs from edge to edge; a number domain extends
+    // to the round values of its automatic marks (Food Truck's sales from 100 to 400, not from the data's 82.64).
+    if !isDate {
+      if upper == lower { upper = lower + 1 }
+      let step = _chartNiceStep((upper - lower) / 5)
+      lower = (lower / step).rounded(.down) * step
+      upper = (upper / step).rounded(.up) * step
+    } else if upper == lower {
+      upper = lower + 86_400
+    }
+    return _ChartDomain(lower: lower, upper: upper, categories: [], categoryMode: false, label: label, isDate: isDate, reversed: reversed)
   }
 
   private func color(for mark: ChartMark, styleValues: [String: Color], nextPalette: inout Int) -> Color {

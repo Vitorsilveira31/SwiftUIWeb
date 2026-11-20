@@ -29,11 +29,11 @@ struct FoodTruckApp: App {
         WindowGroup {
             ContentView(model: model, accountStore: accountStore)
         }
-        #if os(macOS)
+        #if (os(macOS) && !WEB)
         .defaultSize(width: 1000, height: 650)
         #endif
         
-        #if os(macOS)
+        #if (os(macOS) && !WEB)
         MenuBarExtra {
             ScrollView {
                 VStack(spacing: 0) {

@@ -24,7 +24,7 @@ struct DonutGallery: View {
     }
     
     var tableImageSize: Double {
-        #if os(macOS)
+        #if (os(macOS) && !WEB)
         return 30
         #else
         return 60
@@ -40,7 +40,7 @@ struct DonutGallery: View {
             }
         }
         .background()
-        #if os(iOS)
+        #if (os(iOS) || WEB)
         .toolbarRole(.browser)
         #endif
         .toolbar {

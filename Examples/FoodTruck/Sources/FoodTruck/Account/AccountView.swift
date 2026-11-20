@@ -37,7 +37,7 @@ struct AccountView: View {
                     }
                 }
             }
-            #if os(iOS)
+            #if (os(iOS) || WEB)
             NavigationLink(value: "In-app purchase support") {
                 Label("In-app purchase support", systemImage: "questionmark.circle")
             }
@@ -80,7 +80,7 @@ struct AccountView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Account")
-        #if os(iOS)
+        #if (os(iOS) || WEB)
         .navigationDestination(for: String.self) { _ in
             StoreSupportView()
         }

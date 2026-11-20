@@ -8,16 +8,16 @@ A map view configured for this app.
 import SwiftUI
 import MapKit
 
-#if os(iOS)
+#if (os(iOS) || WEB)
 private typealias ViewControllerRepresentable = UIViewControllerRepresentable
-#elseif os(macOS)
+#elseif (os(macOS) && !WEB)
 private typealias ViewControllerRepresentable = NSViewControllerRepresentable
 #endif
 
 struct DetailedMapView: ViewControllerRepresentable {
-    #if os(iOS)
+    #if (os(iOS) || WEB)
     typealias ViewController = UIViewController
-    #elseif os(macOS)
+    #elseif (os(macOS) && !WEB)
     typealias ViewController = NSViewController
     #endif
     
@@ -38,9 +38,9 @@ struct DetailedMapView: ViewControllerRepresentable {
         override func loadView() {
             let mapView = MKMapView()
             view = mapView
-            #if os(iOS)
+            #if (os(iOS) || WEB)
             view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            #elseif os(macOS)
+            #elseif (os(macOS) && !WEB)
             view.autoresizingMask = [.width, .height]
             #endif
             
@@ -56,7 +56,7 @@ struct DetailedMapView: ViewControllerRepresentable {
         }
     }
         
-    #if os(iOS)
+    #if (os(iOS) || WEB)
     func makeUIViewController(context: Context) -> Controller {
         Controller()
     }
@@ -64,7 +64,7 @@ struct DetailedMapView: ViewControllerRepresentable {
     func updateUIViewController(_ controller: Controller, context: Context) {
         update(controller: controller)
     }
-    #elseif os(macOS)
+    #elseif (os(macOS) && !WEB)
     func makeNSViewController(context: Context) -> Controller {
         Controller()
     }
@@ -75,7 +75,7 @@ struct DetailedMapView: ViewControllerRepresentable {
     #endif
     
     func update(controller: Controller) {
-        #if os(iOS)
+        #if (os(iOS) || WEB)
         controller.additionalSafeAreaInsets.top = topSafeAreaInset
         #endif
         controller.mapView.camera = MKMapCamera(

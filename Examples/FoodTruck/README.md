@@ -61,9 +61,12 @@ are Apple's own code.
   and give it a browser meaning: StoreKit is a demonstration store (same three products as `Products.storekit`,
   purchases persisted in local storage), WeatherKit answers with a deterministic forecast, `AuthenticationServices`
   provides the environment value the account screens read.
-- A browser is a desktop host: the source lowering evaluates `os(macOS)` conditions in application sources as true, so
-  Apple's macOS branches (HSplitView, the Orders table, the Social Feed banner, the store sheet) run instead of
-  compiling to nothing (WASI matches no platform).
+- The web version is the iPad version. Apple's platform conditions were rewritten for it: `os(iOS)` became
+  `(os(iOS) || WEB)` and `os(macOS)` became `(os(macOS) && !WEB)` in every `#if` of `Sources/FoodTruck` and
+  `Sources/FoodTruckKit`, so the browser build takes the iPad branches (the grouped backgrounds, the Orders list and
+  table of a regular width, the store sheets, the Siri tip of Top 5) and the native builds are as Apple wrote them. An
+  app made for the web chooses what it looks like there; following the Mac by default is what the framework's
+  lowering does for an app that does not choose (`os(macOS)` is true in application sources).
 - The Swift-to-Embedded constraints (no key paths, no dynamic casts, no existentials) are handled by the source
   lowering that SwiftUIWeb runs on every app: `KeyPathComparator(\Order.status)` and `TableColumn(value: \.status)`
   become closures, `error.localizedDescription` becomes a call to a free function, a class with a generic method is
@@ -95,7 +98,8 @@ adapter below replaces it.
 | `FoodTruck/WebAdapters/WebDetailedMapView.swift` | `City/DetailedMapView.swift` | It wraps `MKMapView` in a UIKit/AppKit view controller; this is the same view drawn with the framework's `Map`. |
 | `FoodTruck/WebAdapters/WebAppRoot.swift` | `App.swift` | The `@main` of the Xcode target; this holds the same model and store for the browser entry point. |
 | `FoodTruckKit/WebAdapters/Subscription+DynamicMembers.swift` | nothing (adds members) | `Subscription` forwards `Product` members through `@dynamicMemberLookup` key paths, which Embedded Swift lacks. |
-| `ShowTopDonutsIntent*.swift` (excluded) | App Intents (Siri, Shortcuts) | A browser has neither. |
+| `FoodTruck/WebAdapters/WebShowTopDonutsIntent.swift` | `Donut/ShowTopDonutsIntent*.swift` (excluded) | App Intents (Siri, Shortcuts) do not exist in a browser; the iPad's Top 5 shows the intent as a Siri tip, which needs only its timeframe and phrase. |
+| `FoodTruck/WebAdapters/WebUserNotifications.swift` | UserNotifications | The iPad's order screen schedules a local notification when donuts go in the oven; the browser build has no notification service, so the request is refused. |
 
 ## Known issues
 

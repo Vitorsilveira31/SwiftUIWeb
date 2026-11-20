@@ -37,7 +37,7 @@ struct SignUpView: View {
                     TextField("User name", text: $username)
                         .textContentType(.username)
                         .multilineTextAlignment(.trailing)
-#if os(iOS)
+#if (os(iOS) || WEB)
                     
                         .textInputAutocapitalization(.never)
                         .keyboardType(.emailAddress)
@@ -49,9 +49,9 @@ struct SignUpView: View {
                 if !usePasskey {
                     LabeledContent("Password") {
                         SecureField("Password", text: $password)
-                        #if os(macOS)
+                        #if (os(macOS) && !WEB)
                             .textContentType(.password)
-                        #elseif os(iOS)
+                        #elseif (os(iOS) || WEB)
                             .textContentType(.newPassword)
                         #endif
                             .multilineTextAlignment(.trailing)
@@ -75,7 +75,7 @@ struct SignUpView: View {
         }
         .formStyle(.grouped)
         .animation(.default, value: usePasskey)
-        #if !os(iOS)
+        #if !(os(iOS) || WEB)
         .frame(maxWidth: 500)
         #endif
         .navigationTitle("Sign up")

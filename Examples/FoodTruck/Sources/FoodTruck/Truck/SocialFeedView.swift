@@ -55,14 +55,14 @@ struct SocialFeedView: View {
         .navigationTitle(navigationTitle)
         .sheet(isPresented: $storeIsPresented) {
             SubscriptionStoreView(controller: subscriptionController)
-                #if os(macOS)
+                #if (os(macOS) && !WEB)
                 .frame(minWidth: 400, minHeight: 400)
                 #endif
         }
         .sheet(isPresented: $manageSocialFeedPlusIsPresented) {
             NavigationStack {
                 SocialFeedPlusSettings(controller: subscriptionController)
-                    #if os(macOS)
+                    #if (os(macOS) && !WEB)
                     .frame(minWidth: 300, minHeight: 350)
                     #endif
             }
@@ -74,7 +74,7 @@ struct SocialFeedView: View {
 struct SocialFeedPlusMarketingView: View {
     @Binding var storeIsPresented: Bool
     
-    #if os(macOS)
+    #if (os(macOS) && !WEB)
     @Environment(\.colorScheme) private var colorScheme
     #endif
     
@@ -92,16 +92,16 @@ struct SocialFeedPlusMarketingView: View {
                     Text("Get Started")
                         .bold()
                         .padding(.vertical, 2)
-                        #if os(macOS)
+                        #if (os(macOS) && !WEB)
                         .foregroundColor(
                             colorScheme == .light ? .accentColor : .white
                         )
                         #endif
                 }
-                #if os(iOS)
+                #if (os(iOS) || WEB)
                 .buttonStyle(.borderedProminent)
                 .foregroundColor(.accentColor)
-                #elseif os(macOS)
+                #elseif (os(macOS) && !WEB)
                 .buttonStyle(.bordered)
                 #endif
                 .tint(.white)
@@ -111,9 +111,9 @@ struct SocialFeedPlusMarketingView: View {
             .padding(10)
             .frame(maxWidth: .infinity)
         }
-        #if os(iOS)
+        #if (os(iOS) || WEB)
         .listRowBackground(Rectangle().fill(.indigo.gradient))
-        #elseif os(macOS)
+        #elseif (os(macOS) && !WEB)
         .background(.indigo.gradient)
         .cornerRadius(10)
         #endif

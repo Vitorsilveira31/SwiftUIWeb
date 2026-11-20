@@ -116,6 +116,8 @@
     --color-swu-background: oklch(1 0 0);
     --color-swu-foreground: oklch(0.145 0 0);
     --color-swu-surface: oklch(1 0 0);
+    --color-swu-grouped-background: #f2f2f7;
+    --color-swu-grouped-surface: #ffffff;
     --color-swu-card: oklch(1 0 0);
     --color-swu-card-foreground: oklch(0.145 0 0);
     --color-swu-popover: oklch(1 0 0);
@@ -327,6 +329,8 @@
     --color-swu-background: oklch(1 0 0);
     --color-swu-foreground: oklch(0.145 0 0);
     --color-swu-surface: oklch(1 0 0);
+    --color-swu-grouped-background: #f2f2f7;
+    --color-swu-grouped-surface: #ffffff;
     --color-swu-card: oklch(1 0 0);
     --color-swu-card-foreground: oklch(0.145 0 0);
     --color-swu-popover: oklch(1 0 0);
@@ -353,6 +357,8 @@
     --color-swu-background: oklch(0.145 0 0);
     --color-swu-foreground: oklch(0.985 0 0);
     --color-swu-surface: oklch(0.205 0 0);
+    --color-swu-grouped-background: #000000;
+    --color-swu-grouped-surface: #1c1c1e;
     --color-swu-card: oklch(0.205 0 0);
     --color-swu-card-foreground: oklch(0.985 0 0);
     --color-swu-popover: oklch(0.205 0 0);
@@ -379,6 +385,8 @@
       --color-swu-background: oklch(0.145 0 0);
       --color-swu-foreground: oklch(0.985 0 0);
       --color-swu-surface: oklch(0.205 0 0);
+      --color-swu-grouped-background: #000000;
+      --color-swu-grouped-surface: #1c1c1e;
       --color-swu-card: oklch(0.205 0 0);
       --color-swu-card-foreground: oklch(0.985 0 0);
       --color-swu-popover: oklch(0.205 0 0);
@@ -637,6 +645,45 @@
     padding: calc(var(--spacing) * 4);
   }
 
+  /* A list or form of sections in its automatic style is inset grouped, as on iPadOS: the grouped background, each
+     section's rows in a rounded card inset from the sides, the section's title above its card. (The sidebar's list has
+     its own look, below.) */
+  .list-view:not([data-list-style]):has(> * > .section-block):not(.navigation-sidebar .list-view),
+  .form-view:has(.section-block) {
+    border-width: 0;
+    border-radius: 0;
+    /* Important, in this layer: it wins over the layout's `padding: 0`, and the rows (stretched in its grid) follow. */
+    padding-inline: 1.25rem !important;
+    background-color: var(--color-swu-grouped-background);
+  }
+  .list-view:not([data-list-style]):not(.navigation-sidebar .list-view) > :has(> .section-block),
+  .form-view > :has(.section-block) {
+    border-width: 0;
+    padding-inline: 0;
+  }
+  /* A row background (`listRowBackground`) is the card's own fill, rounded as the card. */
+  .list-view:not([data-list-style]):has(> * > .section-block):not(.navigation-sidebar .list-view) .section-card:not(.shape-layer + .section-card),
+  .form-view .section-card:not(.shape-layer + .section-card) {
+    background-color: var(--color-swu-grouped-surface);
+  }
+  .list-view:not([data-list-style]):has(> * > .section-block):not(.navigation-sidebar .list-view) .section-block > .shape-layer {
+    clip-path: inset(0 round 1.625rem);
+  }
+  /* A menu picker in a form's row shows its value in the secondary label colour, as on iPadOS. */
+  .form-view .section-card .picker-row > .select-menu {
+    color: var(--color-swu-muted-foreground);
+  }
+  /* A table's column titles are tinted, as an iPadOS table's sortable headers are. */
+  th.table-view-column, .table th.table-view-column {
+    color: var(--tint-color, var(--color-swu-primary));
+  }
+  /* A text field in a form's row is the row itself, as on iPadOS: no field border or fill of its own. */
+  .form-view .section-card input.field-input {
+    border-width: 0;
+    background-color: transparent;
+    box-shadow: none;
+    padding-inline: 0;
+  }
   /* A plain list runs edge to edge: no frame, only the hairlines between rows. */
   /* SwiftUI Text keeps the line breaks in its string. */
   [data-layout-leaf="text"] {
@@ -1401,6 +1448,10 @@
     box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
   }
 
+  /* A segment shows its label's title, as UISegmentedControl does on iPadOS: a Label's icon is not drawn beside it. */
+  .segmented-picker .segment-item .icon-label:has(> :not(.symbol-icon)) > .symbol-icon {
+    display: none;
+  }
   .segmented-picker[style*="--tint-color"] .segment-item[aria-checked="true"] {
     background-color: var(--tint-color);
     color: var(--color-swu-primary-foreground);
@@ -2305,12 +2356,18 @@
     backdrop-filter: none;
   }
 
-  .navigation-stack[data-navigation-title-display-mode="large"]::before {
-    min-height: calc(var(--spacing) * 16);
+  /* A large title, as iPadOS draws it: the bar's row on top (where its items go) and the title below it, 34 points bold.
+     A stack's root screen gets one when its title's display mode is automatic, as on iOS and iPadOS (a pushed screen's
+     automatic title and a sheet's are inline). */
+  .navigation-stack[data-navigation-title-display-mode="large"]::before,
+  .navigation-stack[data-navigation-title-display-mode="automatic"][data-navigation-depth="0"]:not(.sheet-panel *)::before {
+    min-height: 6.5rem;
     align-items: flex-end;
-    padding-bottom: calc(var(--spacing) * 3);
-    font-size: var(--text-3xl);
-    line-height: var(--text-3xl--line-height);
+    padding-top: 3rem;
+    padding-bottom: calc(var(--spacing) * 2);
+    font-size: 2.125rem;
+    line-height: 2.5rem;
+    font-weight: var(--font-weight-bold);
   }
 
   .navigation-stack > .toolbar-item,
@@ -2489,10 +2546,13 @@
     padding-inline: 5.5rem;
   }
 
-  /* A large title sits below the bar row when the bar has items: the items share that row, the title takes the rest. */
-  .navigation-stack[data-navigation-title-display-mode="large"]:has(> .toolbar-item:is([data-toolbar-placement="navigation-bar-leading"], [data-toolbar-placement="navigation-bar-trailing"], [data-toolbar-placement="top-bar-leading"], [data-toolbar-placement="top-bar-trailing"]))::before {
-    min-height: 7rem;
-    padding-top: 3rem;
+
+  /* A screen whose toolbar role is the editor's (`toolbarRole(.editor)`) has its inline title at the bar's leading end,
+     as iPadOS draws a document's title. */
+  .navigation-stack:has(> :is(.navigation-root, .navigation-destination):last-child > [data-toolbar-role="editor"])::before {
+    text-align: start;
+    justify-content: flex-start;
+    padding-inline: calc(var(--spacing) * 4);
   }
 
   /* A hidden navigation bar reserves no space: no title bar, no items, and the screen starts at the top. */
@@ -3094,6 +3154,18 @@
 
   .search-input {
     max-width: 100%;
+  }
+
+  /* A search field in the navigation bar, as iPadOS draws it: a grey capsule with a magnifying glass, 15rem wide. */
+  .search-toolbar-item > .search-input {
+    width: 15rem;
+    height: 2.25rem;
+    border: 0;
+    border-radius: 9999px;
+    padding-inline: 2.25rem 0.75rem;
+    background: color-mix(in srgb, var(--color-swu-foreground) 7%, transparent) no-repeat 0.75rem center / 1rem
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='10.5' cy='10.5' r='6.5'/%3E%3Cpath d='m20 20-4.8-4.8'/%3E%3C/svg%3E");
+    font-size: 1.0625rem;
   }
 
   .toolbar-item,
@@ -5503,39 +5575,62 @@
   }
 }
 
-/* The sidebar's toggle (NavigationSplitView), as on iPad: at the top of the sidebar, in a header that also shows the
-   sidebar's navigation title, while the sidebar shows; at the leading end of the detail's bar while it is hidden. The
-   header sits in the sidebar's top padding, so the sidebar's content keeps the rest of the column. */
+/* The sidebar of a NavigationSplitView, as iPadOS draws it: 320 points wide (or the width the sidebar's content asks for,
+   `--navigation-sidebar-width`), its navigation title small and centred in a header row, the sidebar toggle at the
+   trailing end of that row while the sidebar shows and at the leading end of the detail's bar while it is hidden. Rows
+   are 52 points tall with 17-point labels, and the selected one is a grey capsule. */
+.navigation-split-view { position: relative; }
 .navigation-split-view > .navigation-column { position: relative; }
+.navigation-split-view[data-column-count="2"]:not([data-column-visibility="detailOnly"]) {
+  grid-template-columns: var(--navigation-sidebar-width, 320px) minmax(0, 1fr);
+}
 /* A column `columnVisibility` hides takes no track (the layer's sidebar rule would display it). */
 .navigation-split-view > .navigation-column[data-column-hidden="true"] { display: none; }
 .navigation-split-view[data-column-visibility="detailOnly"] { grid-template-columns: minmax(0, 1fr); }
 .navigation-split-view[data-column-count="3"][data-column-visibility="doubleColumn"] { grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); }
-.navigation-split-view { position: relative; }
+.navigation-split-view > .navigation-sidebar {
+  padding-block-start: 3.5rem;
+  padding-inline: 1rem;
+  background-color: color-mix(in srgb, var(--color-swu-foreground) 5%, var(--color-swu-background));
+}
 .navigation-sidebar-header {
-  position: absolute; inset-block-start: 48px; inset-inline: 0; z-index: 1;
-  padding-inline: calc(var(--spacing) * 2);
+  position: absolute; inset-block-start: 0; inset-inline: 0; z-index: 1;
+  height: 3.5rem; padding-inline: 4rem;
+}
+.navigation-sidebar-title {
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: center;
+  font-size: 1.0625rem; line-height: 3.5rem; font-weight: var(--font-weight-semibold); color: var(--color-swu-foreground);
 }
 .navigation-sidebar-toggle {
-  position: absolute; inset-block-start: 6px; inset-inline-start: calc(var(--spacing) * 2); z-index: 30;
+  position: absolute; inset-block-start: 0.375rem; z-index: 30;
+  inset-inline-start: calc(var(--navigation-sidebar-width, 320px) - 3.5rem);
   display: inline-flex; align-items: center; justify-content: center;
-  width: 36px; height: 36px; padding: 0;
-  border: 0; border-radius: 8px; background: transparent; cursor: pointer;
-  color: var(--tint-color, var(--color-swu-primary)); font-size: 18px; line-height: 1;
+  width: 2.75rem; height: 2.75rem; padding: 0;
+  border: 0; border-radius: 9999px; cursor: pointer;
+  background: color-mix(in srgb, var(--color-swu-background) 85%, transparent);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.08), 0 0 0 0.5px rgb(0 0 0 / 0.06);
+  color: var(--color-swu-foreground); font-size: 1.25rem; line-height: 1;
 }
-.navigation-sidebar-toggle:hover { background: color-mix(in srgb, currentColor 12%, transparent); }
+.navigation-split-view[data-sidebar-hidden] > .navigation-sidebar-toggle { inset-inline-start: 1rem; }
+.navigation-sidebar-toggle:hover { background: color-mix(in srgb, var(--color-swu-foreground) 8%, var(--color-swu-background)); }
 .navigation-sidebar-toggle:focus-visible { outline: 2px solid var(--tint-color, var(--color-swu-primary)); outline-offset: 2px; }
-.navigation-sidebar-title {
-  padding-inline: calc(var(--spacing) * 2); padding-block-end: calc(var(--spacing) * 2);
-  font-size: var(--text-2xl); line-height: var(--text-2xl--line-height); font-weight: var(--font-weight-bold);
-  letter-spacing: var(--tracking-tight); color: var(--color-swu-foreground);
-}
-.navigation-split-view > .navigation-sidebar { padding-block-start: 48px; }
-.navigation-split-view > .navigation-sidebar[data-sidebar-title] { padding-block-start: calc(48px + var(--text-2xl--line-height) * var(--text-2xl) + var(--spacing) * 2); }
 /* The detail's title moves over for the toggle beside it. */
 .navigation-split-view[data-sidebar-hidden] > .navigation-detail > .navigation-stack::before,
 .navigation-split-view[data-sidebar-hidden] > .navigation-detail > .frame-box > .navigation-stack::before {
-  padding-inline-start: calc(var(--spacing) * 6 + 36px);
+  padding-inline-start: 4.5rem;
+}
+.navigation-split-view > .navigation-sidebar .list-view .navigation-link {
+  padding-block: 0.75rem; padding-inline: 0.75rem; border-radius: 9999px; font-size: 1.0625rem;
+}
+.navigation-split-view > .navigation-sidebar .list-view .navigation-link.item-selected {
+  --row-fill: color-mix(in srgb, var(--color-swu-foreground) 9%, transparent);
+}
+.navigation-split-view > .navigation-sidebar .list-view .navigation-link .icon-label:has(> .symbol-icon) { gap: 0.75rem; }
+.navigation-split-view > .navigation-sidebar .list-view .navigation-link .icon-label > .symbol-icon {
+  flex: 0 0 1.5rem; width: 1.5rem; height: 1.5rem; font-size: 1.375rem;
+}
+.navigation-split-view > .navigation-sidebar .section-heading {
+  padding-inline: 1rem; padding-block: 1.25rem 0.5rem; font-size: 1.0625rem; color: var(--color-swu-muted-foreground, #8e8e93);
 }
 
 /* A compact NavigationSplitView is a push navigation: the sidebar is the root and the detail replaces it (the host

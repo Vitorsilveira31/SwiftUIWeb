@@ -49,7 +49,7 @@ struct OrderCompleteView: View {
                 .foregroundStyle(.secondary)
             }
             .padding()
-            #if os(macOS)
+            #if (os(macOS) && !WEB)
             .frame(minWidth: 300, minHeight: 300)
             #endif
             .task { @MainActor in

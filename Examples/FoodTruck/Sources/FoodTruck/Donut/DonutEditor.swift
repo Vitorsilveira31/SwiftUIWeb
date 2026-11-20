@@ -13,7 +13,7 @@ struct DonutEditor: View {
     
     var body: some View {
         ZStack {
-            #if os(macOS)
+            #if (os(macOS) && !WEB)
             HSplitView {
                 donutViewer
                     .layoutPriority(1)
@@ -56,7 +56,7 @@ struct DonutEditor: View {
             }
         }
         .navigationTitle(donut.name)
-        #if os(iOS)
+        #if (os(iOS) || WEB)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarRole(.editor)
         // We don't want store messages to interrupt any donut editing.

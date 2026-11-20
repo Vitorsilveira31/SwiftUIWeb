@@ -5,7 +5,7 @@ Abstract:
 A class that manages and displays StoreKit messages.
 */
 
-#if os(iOS)
+#if (os(iOS) || WEB)
 import Foundation
 import StoreKit
 import SwiftUI

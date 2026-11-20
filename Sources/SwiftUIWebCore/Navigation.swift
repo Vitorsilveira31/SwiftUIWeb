@@ -443,6 +443,23 @@ final class NavigationContext {
 
 }
 
+/// Whether views are being edited: rows of an editable list show their handles when it is `.active`.
+public enum EditMode: Hashable, Sendable {
+  case inactive, transient, active
+  public var isEditing: Bool { self != .inactive }
+}
+
+private enum EditModeKey: EnvironmentKey { static var defaultValue: Binding<EditMode>? { nil } }
+
+public extension EnvironmentValues {
+  /// The edit mode of the views inside a navigation stack, as on iOS and iPadOS: every stack provides one, inactive at
+  /// first (Food Truck's Orders shows "Select" while it is inactive), unless an enclosing view already provides one.
+  var editMode: Binding<EditMode>? {
+    get { self[EditModeKey.self] }
+    set { self[EditModeKey.self] = newValue }
+  }
+}
+
 /// SwiftUI spells the title display mode as `NavigationBarItem.TitleDisplayMode`.
 public enum NavigationBarItem {
   public enum TitleDisplayMode: Hashable, Sendable {
@@ -472,6 +489,8 @@ public nonisolated struct NavigationStack<Content: View>: View {
   /// The stack's history observer, kept across renders: a path the app rebuilds or replaces (a typed collection
   /// binding, a path set by code) arrives without it, and the stack still compares it with what the history holds.
   @State(memberID: 905793610) private var historyObserver = _NavigationHistoryObserverBox()
+  /// The edit mode the stack provides when no enclosing view does (`EnvironmentValues.editMode`).
+  @State(memberID: 905793611) private var ownEditMode = EditMode.inactive
 
   nonisolated public init(@ViewBuilder root: () -> Content) {
     self.content = root()
@@ -588,6 +607,7 @@ public nonisolated struct NavigationStack<Content: View>: View {
     var local = context
     local.navigationContext = navigation
     local.environment.dismiss = DismissAction { navigation.dismiss() }
+    if local.environment.editMode == nil { local.environment.editMode = $ownEditMode }
 
     navigation.beginToolbarCollection()
     // The stack gathers what its content registered once the pass has rendered it: the content's deferred parts
@@ -2131,6 +2151,8 @@ public nonisolated struct NavigationSplitView<Sidebar: View, Content: View, Deta
         let high = hints["data-column-width-max"] ?? ideal
         tracks.append("minmax(\(low)px, \(high)px)")
         sized = true
+        // The sidebar's width places its toggle at the sidebar's trailing end (the stylesheet's default is 320 points).
+        if index == 0 { node.styles["--navigation-sidebar-width"] = "\(ideal)px" }
       } else {
         tracks.append(index == node.children.count - 1 ? "minmax(0, 1fr)" : "minmax(180px, \(index == 0 && node.children.count == 3 ? 240 : 280)px)")
       }

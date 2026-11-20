@@ -12,13 +12,13 @@ struct DonutGalleryGrid: View {
     var donuts: [Donut]
     var width: Double
     
-    #if os(iOS)
+    #if (os(iOS) || WEB)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     
     var useReducedThumbnailSize: Bool {
-        #if os(iOS)
+        #if (os(iOS) || WEB)
         if sizeClass == .compact {
             return true
         }
@@ -27,11 +27,11 @@ struct DonutGalleryGrid: View {
             return true
         }
         
-        #if os(iOS)
+        #if (os(iOS) || WEB)
         if width <= 390 {
             return true
         }
-        #elseif os(macOS)
+        #elseif (os(macOS) && !WEB)
         if width <= 520 {
             return true
         }
@@ -45,7 +45,7 @@ struct DonutGalleryGrid: View {
     }
     
     var thumbnailSize: Double {
-        #if os(iOS)
+        #if (os(iOS) || WEB)
         return useReducedThumbnailSize ? 60 : 100
         #else
         return useReducedThumbnailSize ? 40 : 80

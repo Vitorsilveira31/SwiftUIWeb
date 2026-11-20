@@ -1,7 +1,7 @@
 // swift-tools-version: 6.4
 import PackageDescription
 
-// Apple's Food Truck sample (Sources/FoodTruck and Sources/FoodTruckKit, unmodified) running in the browser. The web package compiles its sources as they
+// Apple's Food Truck sample (Sources/FoodTruck and Sources/FoodTruckKit, adapted as README.md lists) running in the browser as its iPad version. The web package compiles its sources as they
 // are: `import SwiftUI`, `import Charts`, `import MapKit` ... are aliased to SwiftUIWeb's modules, and the Apple
 // frameworks that have no browser counterpart resolve to the stand-ins in Shims/. Only the entry point differs: Web/
 // replaces App.swift, as every SwiftUIWeb example does.

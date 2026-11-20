@@ -10,7 +10,7 @@ import StoreKit
 import FoodTruckKit
 
 struct StoreSupportView: View {
-    #if os(iOS)
+    #if (os(iOS) || WEB)
     @State private var manageSubscriptionSheetIsPresented = false
     #endif
     
@@ -18,7 +18,7 @@ struct StoreSupportView: View {
     
     var body: some View {
         List {
-            #if os(iOS)
+            #if (os(iOS) || WEB)
             Button("Manage subscription") {
                 manageSubscriptionSheetIsPresented = true
             }

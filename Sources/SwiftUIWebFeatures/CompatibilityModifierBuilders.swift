@@ -256,9 +256,12 @@ func _labelsHiddenModifier() -> _SemanticCompatibilityModifier {
   _SemanticCompatibilityModifier(attributes: ["data-labels-hidden": "true"], environment: { $0._labelsHidden = true })
 }
 
+/// `.ignoresSafeArea()` lets a view run into the safe areas around it (under a navigation bar: Tools/css-layout.js,
+/// `extendUnderBars`); it does not change the size the view takes. A minimum of the whole container made Food Truck's
+/// `Divider().ignoresSafeArea()` in the Donut Editor's HStack as wide as the stack, and pushed the form off the screen.
 @inline(never)
 func _ignoresSafeAreaModifier() -> _SemanticCompatibilityModifier {
-  _SemanticCompatibilityModifier(attributes: ["data-ignores-safe-area": "true"], styles: ["min-width": "100%", "min-height": "100%"])
+  _SemanticCompatibilityModifier(attributes: ["data-ignores-safe-area": "true"])
 }
 
 @inline(never)

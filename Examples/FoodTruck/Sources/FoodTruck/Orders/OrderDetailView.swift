@@ -121,7 +121,7 @@ struct OrderDetailView: View {
     }
     #endif
     
-    #if os(iOS)
+    #if (os(iOS) || WEB)
     func postNotification() {
         let timerSeconds = 60
         let content = UNMutableNotificationContent()

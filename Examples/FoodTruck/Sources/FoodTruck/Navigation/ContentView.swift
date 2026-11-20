@@ -22,7 +22,7 @@ struct ContentView: View {
     @State private var selection: Panel? = Panel.truck
     @State private var path = NavigationPath()
 
-    #if os(iOS)
+    #if (os(iOS) || WEB)
     @Environment(\.displayStoreKitMessage) private var displayStoreMessage
     @Environment(\.scenePhase) private var scenePhase
     #endif
@@ -47,9 +47,9 @@ struct ContentView: View {
             path.removeLast(path.count)
         }
         .environment(accountStore)
-        #if os(macOS)
+        #if (os(macOS) && !WEB)
         .frame(minWidth: 600, minHeight: 450)
-        #elseif os(iOS)
+        #elseif (os(iOS) || WEB)
         .onChange(of: scenePhase) { newValue in
             // If this view becomes active, tell the Messages manager to display
             // store messages in this window.

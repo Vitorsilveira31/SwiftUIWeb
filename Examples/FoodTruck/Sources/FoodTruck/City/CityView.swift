@@ -51,7 +51,7 @@ struct CityView: View {
                 }
                 .background(alignment: .bottom) {
                     ParkingSpotShowcaseView(spot: spot, topSafeAreaInset: 0)
-                        #if os(iOS)
+                        #if (os(iOS) || WEB)
                         .mask {
                             LinearGradient(
                                 stops: [

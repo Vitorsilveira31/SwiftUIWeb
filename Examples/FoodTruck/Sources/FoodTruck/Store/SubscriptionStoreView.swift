@@ -17,7 +17,7 @@ struct SubscriptionStoreView: View {
     
     var body: some View {
         Group {
-            #if os(macOS)
+            #if (os(macOS) && !WEB)
             VStack(spacing: 0) {
                 SubscriptionStoreHeaderView()
                     .frame(maxWidth: .infinity)
@@ -71,7 +71,7 @@ struct SubscriptionStoreView: View {
             }
             #endif
         }
-        #if os(iOS)
+        #if (os(iOS) || WEB)
         .background(Color(uiColor: .systemGray6))
         #endif
         .onAppear {
@@ -90,13 +90,13 @@ struct SubscriptionStoreView: View {
         } label: {
             Image(systemName: "xmark.circle.fill")
                 .symbolRenderingMode(.palette)
-            #if os(iOS)
+            #if (os(iOS) || WEB)
                 .foregroundStyle(
                     .secondary,
                     .clear,
                     Color(uiColor: .systemGray5)
                 )
-            #elseif os(macOS)
+            #elseif (os(macOS) && !WEB)
                 .foregroundStyle(
                     .secondary,
                     .clear,
@@ -256,12 +256,12 @@ struct SubscriptionOptionView: View {
         .background(Self.backgroundColor, in: Self.backgroundShape)
         .overlay {
             Self.backgroundShape
-                #if os(iOS)
+                #if (os(iOS) || WEB)
                 .strokeBorder(
                     Color.accentColor,
                     lineWidth: isOn ? 1 : 0
                 )
-                #elseif os(macOS)
+                #elseif (os(macOS) && !WEB)
                 .strokeBorder(
                     isOn ? Color.accentColor : .gray.opacity(0.1),
                     lineWidth: 1
@@ -308,7 +308,7 @@ struct SubscriptionOptionView: View {
 
 struct SubscriptionPurchaseView: View {
     @State private var canRedeemIntroOffer = false
-    #if os(iOS)
+    #if (os(iOS) || WEB)
     @State private var redeemSheetIsPresented = false
     #endif
     
@@ -331,18 +331,18 @@ struct SubscriptionPurchaseView: View {
                 }
                 .bold()
                 .padding(5)
-                #if os(iOS)
+                #if (os(iOS) || WEB)
                 .frame(maxWidth: .infinity)
                 #endif
             }
             .buttonStyle(.borderedProminent)
             .disabled(selectedSubscription == nil)
             .padding(.horizontal)
-            #if os(macOS)
+            #if (os(macOS) && !WEB)
             .tint(.accentColor)
             .controlSize(.large)
             #endif
-            #if os(iOS)
+            #if (os(iOS) || WEB)
             Button("Redeem an offer") {
                 redeemSheetIsPresented = true
             }
@@ -352,7 +352,7 @@ struct SubscriptionPurchaseView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical)
-        #if os(iOS)
+        #if (os(iOS) || WEB)
         .offerCodeRedemption(isPresented: $redeemSheetIsPresented) { _ in
             dismiss()
         }

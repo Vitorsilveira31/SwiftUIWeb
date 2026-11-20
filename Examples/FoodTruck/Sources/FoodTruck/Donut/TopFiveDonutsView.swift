@@ -34,7 +34,7 @@ struct TopFiveDonutsView: View {
                 
                 TopFiveDonutsChart(model: model, timeframe: timeframe)
                 
-                #if os(iOS)
+                #if (os(iOS) || WEB)
                 SiriTipView(intent: ShowTopDonutsIntent(timeframe: timeframe))
                     .padding(.top, 20)
                 #endif
