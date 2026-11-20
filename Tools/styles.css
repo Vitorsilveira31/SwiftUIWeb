@@ -669,6 +669,14 @@
   .list-view:not([data-list-style]):has(> * > .section-block):not(.navigation-sidebar .list-view) .section-block > .shape-layer {
     clip-path: inset(0 round 1.625rem);
   }
+  /* A menu picker in a form's row shows its value in the secondary label colour, as on iPadOS. */
+  .form-view .section-card .picker-row > .select-menu {
+    color: var(--color-swu-muted-foreground);
+  }
+  /* A table's column titles are tinted, as an iPadOS table's sortable headers are. */
+  th.table-view-column, .table th.table-view-column {
+    color: var(--tint-color, var(--color-swu-primary));
+  }
   /* A text field in a form's row is the row itself, as on iPadOS: no field border or fill of its own. */
   .form-view .section-card input.field-input {
     border-width: 0;
@@ -2538,6 +2546,14 @@
     padding-inline: 5.5rem;
   }
 
+
+  /* A screen whose toolbar role is the editor's (`toolbarRole(.editor)`) has its inline title at the bar's leading end,
+     as iPadOS draws a document's title. */
+  .navigation-stack:has(> :is(.navigation-root, .navigation-destination):last-child > [data-toolbar-role="editor"])::before {
+    text-align: start;
+    justify-content: flex-start;
+    padding-inline: calc(var(--spacing) * 4);
+  }
 
   /* A hidden navigation bar reserves no space: no title bar, no items, and the screen starts at the top. */
   main.navigation-stack[data-navigation-bar-hidden="true"][data-navigation-depth]::before,
