@@ -1700,7 +1700,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   const geometry = new GeometryHost(root, {dispatch: (element, name, value) => dispatchNamed(element, name, value), eventIdAttribute: EVENT_ID, eventsAttribute: EVENTS,
     // Measurements arrive after the frame's layout, outside the commit's batch: one batch per delivery, so Swift
     // publishes once for all of them.
-    batch: run => { api.batch_begin?.(); try { run(); } finally { api.batch_end?.(); } answerMeasurements(); }});
+    batch: run => { api.batch_begin?.(); try { run(); } finally { api.batch_end?.(); } answerMeasurements(); revealFittingReaders(false); }});
   // A measurement reaches Swift after the frame's layout and before its paint (a ResizeObserver delivery). SwiftUI applies
   // what a view does with its size (`onGeometryChange`) before the first frame shows the view; here the answer is a
   // publication, which the frame after would show: for that one frame a dialog sized from its content filled the window.
@@ -1725,7 +1725,8 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   }
   function syncGeometryReaders() {
     const added = geometry.sync();
-    if (!added.length || commitChanges.everything) return;
+    if (!added.length) return;
+    if (commitChanges.everything) { if (swiftInWorker()) holdUnfitReaders(added); return; }
     if (!swiftInWorker()) {
       // After the commit, once the layout pass has styled what it inserted (a view has no box before that).
       queueMicrotask(() => {
@@ -1737,6 +1738,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
       });
       return;
     }
+    holdUnfitReaders(added.filter(element => onNewScreen(element)));
     for (const element of added) {
       let piece = null;
       for (const node of commitChanges.added) if (node.isConnected && node.contains(element) && (!piece || node.contains(piece))) piece = node;
@@ -1755,6 +1757,61 @@ export function mountEmbeddedBrowser(instance, options = {}) {
     if (!answered && performance.now() - measuringSince < MEASURING_LIMIT_MS) { measuringFrame = window.requestAnimationFrame(revealMeasured); return; }
     for (const piece of measuring) piece.removeAttribute(MEASURING);
     measuring.clear();
+  }
+  // A GeometryReader the commit inserted is drawn for a size Swift guessed (the enclosing reader's, or the window's) until
+  // the page has measured it and Swift has drawn it again: a reader in a reader takes a round trip to the worker per level,
+  // and each showed (Food Truck's Truck page went through three layouts, its donuts at 560 points, then 436, then 163).
+  // SwiftUI draws a reader once, for its size. So the content of a reader inserted with a size other than its box's
+  // (`data-geometry-rendered`) stays hidden (`data-measuring`: its box keeps its place in the layout, so the page around it
+  // does not move) until a commit draws it for its box, at most `FITTING_LIMIT_MS`; a reader already shown is never hidden
+  // again. The check runs where the measurements are taken, after the frame's layout and before its paint. Only the readers
+  // of a screen the commit brought (the first page, a navigation's screen, a tab's panel) wait: content inserted into a
+  // screen already shown (Food Truck's new orders) would blink.
+  const FITTING_LIMIT_MS = 250;
+  const SCREEN = '.navigation-root,.navigation-destination,.navigation-stack,[role="tabpanel"]';
+  const SCREEN_CONTENT = '.navigation-root,.navigation-destination,.navigation-column,[role="tabpanel"]';
+  function onNewScreen(element) {
+    let piece = null;
+    for (const node of commitChanges.added) if (node.isConnected && node.contains(element) && (!piece || node.contains(piece))) piece = node;
+    if (!piece || piece === root) return false;
+    return piece.matches(SCREEN) || piece.parentElement?.matches(SCREEN_CONTENT) === true || piece.querySelector(SCREEN) !== null;
+  }
+  const fitting = new Map();
+  let fittingFrame = 0;
+  function readerFits(element) {
+    const rendered = element.getAttribute('data-geometry-rendered');
+    if (rendered === null) return true;
+    const [width, height] = rendered.split(',').map(Number);
+    const rect = element.getBoundingClientRect();
+    return Math.abs(rect.width - width) < 1 && Math.abs(rect.height - height) < 1;
+  }
+  function holdUnfitReaders(added) {
+    const now = performance.now();
+    for (const element of added) {
+      if (!element.hasAttribute('data-geometry-reader') || !element.hasAttribute('data-geometry-rendered')) continue;
+      if (!element.hasAttribute(MEASURING)) element.setAttribute(MEASURING, '');
+      fitting.set(element, now);
+    }
+    if (fitting.size && !fittingFrame) fittingFrame = window.requestAnimationFrame(() => { fittingFrame = 0; revealFittingReaders(true); });
+  }
+  // The readers waiting are shown together, once every one fits: a hidden reader still takes the box of the size it was
+  // drawn for, so the readers beside it fit a layout that is about to change (Food Truck's forecast chart fit a row the
+  // hidden donuts made 635 points tall, a frame before the row took its height).
+  function revealFittingReaders(fromFrame) {
+    if (!fitting.size) return;
+    const now = performance.now();
+    let oldest = now, allFit = true;
+    for (const [element, since] of fitting) {
+      if (!element.isConnected) { fitting.delete(element); continue; }
+      oldest = Math.min(oldest, since);
+      if (allFit && !readerFits(element)) allFit = false;
+    }
+    if (allFit || now - oldest >= FITTING_LIMIT_MS) {
+      for (const element of fitting.keys()) element.removeAttribute(MEASURING);
+      fitting.clear();
+      return;
+    }
+    if (fromFrame && !fittingFrame) fittingFrame = window.requestAnimationFrame(() => { fittingFrame = 0; revealFittingReaders(true); });
   }
   // AVPlayer state rendered by Swift, applied to the <video>/<audio> elements after each commit.
   if (typeof SWIFTUIWEB_HAS_MEDIA === 'undefined' || SWIFTUIWEB_HAS_MEDIA) plugins.push(new MediaHost(root, {dispatchNamed, dispatchHeadless, window}));

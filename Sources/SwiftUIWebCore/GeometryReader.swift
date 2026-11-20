@@ -120,6 +120,10 @@ public nonisolated struct GeometryReader<Content: View>: View, _OwnerBoundaryCon
     if measurement.size.width > 0 || measurement.size.height > 0 { contentContext.environment._geometryHint = measurement.size }
     let child = content(GeometryProxy(measurement: measurement, access: access))._render(in: contentContext)
     store.rendered = measurement
+    // The size the content was drawn for. With Swift in a worker the page shows a reader it has just inserted only once
+    // it is drawn for the size the layout gives it (Tools/embedded-dom.js): the first evaluation runs at the enclosing
+    // reader's size or the window's, and showed a page at sizes it never has (Food Truck's donuts at 560 points).
+    node.attributes["data-geometry-rendered"] = "\(_layoutNumber(CGFloat(measurement.size.width))),\(_layoutNumber(CGFloat(measurement.size.height)))"
     // Sticky: a proxy captured by a child view may be read by a later,
     // independent body evaluation of that child.
     store.readsPosition = store.readsPosition || access.readsPosition
