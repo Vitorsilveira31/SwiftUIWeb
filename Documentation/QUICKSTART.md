@@ -43,7 +43,7 @@ import PackageDescription
 let package = Package(
   name: "MyApp",
   dependencies: [
-    .package(url: "https://github.com/Vitorsilveira31/SwiftUIWeb.git", from: "0.1.31")
+    .package(url: "https://github.com/Vitorsilveira31/SwiftUIWeb.git", from: "0.1.32")
   ],
   targets: [
     .executableTarget(
