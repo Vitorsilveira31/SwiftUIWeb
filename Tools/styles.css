@@ -2467,6 +2467,8 @@
     white-space: nowrap;
     text-overflow: ellipsis;
     line-height: 3rem;
+    /* A bar item taller than the title row stretches the bar: the title stays centred in it, as UIKit centres it. */
+    align-content: center;
     justify-content: center;
     text-align: center;
   }
@@ -2902,6 +2904,15 @@
 
   .full-screen-cover > .presentation-content {
     padding: 0px;
+  }
+
+  /* A sheet's content fills it edge to edge, as in SwiftUI: the presented view brings its own padding and background.
+     An alert and a confirmation dialog keep theirs. */
+  .sheet-panel > .presentation-content {
+    padding: 0px;
+  }
+  .sheet-panel > .presentation-content > * + * {
+    margin-top: 0px;
   }
 
   .full-screen-cover[data-enter-animation="true"] {
@@ -5118,6 +5129,8 @@
 
     .sheet-panel .presentation-content,
     .sheet .sheet-content { scrollbar-gutter: stable; }
+    /* A navigation stack scrolls itself: the sheet keeps no gutter beside it. */
+    .sheet-panel .presentation-content:has(> .navigation-stack) { scrollbar-gutter: auto; }
   }
 
   .popover,
