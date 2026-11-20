@@ -105,14 +105,15 @@ describe("CompileAssets", () => {
       assert.equal(mod.main(["x", root, join(root, "o.css"), bundle]), 0);
       assert.equal(readFileSync(join(bundle, "catalog-assets", "AppBrand.svg"), "utf8"), "<svg/>");
       assert.equal(
-        readFileSync(join(bundle, "catalog-assets", "Poster.png"), "latin1"),
-        "\x89PNG1x",
-        "the universal 1x file wins",
+        readFileSync(join(bundle, "catalog-assets", "Poster@2x.png"), "latin1"),
+        "\x89PNG",
+        "the universal 2x file wins, its name keeping its density",
       );
+      assert.equal(existsSync(join(bundle, "catalog-assets", "Poster.png")), false);
       assert.equal(existsSync(join(bundle, "catalog-assets", "Gone.png")), false);
       assert.deepEqual(readFileSync(join(bundle, "runtime-environment"), "utf8").split("\n").slice(0, -1), [
         "SWIFTUIWEB_LANGUAGE=pt",
-        "SWIFTUIWEB_IMAGE_ASSETS=AppBrand=catalog-assets/AppBrand.svg;Poster=catalog-assets/Poster.png",
+        "SWIFTUIWEB_IMAGE_ASSETS=AppBrand=catalog-assets/AppBrand.svg;Poster=catalog-assets/Poster@2x.png",
       ]);
       assert.equal(existsSync(join(root, "o.css")), false, "no color sets, no stylesheet");
     });

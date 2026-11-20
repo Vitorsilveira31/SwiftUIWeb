@@ -7,6 +7,13 @@ import {AdaptiveTabShell} from './tab-shell.js';
 import {GeometryHost} from './geometry-host.js';
 import {MediaHost} from './media-host.js';
 import {SplitViewHost} from './split-view-host.js';
+/** The density a catalog image's file was drawn for, from the `@2x` or `@3x` its name keeps (before a release hash): 1
+ * otherwise. */
+function densityOf(url) {
+  const match = /@([23])x(?:\.[0-9a-z]+)?\.[a-z0-9]+(?:[?#].*)?$/i.exec(String(url || ''));
+  return match ? Number(match[1]) : 1;
+}
+
 
 /** A NavigationSplitView column hidden or shown, as iPad animates it: the page lays the columns out once, for where they
  * end, and every block of the content (a card, the header, the title) moves and grows from where it was to where it ends
@@ -2034,6 +2041,18 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   // Divider drag and keys for HSplitView and VSplitView: the panes move here and report their settled positions to Swift.
   if (typeof SWIFTUIWEB_HAS_SPLIT_VIEWS === 'undefined' || SWIFTUIWEB_HAS_SPLIT_VIEWS) plugins.push(new SplitViewHost(root, {dispatchNamed, window}));
   plugins.push(new SplitColumnMorph(root, {window}));
+  // An image whose file was drawn for a denser screen (`Name@2x.png`, Tools/compile-assets.mjs) says so (`srcset`): it lays
+  // out and draws at its size in points, with twice the pixels.
+  plugins.push({
+    needsSync: changes => changes.everything || changes.touches('img', ['src']),
+    sync() {
+      for (const image of root.querySelectorAll('img[src*="@2x"],img[src*="@3x"]')) {
+        // A candidate's URL cannot hold a space or a comma unescaped (catalog names do: "1 Small Clouds").
+        const src=image.getAttribute('src'), density=densityOf(src), wanted=density>1?`${src.replace(/[\s,]/g,c=>encodeURIComponent(c))} ${density}x`:null;
+        if (wanted && image.getAttribute('srcset')!==wanted) image.setAttribute('srcset',wanted);
+      }
+    },
+  });
 
   function syncTimelines() {
     if (typeof api.timeline_tick !== 'function' || !markerSeen('timeline')) return;
@@ -2609,9 +2628,14 @@ export function mountEmbeddedBrowser(instance, options = {}) {
     const resolved=getComputedStyle(colorProbe).color||value; colorProbe.remove();
     known.colors.set(value,resolved); return resolved;
   }
+  // The density each canvas image's file was drawn for (`densityOf`): its size in points is its natural size divided by it.
+  const imageDensities=new WeakMap();
+  const pointWidth=image=>image.naturalWidth/(imageDensities.get(image)||1), pointHeight=image=>image.naturalHeight/(imageDensities.get(image)||1);
   function canvasImage(url, canvas) {
     let entry=canvasImages.get(url);
-    if (!entry) { const image=new Image(); entry={image,ready:false}; image.onload=()=>{entry.ready=true;canvasStale=true;for(const c of root.querySelectorAll('canvas[data-draw-canvas]'))canvasPainted.delete(c);schedule();}; image.src=url; canvasImages.set(url,entry); }
+    // A catalog image drawn for a denser screen (`@2x`) is drawn at its size in points: its natural size is divided by its
+    // density (`srcset`), as UIImage's size is.
+    if (!entry) { const image=new Image(); entry={image,ready:false}; image.onload=()=>{entry.ready=true;canvasStale=true;for(const c of root.querySelectorAll('canvas[data-draw-canvas]'))canvasPainted.delete(c);schedule();}; imageDensities.set(image,densityOf(url)); image.src=url; canvasImages.set(url,entry); }
     return entry.ready?entry.image:null;
   }
   // A symbol's box is measured in the page, where its markup lays out with the canvas font and color. The SVG that
@@ -2654,7 +2678,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   // sizes one tile from the source rect times `z`. A not-yet-loaded image yields null (nothing drawn).
   function canvasTile(ctx, shading) {
     const image=canvasImage(shading.src, null); if (!image) return null;
-    const iw=image.naturalWidth, ih=image.naturalHeight;
+    const iw=pointWidth(image), ih=pointHeight(image);
     let source=image;
     if (shading.sx!==0||shading.sy!==0||shading.sw!==1||shading.sh!==1) {
       const cw=Math.max(1,Math.round(iw*shading.sw)), ch=Math.max(1,Math.round(ih*shading.sh));
@@ -2725,7 +2749,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
         case 'i': {
           const image=canvasImage(c.src,canvas); if (!image) break;
           if (c.w!==undefined) ctx.drawImage(image,c.x,c.y,c.w,c.h);
-          else { const iw=image.naturalWidth, ih=image.naturalHeight; ctx.drawImage(image,c.px-iw*c.ax,c.py-ih*c.ay,iw,ih); }
+          else { const iw=pointWidth(image), ih=pointHeight(image); ctx.drawImage(image,c.px-iw*c.ax,c.py-ih*c.ay,iw,ih); }
           break;
         }
       }
@@ -2740,7 +2764,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   const imagePaintCrops = new Map();
   function imagePaintCrop(image, source, rect) {
     const key=source+'|'+rect.join(','); const cached=imagePaintCrops.get(key); if (cached) return cached;
-    const [x,y,w,h]=rect, iw=image.naturalWidth, ih=image.naturalHeight;
+    const [x,y,w,h]=rect, iw=pointWidth(image), ih=pointHeight(image);
     const cw=Math.max(1,Math.round(iw*w)), ch=Math.max(1,Math.round(ih*h));
     const crop=document.createElement('canvas'); crop.width=cw; crop.height=ch;
     crop.getContext('2d').drawImage(image,iw*x,ih*y,iw*w,ih*h,0,0,cw,ch);
@@ -2755,7 +2779,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
       const scale=Number(element.getAttribute('data-image-paint-scale')||'1');
       const image=source?canvasImage(source,null):null;
       if (!image||!(image.naturalWidth>0)) continue;
-      const [x,y,w,h]=rect, iw=image.naturalWidth, ih=image.naturalHeight;
+      const [x,y,w,h]=rect, iw=pointWidth(image), ih=pointHeight(image);
       if (element.localName==='pattern') {
         // SVG: the pattern tile clips the whole image, offset so that the source rect fills the tile.
         const picture=element.querySelector('image'); if (!picture) continue;

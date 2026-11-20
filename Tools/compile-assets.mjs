@@ -552,18 +552,27 @@ function containedFile(contents, name, root) {
   return path;
 }
 
-/** File of an image set named by its Contents.json, or null. */
-export function imagesetFile(contents, root) {
+/** File of an image set named by its Contents.json, or null, with its scale (1 unless the set gives it). The universal 2x
+ * file wins when the set has one: a browser window is usually twice as dense as its CSS pixels, where Food Truck's header,
+ * drawn from the 1x files, was half as sharp as on iPad. The page draws it at its size in points (`srcset`, by the `@2x`
+ * its name keeps). Then the 1x file, then the first one. */
+export function imagesetSource(contents, root) {
   const entries = asList(jsonGet(readJson(contents), "images", []));
   const candidates = entries.filter((e) => isTruthy(jsonGet(e, "filename", undefined)));
-  const preferred = candidates.filter(
-    (e) => jsonGet(e, "idiom", "universal") === "universal" && jsonGet(e, "scale", "1x") === "1x",
-  );
-  for (const entry of new Set([...preferred, ...candidates])) {
+  const universal = (scale) =>
+    candidates.filter((e) => jsonGet(e, "idiom", "universal") === "universal" && jsonGet(e, "scale", "1x") === scale);
+  // Each entry is tried once, in that order (an entry that leaves its set is reported once).
+  const doubled = new Set(universal("2x"));
+  for (const entry of new Set([...doubled, ...universal("1x"), ...candidates])) {
     const path = containedFile(contents, fileField(entry, "filename", undefined), root);
-    if (path !== null) return path;
+    if (path !== null) return { path, scale: doubled.has(entry) ? 2 : 1 };
   }
   return null;
+}
+
+/** File of an image set named by its Contents.json, or null (`imagesetSource`). */
+export function imagesetFile(contents, root) {
+  return imagesetSource(contents, root)?.path ?? null;
 }
 
 /** File of a symbol set named by its Contents.json, or null. */
@@ -660,8 +669,8 @@ export function symbolSvg(template) {
 export function compileImages(root) {
   const images = new Map();
   for (const [name, contents] of catalogEntries(root, ".imageset")) {
-    const path = imagesetFile(contents, root);
-    if (path !== null) images.set(name, path);
+    const source = imagesetSource(contents, root);
+    if (source !== null) images.set(name, source.scale === 2 ? { path: source.path, scale: 2 } : source.path);
   }
   for (const [name, contents] of catalogEntries(root, ".symbolset")) {
     const path = symbolsetFile(contents, root);
@@ -687,7 +696,9 @@ export function installImages(images, bundle) {
   if (images.size === 0) return manifest;
   const target = joinPath(bundle, ASSET_DIRECTORY);
   mkdirSync(target, { recursive: true });
-  for (const [name, source] of images) {
+  for (const [name, entry] of images) {
+    // A 2x file keeps `@2x` in its name: the page draws it at half its pixels (embedded-dom.js, `densityOf`).
+    const source = typeof entry === "string" ? entry : entry.path, density = typeof entry === "string" ? "" : "@2x";
     // The manifest is written as NAME=path;NAME=path lines, so a name or extension must not carry those separators or a newline.
     if (/[\x00-\x1f=;\\]/.test(name)) {
       console.error(
@@ -711,7 +722,7 @@ export function installImages(images, bundle) {
       destination = joinPath(target, `${stem}.symbol.svg`);
       writeText(destination, svg);
     } else {
-      destination = joinPath(target, stem + suffixOf(nameOf(source)).toLowerCase());
+      destination = joinPath(target, stem + density + suffixOf(nameOf(source)).toLowerCase());
       copyFileSync(source, destination);
     }
     manifest.set(name, `${ASSET_DIRECTORY}/${nameOf(destination)}`);

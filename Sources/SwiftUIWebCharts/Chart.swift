@@ -200,6 +200,10 @@ struct _ChartDomain {
   let label: String
   var isDate = false
   var reversed = false
+  /// The distance between the automatic marks the domain was rounded to: its axis's automatic marks take it, as in Swift
+  /// Charts, rather than one worked out again from the rounded domain (a domain from 54.5 to 85 asked for six marks
+  /// would otherwise be marked every 10, not every 5).
+  var markStep: Double? = nil
 
   /// Whether a categorical domain lists `value`. A numeric domain, or a missing value, always fits.
   func knows(_ value: ChartValue?) -> Bool {
@@ -247,8 +251,10 @@ struct _SVGChartRenderer: _ChartRenderer {
 
   @MainActor func render(_ model: _ChartModel, context: _RenderContext) -> _RenderNode {
     let configuration = model.configuration
-    let xDomain = domain(for: model.marks, axis: .x, explicit: configuration.xScale, automatic: configuration.xAutomaticDomain)
-    let yDomain = domain(for: model.marks, axis: .y, explicit: configuration.yScale, automatic: configuration.yAutomaticDomain)
+    // An automatic domain extends to the automatic marks of its axis, as the axis asks for them (Food Truck's forecast asks
+    // for six marks at least five degrees apart, and has 55 to 85, not 50 to 90).
+    let xDomain = domain(for: model.marks, axis: .x, explicit: configuration.xScale, automatic: configuration.xAutomaticDomain, marks: configuration.xAxisCustom?.first?.valueSpec)
+    let yDomain = domain(for: model.marks, axis: .y, explicit: configuration.yScale, automatic: configuration.yAutomaticDomain, marks: configuration.yAxisCustom?.first?.valueSpec)
     // Custom axis marks are evaluated up front: view-valued labels decide
     // how much room the plot leaves below itself.
     let xAxis = configuration.xAxisCustom.map { resolveAxis($0, domain: xDomain) }
@@ -730,7 +736,7 @@ struct _SVGChartRenderer: _ChartRenderer {
   private func tickValues(_ marks: AxisMarks, domain: _ChartDomain) -> [ChartValue] {
     if let explicit = marks.explicitValues { return explicit }
     if domain.categoryMode { return domain.categories.map { ChartValue.value("", $0) } }
-    return _chartAxisValues(marks.valueSpec, lower: domain.lower, upper: domain.upper, isDate: domain.isDate).map { number in
+    return _chartAxisValues(marks.valueSpec, lower: domain.lower, upper: domain.upper, isDate: domain.isDate, step: domain.markStep).map { number in
       domain.isDate ? ChartValue.value("", Date(timeIntervalSince1970: number)) : ChartValue.value("", number)
     }
   }
@@ -816,7 +822,7 @@ struct _SVGChartRenderer: _ChartRenderer {
         nodes.append(contentsOf: customAxisNodes(yAxis, isX: false, env: env))
       } else {
         // Swift Charts' automatic marks: round values in the domain (which `domain(for:)` extends to round bounds).
-        let yValues = config.yAxis.values ?? _chartAxisValues(.automatic, lower: yDomain.lower, upper: yDomain.upper, isDate: false)
+        let yValues = config.yAxis.values ?? _chartAxisValues(.automatic, lower: yDomain.lower, upper: yDomain.upper, isDate: false, step: yDomain.markStep)
         for value in yValues {
           let fraction = (value - yDomain.lower) / max(yDomain.upper - yDomain.lower, 0.000001); let y = layout.top + layout.plotHeight - (yDomain.reversed ? 1 - fraction : fraction) * layout.plotHeight
           let grid = _RenderNode.element("line"); grid.attributes["x1"] = _chartNumber(layout.left); grid.attributes["x2"] = _chartNumber(layout.left + layout.plotWidth); grid.attributes["y1"] = _chartNumber(y); grid.attributes["y2"] = _chartNumber(y); grid.attributes["stroke"] = "currentColor"; grid.attributes["stroke-opacity"] = "0.12"; nodes.append(grid)
@@ -850,7 +856,7 @@ struct _SVGChartRenderer: _ChartRenderer {
     return nodes
   }
 
-  private func domain(for marks: [ChartMark], axis: ChartSelectionAxis, explicit: ChartScaleDomain?, automatic: AutomaticScaleDomain?) -> _ChartDomain {
+  private func domain(for marks: [ChartMark], axis: ChartSelectionAxis, explicit: ChartScaleDomain?, automatic: AutomaticScaleDomain?, marks spec: AxisMarkValues? = nil) -> _ChartDomain {
     let reversed = automatic?.reversed ?? false
     if let explicit {
       var isDate = explicit.lowerBound._isDate
@@ -882,9 +888,12 @@ struct _SVGChartRenderer: _ChartRenderer {
     // to the round values of its automatic marks (Food Truck's sales from 100 to 400, not from the data's 82.64).
     if !isDate {
       if upper == lower { upper = lower + 1 }
-      let step = _chartNiceStep((upper - lower) / 5)
-      lower = (lower / step).rounded(.down) * step
-      upper = (upper / step).rounded(.up) * step
+      let automaticMarks = spec.flatMap { $0.kind == .automatic ? $0 : nil }
+      var step = _chartClosestNiceStep(range: upper - lower, desired: Double(max(automaticMarks?.desiredCount ?? 5, 2)))
+      if let minimum = automaticMarks?.minimumStride { while step < minimum { step = _chartNextNiceStep(step) } }
+      if automaticMarks?.roundLowerBound != false { lower = (lower / step).rounded(.down) * step }
+      if automaticMarks?.roundUpperBound != false { upper = (upper / step).rounded(.up) * step }
+      return _ChartDomain(lower: lower, upper: upper, categories: [], categoryMode: false, label: label, isDate: isDate, reversed: reversed, markStep: step)
     } else if upper == lower {
       upper = lower + 86_400
     }

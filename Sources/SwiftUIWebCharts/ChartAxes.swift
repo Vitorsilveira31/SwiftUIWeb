@@ -288,7 +288,7 @@ public struct AxisMarks: AxisContent {
 // MARK: Tick values
 
 /// Places an axis's marks inside `lower...upper`.
-func _chartAxisValues(_ spec: AxisMarkValues, lower: Double, upper: Double, isDate: Bool) -> [Double] {
+func _chartAxisValues(_ spec: AxisMarkValues, lower: Double, upper: Double, isDate: Bool, step domainStep: Double? = nil) -> [Double] {
   guard upper > lower else { return [lower] }
   let range = upper - lower
   let step: Double
@@ -299,7 +299,8 @@ func _chartAxisValues(_ spec: AxisMarkValues, lower: Double, upper: Double, isDa
     // Swift Charts marks a date axis by calendar units, about three of them across a plot (a week apart over two
     // weeks), and a number axis about five times.
     let desired = Double(max(spec.desiredCount ?? (isDate ? 3 : 5), 2))
-    var automaticStep = isDate ? _chartTimeStep(range: range, desired: desired) : _chartNiceStep(range / desired)
+    // The step the domain was rounded to, when the marks ask for what the domain was worked out with.
+    var automaticStep = isDate ? _chartTimeStep(range: range, desired: desired) : (domainStep ?? _chartClosestNiceStep(range: range, desired: desired))
     if let minimum = spec.minimumStride {
       while automaticStep < minimum { automaticStep = _chartNextNiceStep(automaticStep) }
     }
@@ -334,7 +335,27 @@ func _chartNiceStep(_ raw: Double) -> Double {
   return 10 * magnitude
 }
 
-private func _chartNextNiceStep(_ step: Double) -> Double {
+/// The round step that marks `range` closest to `desired` times, as Swift Charts picks it: of the two round steps around
+/// `range / desired`, the one whose count of marks is nearer (Food Truck's forecast, 30.5 degrees asked six times, is
+/// marked every 5, seven marks, not every 10, four).
+func _chartClosestNiceStep(range: Double, desired: Double) -> Double {
+  let above = _chartNiceStep(range / desired)
+  let below = _chartPreviousNiceStep(above)
+  guard below > 0, below < above else { return above }
+  return abs(range / below - desired) < abs(range / above - desired) ? below : above
+}
+
+/// The round step below `step` (10 → 5 → 2 → 1).
+func _chartPreviousNiceStep(_ step: Double) -> Double {
+  let magnitude = _chartMagnitude(step)
+  let normalized = step / magnitude
+  if normalized > 5.5 { return 5 * magnitude }
+  if normalized > 2.5 { return 2 * magnitude }
+  if normalized > 1.5 { return magnitude }
+  return 0.5 * magnitude
+}
+
+func _chartNextNiceStep(_ step: Double) -> Double {
   let magnitude = _chartMagnitude(step)
   let normalized = step / magnitude
   if normalized < 1.5 { return 2 * magnitude }
