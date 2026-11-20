@@ -168,15 +168,21 @@ struct _ChartLayout {
   let width: Double
   /// Room above the plot: more when the legend is drawn there.
   let top: Double
-  let left: Double = 52
-  let right: Double = 16
+  /// The plot's margins: the y axis labels take the wider one, on the trailing side as in Swift Charts.
+  let left: Double
+  let right: Double
+  /// Whether the y axis sits on the plot's leading side (`AxisMarks(position: .leading)`).
+  let yAxisLeading: Bool
   let plotHeight: Double
   /// Room under the plot for axis labels; grows when labels are views.
   let bottom: Double
   /// Whether this is the size the host laid the chart out at, rather than the 640 pt wide fallback.
   let measured: Bool
-  init(bottom: Double = 42, size: CGSize = CGSize(width: 0, height: 0), legendAbove: Bool = false) {
+  init(bottom: Double = 42, size: CGSize = CGSize(width: 0, height: 0), legendAbove: Bool = false, yAxisLeading: Bool = false) {
     self.bottom = bottom
+    self.yAxisLeading = yAxisLeading
+    left = yAxisLeading ? 52 : 16
+    right = yAxisLeading ? 16 : 52
     top = legendAbove ? 32 : 16
     measured = size.width > 0 && size.height > 0
     width = measured ? Double(size.width) : 640
@@ -249,7 +255,10 @@ struct _SVGChartRenderer: _ChartRenderer {
     let yAxis = configuration.yAxisCustom.map { resolveAxis($0, domain: yDomain) }
     let legendAbove = configuration.legendPosition != .hidden && configuration.legendPosition != .bottom
       && configuration.legendPosition != .trailing && model.marks.contains { $0.foregroundStyleValue != nil }
-    let layout = _ChartLayout(bottom: xAxis?.hasViewLabels == true ? 104 : 42, size: model.size, legendAbove: legendAbove)
+    let layout = _ChartLayout(
+      bottom: xAxis?.hasViewLabels == true ? 104 : 42, size: model.size, legendAbove: legendAbove,
+      yAxisLeading: configuration.yAxisCustom?.first?.position == .leading
+    )
     let xScale = { (value: ChartValue) -> Double in
       layout.left + xDomain.fraction(value) * layout.plotWidth
     }
@@ -757,7 +766,11 @@ struct _SVGChartRenderer: _ChartRenderer {
           let length = item.tickLength ?? 5
           let line = _RenderNode.element("line")
           if isX { line.attributes["x1"] = _chartNumber(position); line.attributes["x2"] = _chartNumber(position); line.attributes["y1"] = _chartNumber(bottomEdge); line.attributes["y2"] = _chartNumber(bottomEdge + length) }
-          else { line.attributes["x1"] = _chartNumber(layout.left - length); line.attributes["x2"] = _chartNumber(layout.left); line.attributes["y1"] = _chartNumber(position); line.attributes["y2"] = _chartNumber(position) }
+          else {
+            let edge = layout.yAxisLeading ? layout.left : layout.left + layout.plotWidth
+            line.attributes["x1"] = _chartNumber(edge); line.attributes["x2"] = _chartNumber(layout.yAxisLeading ? edge - length : edge + length)
+            line.attributes["y1"] = _chartNumber(position); line.attributes["y2"] = _chartNumber(position)
+          }
           strokeLine(line, stroke: item.stroke, opacity: "0.35")
           line.attributes["data-chart-axis-tick"] = isX ? "x" : "y"
           nodes.append(line)
@@ -768,11 +781,14 @@ struct _SVGChartRenderer: _ChartRenderer {
               let width = domainBand(domain, extent: layout.plotWidth) ?? 80
               nodes.append(foreignView(view, x: position - width / 2, y: bottomEdge + pad, width: width, height: layout.bottom - pad - 4, justify: "center", align: "flex-start", env: env, key: "axis-x-\(entryIndex)", role: "axis-label"))
             } else {
-              nodes.append(foreignView(view, x: layout.left - pad - 64, y: position - 12, width: 64, height: 24, justify: "flex-end", align: "center", env: env, key: "axis-y-\(entryIndex)", role: "axis-label"))
+              let x = layout.yAxisLeading ? layout.left - pad - 64 : layout.left + layout.plotWidth + pad
+              nodes.append(foreignView(view, x: x, y: position - 12, width: 64, height: 24, justify: layout.yAxisLeading ? "flex-end" : "flex-start", align: "center", env: env, key: "axis-y-\(entryIndex)", role: "axis-label"))
             }
           } else {
             let text = labelText(item, value: entry.value, domain: domain)
-            let label = isX ? svgText(text, x: position, y: bottomEdge + 12 + pad, anchor: "middle") : svgText(text, x: layout.left - pad - 2, y: position + 4, anchor: "end")
+            let label = isX ? svgText(text, x: position, y: bottomEdge + 12 + pad, anchor: "middle")
+              : layout.yAxisLeading ? svgText(text, x: layout.left - pad - 2, y: position + 4, anchor: "end")
+              : svgText(text, x: layout.left + layout.plotWidth + pad + 2, y: position + 4, anchor: "start")
             label.attributes["fill"] = "currentColor"; label.attributes["font-size"] = "11"
             label.attributes["data-chart-axis-label"] = isX ? "x" : "y"
             nodes.append(label)
@@ -797,7 +813,10 @@ struct _SVGChartRenderer: _ChartRenderer {
         for value in yValues {
           let fraction = (value - yDomain.lower) / max(yDomain.upper - yDomain.lower, 0.000001); let y = layout.top + layout.plotHeight - (yDomain.reversed ? 1 - fraction : fraction) * layout.plotHeight
           let grid = _RenderNode.element("line"); grid.attributes["x1"] = _chartNumber(layout.left); grid.attributes["x2"] = _chartNumber(layout.left + layout.plotWidth); grid.attributes["y1"] = _chartNumber(y); grid.attributes["y2"] = _chartNumber(y); grid.attributes["stroke"] = "currentColor"; grid.attributes["stroke-opacity"] = "0.12"; nodes.append(grid)
-          let label = svgText(_chartNumber(value), x: layout.left - 8, y: y + 4, anchor: "end"); label.attributes["fill"] = "currentColor"; label.attributes["font-size"] = "11"; nodes.append(label)
+          let label = layout.yAxisLeading
+            ? svgText(_chartNumber(value), x: layout.left - 8, y: y + 4, anchor: "end")
+            : svgText(_chartNumber(value), x: layout.left + layout.plotWidth + 8, y: y + 4, anchor: "start")
+          label.attributes["fill"] = "currentColor"; label.attributes["font-size"] = "11"; nodes.append(label)
         }
       }
     }

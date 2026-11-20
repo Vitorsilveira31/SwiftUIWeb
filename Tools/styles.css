@@ -853,6 +853,18 @@
     line-height: 1;
   }
 
+  /* A `.circle.fill` symbol in palette mode drawn from its plain glyph: the glyph, in the first style, on a disc in the
+     second, as SF Symbols layers `.foregroundStyle(.white, .indigo)` on `moon.circle.fill`. */
+  .symbol-icon[data-symbol$=".circle.fill"][data-symbol-rendering-mode="palette"] {
+    border-radius: 9999px;
+    padding: 0.2em;
+    background-color: var(--secondary-style, currentColor);
+  }
+  .symbol-icon[data-symbol$=".circle.fill"][data-symbol-rendering-mode="palette"] > svg.lucide-glyph {
+    width: 0.8em;
+    height: 0.8em;
+  }
+
   /* `imageScale(_:)`: symbols scale relative to the surrounding font. */
   .symbol-icon[data-image-scale],
   [data-image-scale] .symbol-icon {
@@ -3201,15 +3213,11 @@
 
   .mapkit-view,
   .web-view,
+  /* A Chart draws its marks and axes only, as Swift Charts does: no frame, fill or inset of its own. */
   .data-chart {
     display: block;
     min-height: calc(var(--spacing) * 40);
     width: 100%;
-    border-radius: var(--radius-lg);
-    border-style: solid;
-    border-width: 1px;
-    border-color: var(--color-swu-border);
-    background-color: var(--color-swu-muted);
   }
 
   .mapkit-view {
@@ -3220,10 +3228,6 @@
   .web-view {
     min-height: calc(var(--spacing) * 96);
     background-color: var(--color-swu-surface);
-  }
-
-  .data-chart {
-    padding: calc(var(--spacing) * 4);
   }
 
   .responsive-compact {
@@ -5301,10 +5305,9 @@
     min-height: 0;
   }
 
-  /* A sidebar is a source list, not a card: no frame and no hairlines between rows, a rounded row, the selected row
-     filled with the tint, and the icons in one fixed column so the labels line up as in a native sidebar. The layout
-     engine owns the width, margin and padding of a section's rows (with !important), so the top-level rows are
-     indented to meet them and a selected section row is widened with a shadow instead of a margin. */
+  /* A sidebar is a source list, not a card: no frame and no hairlines between rows, a rounded row as wide as the
+     sidebar, the selected row filled with the tint, and the icons in one fixed column so the labels line up as in a native
+     sidebar. A section's rows have the same metrics as the rows above them (no grouped-list inset in a sidebar). */
   .navigation-split-view .navigation-sidebar .list-view {
     gap: 2px;
     border-width: 0;
@@ -5343,14 +5346,8 @@
       }
     }
   }
-  .navigation-split-view .navigation-sidebar .list-view > .navigation-link {
-    padding-inline-start: calc(var(--spacing) * 6);
-  }
   .navigation-split-view .navigation-sidebar .list-view .navigation-link.item-selected {
     --row-fill: color-mix(in srgb, var(--tint-color, var(--color-swu-primary)) 16%, transparent);
-  }
-  .navigation-split-view .navigation-sidebar .section-row .navigation-link {
-    box-shadow: calc(var(--spacing) * -4) 0 0 0 var(--row-fill), calc(var(--spacing) * 4) 0 0 0 var(--row-fill);
   }
   .navigation-split-view .navigation-sidebar .list-view .navigation-link [data-layout-leaf="text"] {
     white-space: nowrap;

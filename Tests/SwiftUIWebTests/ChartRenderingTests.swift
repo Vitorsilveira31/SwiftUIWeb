@@ -42,6 +42,17 @@ final class ChartRenderingTests {
   }
 
   @Test
+  func theYAxisSitsOnTheTrailingSideUnlessItAsksForTheLeadingOne() {
+    let trailing = StaticHTMLFiberRenderer().render(Chart { BarMark(x: .value("Day", "Mon"), y: .value("Value", 4)) }
+      .chartYAxis { AxisMarks { _ in AxisValueLabel() } })
+    #expect(trailing.contains("data-chart-axis-label=\"y\""))
+    #expect(trailing.contains("text-anchor=\"start\""))
+    let leading = StaticHTMLFiberRenderer().render(Chart { BarMark(x: .value("Day", "Mon"), y: .value("Value", 4)) }
+      .chartYAxis { AxisMarks(position: .leading) { _ in AxisValueLabel() } })
+    #expect(leading.contains("text-anchor=\"end\""))
+  }
+
+  @Test
   func testSelectionInstallsAccessibleHitTarget() {
     let selection = Binding<String?>(get: { nil }, set: { _ in })
     let chart = Chart {
