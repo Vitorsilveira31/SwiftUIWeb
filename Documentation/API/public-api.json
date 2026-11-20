@@ -15440,6 +15440,12 @@
     {
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/Navigation.swift",
+      "signature": "public enum EditMode: Hashable, Sendable",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebCore",
+      "file": "Sources/SwiftUIWebCore/Navigation.swift",
       "signature": "public enum NavigationBarItem",
       "availability": []
     },
@@ -16041,6 +16047,12 @@
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/Navigation.swift",
       "signature": "public var count: Int",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebCore",
+      "file": "Sources/SwiftUIWebCore/Navigation.swift",
+      "signature": "public var isEditing: Bool",
       "availability": []
     },
     {
@@ -23096,12 +23108,6 @@
     {
       "target": "SwiftUIWebFeatures",
       "file": "Sources/SwiftUIWebFeatures/ApplePlatformParity.swift",
-      "signature": "public enum EditMode: Hashable, Sendable",
-      "availability": []
-    },
-    {
-      "target": "SwiftUIWebFeatures",
-      "file": "Sources/SwiftUIWebFeatures/ApplePlatformParity.swift",
       "signature": "public enum SearchScopeActivation: Hashable, Sendable",
       "availability": []
     },
@@ -23421,12 +23427,6 @@
       "target": "SwiftUIWebFeatures",
       "file": "Sources/SwiftUIWebFeatures/ApplePlatformParity.swift",
       "signature": "public typealias RawValue = UInt32",
-      "availability": []
-    },
-    {
-      "target": "SwiftUIWebFeatures",
-      "file": "Sources/SwiftUIWebFeatures/ApplePlatformParity.swift",
-      "signature": "public var isEditing: Bool",
       "availability": []
     },
     {

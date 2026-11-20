@@ -38,7 +38,7 @@ struct AttributedTextRunTests {
     #expect(anchor.children[0].styles["text-decoration-line"] == "underline line-through")
     #expect(anchor.children[0].attributes["data-text-href"] == nil)
     // A link takes the tint, and its tap is handled by the environment's openURL, not the browser's navigation.
-    #expect(anchor.styles["color"] == Color.accentColor.cssValue)
+    #expect(anchor.styles["color"] == Color._currentTint.cssValue)
     #expect(anchor.events["click"]?.preventsDefault == true)
   }
 
