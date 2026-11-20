@@ -2965,7 +2965,11 @@
     min-width: 0;
   }
 
-  .backdrop-layer > :first-child {
+  /* The layer and the decorated view are told apart by position: a background's layer is the first child, an
+     overlay's the last. An empty layer (`.background { if hovering { … } }` while not hovering) renders no element, so
+     the decorated view is the only child, both first and last, and the layer rules must not reach it: `contain: size`
+     collapsed it to 0×0. `:where` keeps these rules as specific as before, so a presentation's lift below still wins. */
+  .backdrop-layer > :first-child:where(:not(:last-child)) {
     z-index: 0;
     pointer-events: none;
     /* A background is proposed the size of the view it decorates and never changes it. */
@@ -2977,7 +2981,7 @@
     z-index: 1;
   }
 
-  .overlay-layer > :last-child {
+  .overlay-layer > :last-child:where(:not(:first-child)) {
     z-index: 2;
   }
 
@@ -2989,7 +2993,7 @@
     z-index: 50;
   }
 
-  .overlay-layer[data-enter-animation="true"] > :last-child,
+  .overlay-layer[data-enter-animation="true"] > :last-child:where(:not(:first-child)),
   .overlay-layer > :last-child[data-enter-animation="true"] {
     animation: swu-fade-in 180ms ease-out;
   }

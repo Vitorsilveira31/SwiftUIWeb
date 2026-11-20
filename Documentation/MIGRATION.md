@@ -119,6 +119,11 @@ nested in a private type, or a state declared inside an `#if` in the view, is st
 
 ### Looks that changed
 
+- **An empty background or overlay leaves its view alone.** `.background { if isHovering { … } }` while not hovering
+  (or a background of `EmptyView()`) collapsed the view it decorates to 0×0 and stopped clicks on it: the stylesheet's
+  rules for the background layer (`contain: size`, no hit testing) picked the layer as the first child, which is the
+  view itself when the layer renders nothing. They now apply only when a layer is there, as do an overlay's. An
+  application that kept an `else { Color.clear }` for this can drop it.
 - **On a phone the page scrolls the document.** The screen's ScrollView scrolled inside a box of the window's height, so
   the page ended above a phone browser's bottom bar and the bars never shrank. On a touch screen the vertical ScrollView
   that fills the bottom of the window now hands its scrolling to the document: the page runs under the browser's bars,

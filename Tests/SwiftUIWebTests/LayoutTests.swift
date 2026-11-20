@@ -619,6 +619,24 @@ final class LayoutTests {
   }
 
   @Test
+  func testAnEmptyBackgroundOrOverlayLeavesTheDecoratedViewAsTheWrappersOnlyChild() {
+    // The markup `Tools/test-empty-layer.mjs` lays out: an empty layer renders no element, so the decorated view is the
+    // wrapper's only child (both its first and its last), and the stylesheet's layer rules must not reach it there.
+    let hidden = false
+    let cases: [(String, AnyView)] = [
+      ("backdrop-layer", AnyView(Text("Card").background { if hidden { Color.red } })),
+      ("backdrop-layer", AnyView(Text("Card").background { EmptyView() })),
+      ("overlay-layer", AnyView(Text("Card").overlay { if hidden { Color.red } })),
+      ("overlay-layer", AnyView(Text("Card").overlay { EmptyView() })),
+    ]
+    for (kind, view) in cases {
+      let html = StaticHTMLFiberRenderer(rootTag: "main").renderHTML(view)
+      #expect(html.hasPrefix("<div class=\"\(kind) passthrough\""), "\(html)")
+      #expect(html.hasSuffix(">Card</div>"), "\(html)")
+    }
+  }
+
+  @Test
   func testALayoutItemIsPlacedAtItsPointAndAnchoredByItsOwnSize() {
     // The page decides the size, so the item only states the point and the anchor as shares of its own size.
     let item = _RenderNode.element("div")
