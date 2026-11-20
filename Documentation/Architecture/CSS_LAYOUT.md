@@ -242,7 +242,7 @@ can pin a centre without knowing it. After each layout pass (`reportLayouts`) th
   the mapper lays the item out at each one as it lays it out at the placed proposal (`measureAsks`: the item is out of the
   flow, so nothing else moves), reads it, and puts it back.
 A pass in which nothing a Layout depends on changed probes nothing (`layoutsStale`): the mapper probes again after a change
-it notes in an island (a block, a text, an element, an inline style, an image source, a proposal Swift asks about), after it
+it notes in an island (a text, an element, any attribute but those that only paint, such as a canvas's drawing), after it
 styled an island, chose a ViewThatFits candidate or rewrote a container length, a text cap, a font shrink or a bar inset, and
 when the host reports what it does not observe (`invalidateLayouts`: a DOM change outside the islands, a resize, fonts, a
 global attribute, a control's input, the page's scroll view moving). Food Truck's animated header commits every frame and

@@ -349,12 +349,24 @@ await runSuite(async () => {
       css.note({ type: "attributes", attributeName: "open", oldValue: null }, t1, ideal);
       css.flush();
       const opened = reports.slice(from).filter((r) => r[0] === "sizes").length;
+      // An attribute the framework stylesheet sizes a control by (a TextEditor's chrome) changes: measured again.
+      t1.setAttribute("data-field-chrome", "hidden");
+      from = reports.length;
+      css.note({ type: "attributes", attributeName: "data-field-chrome", oldValue: null }, t1, ideal);
+      css.flush();
+      const chrome = reports.slice(from).filter((r) => r[0] === "sizes").length;
+      // A canvas redraws (Food Truck's header, every frame): its box does not move, nothing is probed.
+      t1.setAttribute("data-canvas-commands", "[1]");
+      from = reports.length;
+      css.note({ type: "attributes", attributeName: "data-canvas-commands", oldValue: "[0]" }, t1, ideal);
+      css.flush();
+      const redrawn = reports.length - from;
       // Something the mapper does not observe changed (the host saw it): probed again.
       from = reports.length;
       css.invalidateLayouts(); css.flush();
       const invalidated = reports.slice(from).filter((r) => r[0] === "proposal").length;
       observer.disconnect();
-      return { ...shown, moved, idle, grown, opened, invalidated };
+      return { ...shown, moved, idle, grown, opened, chrome, redrawn, invalidated };
     });
     assert.deepEqual([custom.ok, custom.items, custom.refused], [true, [true, true, true], {}], "a user-defined Layout and its subviews are CSS's");
     assert.deepEqual([custom.box[2], custom.box[3]], [200, 80], "the Layout is the size Swift gave it");
@@ -366,6 +378,8 @@ await runSuite(async () => {
     assert.deepEqual(custom.idle, { reports: 0, writes: 0 }, "a pass that changed nothing a Layout depends on probes nothing");
     assert.ok(Number(custom.grown?.split(":")[1].split(",")[0]) > custom.ideal[2], `a text that changed in a subview is measured again (${custom.grown})`);
     assert.equal(custom.opened, 1, "a disclosure that opened in a subview is measured again");
+    assert.equal(custom.chrome, 1, "so is a subview whose chrome the stylesheet sizes changed");
+    assert.equal(custom.redrawn, 0, "a canvas that redraws probes nothing");
     assert.equal(custom.invalidated, 1, "and a change the host reports probes the Layout again");
     assert.deepEqual(custom.reports.find((r) => r[0] === "proposal")?.slice(1), ["box", 1000, 700], "the Layout is told what it is offered: the window, through the stack that hugs its content");
     const sizes = custom.reports.find((r) => r[0] === "sizes")?.[2].split(";");

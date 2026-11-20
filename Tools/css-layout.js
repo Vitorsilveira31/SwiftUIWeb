@@ -24,11 +24,15 @@ for (const k of ['w', 'h', 'min-w', 'min-h', 'ideal-w', 'ideal-h', 'max-w', 'max
 for (const k of ['top', 'leading', 'bottom', 'trailing']) STYLE_ATTRIBUTES.add('data-padding-' + k);
 export const ownsCssLayoutAttribute = name => name === 'data-cl' || name.startsWith('data-cl-');
 export const affectsCssLayout = name => STYLE_ATTRIBUTES.has(name);
-/** Whether an attribute can change the size the browser gives an element CSS lays out (what a user-defined Layout is offered,
- * the size of a subview it reads), though it is not one the mapper analyses: its inline style (a font size), what an image
- * or a media element shows, whether a disclosure is open, the proposals Swift asks a Layout's subviews about. */
-const SIZE_ATTRIBUTES = new Set(['style', 'src', 'srcset', 'width', 'height', 'open', 'data-layout-asks', 'data-layout-proposal']);
-const affectsLayoutSize = name => STYLE_ATTRIBUTES.has(name) || SIZE_ATTRIBUTES.has(name);
+/** The attributes whose change never moves a box: what a canvas draws, how an image loads, a piece kept hidden until it is
+ * measured (`visibility`), what assistive technologies read, the mapper's own blocks. Any other attribute that changes inside
+ * an island can change the size the browser gives an element CSS lays out (what a user-defined Layout is offered, the size of a
+ * subview it reads), though the mapper does not analyse it: an inline style (a font size), an image's source, a disclosure that
+ * opens, and the many the framework stylesheet sizes controls and chrome by (`data-field-chrome`, `data-tab-bar-hidden`). A text
+ * field's value is what it shows, not its box. Food Truck's animated header rewrites only its canvas on every frame. */
+const PAINT_ATTRIBUTES = new Set(['data-canvas-commands', 'data-canvas-fingerprint', 'data-measuring', 'fetchpriority', 'loading', 'decoding',
+  'aria-label', 'aria-live', 'aria-description', 'title', 'data-tooltip']);
+const affectsLayoutSize = (name, target) => !PAINT_ATTRIBUTES.has(name) && !ownsCssLayoutAttribute(name) && !(name === 'value' && target.localName === 'input');
 /** The layers an element holds besides its own (`data-layout-wrap`, outermost first): `kind;name=value;...` separated by `|`.
  * A layer's field names are the attribute names it would have on an element of its own, without `data-`. */
 const parseLayers = text => text.split('|').map(part => {
@@ -462,7 +466,7 @@ export class CssLayout {
   note(record, target, island) {
     // A text, an element or a layout attribute that changes inside an island can change what a Layout is offered or the size
     // of one of its subviews, though only some of them change a block (the browser lays a text out).
-    if (record.type !== 'attributes' || (affectsLayoutSize(record.attributeName) && record.oldValue !== target.getAttribute(record.attributeName))) this.layoutsStale = true;
+    if (record.type !== 'attributes' || (affectsLayoutSize(record.attributeName, target) && record.oldValue !== target.getAttribute(record.attributeName))) this.layoutsStale = true;
     // What a <select> shows sizes it (`sizeSelects`): the text of its options and which one is selected.
     const labelsSelect = target.localName === 'option' && (record.type === 'characterData' || record.attributeName === 'selected');
     if (labelsSelect) { if (record.type === 'attributes' && record.oldValue === target.getAttribute('selected')) return; }
@@ -476,7 +480,6 @@ export class CssLayout {
   flush() {
     for (const island of this.islands) if (!island.isConnected) { this.islands.delete(island); this.pending.delete(island); this.layoutsStale = true; }
     this.released = [];
-    if (this.pending.size) this.layoutsStale = true;
     this.style();
     // Each pass (a patch, a resize of the window) selects the candidate of every ViewThatFits for what it is offered now.
     if (this.fits.size) this.chooseFits();
@@ -714,6 +717,8 @@ export class CssLayout {
   /** Analyses and styles the islands with pending changes. */
   style() {
     if (this.pending.size === 0) return;
+    // A block it writes can change what a Layout is offered (whoever styles: a pass, a ViewThatFits choice, the oracle).
+    this.layoutsStale = true;
     for (const island of this.pending) {
       // Something CSS cannot express appeared in it: the host reports it (`released`).
       if (!this.claim(island)) { this.release(island); this.released.push(island); continue; }
