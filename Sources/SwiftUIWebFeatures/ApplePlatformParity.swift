@@ -239,7 +239,11 @@ public enum WindowResizability: Sendable { case automatic, contentSize, contentM
 public extension View {
   nonisolated func listSectionSeparator(_ visibility: Visibility, edges: VerticalEdge.Set = .all) -> some View { self }
 
-  nonisolated func presentationBackground<S: ShapeStyle>(_ style: S) -> some View { self }
+  /// The presentation's own surface takes the style: a sheet or a cover paints it under its content, in place of the
+  /// default panel colour.
+  nonisolated func presentationBackground<S: ShapeStyle>(_ style: S) -> some View {
+    modifier(_SemanticCompatibilityModifier(attributes: ["data-presentation-background": style._swiftUIWebCSSValue]))
+  }
 
   nonisolated func presentationBackground<V: View>(alignment: Alignment = .center, @ViewBuilder content: () -> V) -> some View { self }
 

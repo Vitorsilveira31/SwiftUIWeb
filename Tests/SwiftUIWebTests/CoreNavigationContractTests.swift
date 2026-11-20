@@ -580,6 +580,78 @@ struct CoreNavigationContractTests {
   }
 
   @Test
+  func aPushThePathBindingDeclinesLeavesTheHistoryAlone() {
+    final class Recorder: NavigationHistoryAdapter {
+      var operations: [NavigationHistoryOperation] = []
+      func apply(_ operation: NavigationHistoryOperation) { operations.append(operation) }
+    }
+    final class Handled { var routes: [Int] = [] }
+    struct Root: View {
+      let history: Recorder
+      let handled: Handled
+      var body: some View {
+        // The app takes the route elsewhere (another stack, a panel's presenter) and keeps this path empty.
+        NavigationStack(path: Binding<[Int]>(get: { [] }, set: { handled.routes.append(contentsOf: $0) })) {
+          NavigationLink(value: 7) { Text("Open seven") }
+            .navigationDestination(for: Int.self) { Text("Screen \($0)") }
+        }
+        .environment(\.navigationHistory, history)
+      }
+    }
+
+    let history = Recorder()
+    let handled = Handled()
+    let root = Root(history: history, handled: handled)
+    let tree = FiberTree(root)
+    tree.dispatch(event: "click", on: tree.findNode(withEvent: "click"))
+    _ = tree.update(root)
+
+    #expect(handled.routes == [7])
+    #expect(!tree.renderNode.htmlDescription.contains("Screen 7"))
+    #expect(history.operations.isEmpty)
+  }
+
+  @Test
+  func aPathSetByCodeIsRecordedInTheHistory() {
+    final class Recorder: NavigationHistoryAdapter {
+      var operations: [NavigationHistoryOperation] = []
+      func apply(_ operation: NavigationHistoryOperation) { operations.append(operation) }
+    }
+    struct Root: View {
+      let history: Recorder
+      @State var routes: [Int] = []
+      var body: some View {
+        VStack {
+          Button("Open by code") { routes = [3] }
+          Button("Back to the root") { routes = [] }
+          NavigationStack(path: $routes) {
+            Text("Root")
+              .navigationDestination(for: Int.self) { Text("Screen \($0)") }
+          }
+          .environment(\.navigationHistory, history)
+        }
+      }
+    }
+
+    let history = Recorder()
+    let root = Root(history: history)
+    let tree = FiberTree(root)
+    func button(_ label: String) -> _RenderNode? {
+      findNode(tree.renderNode) { $0.events["click"] != nil && $0.htmlDescription.contains(label) }
+    }
+    tree.dispatch(event: "click", on: button("Open by code"))
+    _ = tree.update(root)
+    #expect(tree.renderNode.htmlDescription.contains("Screen 3"))
+    #expect(history.operations.count == 1)
+    if case .push = history.operations.last {} else { Issue.record("A path set by code should push browser history") }
+
+    tree.dispatch(event: "click", on: button("Back to the root"))
+    _ = tree.update(root)
+    #expect(history.operations.count == 2)
+    if case .back = history.operations.last {} else { Issue.record("A path emptied by code should move browser history back") }
+  }
+
+  @Test
   func activeDestinationLinkUsesSelectionAndDismissCallbacks() {
     struct Destination: View {
       @Environment(\.dismiss) private var dismiss

@@ -121,6 +121,21 @@ struct ControlStyleParityTests {
   }
 
   @Test
+  func presentationBackgroundPaintsTheSheetSurface() {
+    struct Fixture: View {
+      @State var presented = true
+      var body: some View {
+        Text("Root").sheet(isPresented: $presented) {
+          Text("Sheet").presentationBackground(Color.black)
+        }
+      }
+    }
+    let tree = FiberTree(Fixture())
+    let sheet = all(tree.renderNode) { $0.classes.contains("sheet-panel") }.first
+    #expect(sheet?.styles["background"] == Color.black._swiftUIWebCSSValue)
+  }
+
+  @Test
   func detentsSizeTheSheetAndStartAtTheSmallestDetent() {
     struct Fixture: View {
       @State var presented = true

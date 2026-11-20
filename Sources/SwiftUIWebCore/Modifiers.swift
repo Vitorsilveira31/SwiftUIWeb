@@ -2969,6 +2969,11 @@ private func presentationClass(_ style: String) -> String {
   // rendered child. Mirror the values onto the sheet wrapper as well. This
   // gives browser hosts one stable surface to size and gesture while keeping
   // the original child node/event identity intact for selection bindings.
+  // `presentationBackground(_:)`: the sheet's or the cover's surface, not an alert's.
+  if style != "alert", style != "confirmation-dialog",
+     let background = presentationMetadataValue(in: content, key: "data-presentation-background") {
+    node.styles["background"] = background
+  }
   if style == "sheet" {
     let metadataKeys = [
       "data-presentation-detents",

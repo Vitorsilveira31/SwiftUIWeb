@@ -385,16 +385,26 @@ final class NavigationContext {
   }
 
   @MainActor fileprivate func push<Value: Hashable>(_ value: Value) {
-    var next = path.wrappedValue
-    next.append(value)
-    path.wrappedValue = next
+    commit { $0.append(value) }
   }
 
   @MainActor fileprivate func push(destination: AnyView) {
-    var next = path.wrappedValue
     directCounter += 1
-    next.append(destination: destination, key: _FiberKey("destination-\(directCounter)"))
+    let key = _FiberKey("destination-\(directCounter)")
+    commit { $0.append(destination: destination, key: key) }
+  }
+
+  /// Changes the stack's path, then records the change in the browser history only as far as the path took it: a
+  /// path binding that keeps its value (an app that handles the route elsewhere) leaves the history as it was, instead
+  /// of an entry for a screen that never opened.
+  @MainActor private func commit(_ change: (inout NavigationPath) -> Void) {
+    var next = path.wrappedValue
+    let observer = next.observer
+    next.observer = nil
+    change(&next)
+    next.observer = observer
     path.wrappedValue = next
+    observer?.changed(to: path.wrappedValue)
   }
 
   @MainActor fileprivate func dismiss() {
@@ -409,10 +419,8 @@ final class NavigationContext {
   }
 
   @MainActor fileprivate func popPath() {
-    var next = path.wrappedValue
-    guard !next.isEmpty else { return }
-    next.removeLast()
-    path.wrappedValue = next
+    guard !path.wrappedValue.isEmpty else { return }
+    commit { $0.removeLast() }
   }
 
   fileprivate func registerActive(isPresented: @escaping () -> Bool, dismiss: @escaping () -> Void, build: @escaping () -> AnyView) {
@@ -461,6 +469,9 @@ public nonisolated struct NavigationStack<Content: View>: View {
   @State(memberID: 905793607) private var internalPath = NavigationPath()
   @State(memberID: 905793608) private var mixedBase: NavigationPath? = nil
   @State(memberID: 905793609) private var pathRevision = 0
+  /// The stack's history observer, kept across renders: a path the app rebuilds or replaces (a typed collection
+  /// binding, a path set by code) arrives without it, and the stack still compares it with what the history holds.
+  @State(memberID: 905793610) private var historyObserver = _NavigationHistoryObserverBox()
 
   nonisolated public init(@ViewBuilder root: () -> Content) {
     self.content = root()
@@ -534,10 +545,24 @@ public nonisolated struct NavigationStack<Content: View>: View {
     // A stack is evaluated for every Fiber refresh. Installing a new observer
     // on every pass resets the previous-path snapshot and registers duplicate
     // browser callbacks, which makes push/pop appear to stop working after
-    // the first interaction. The observer travels with the path value and is
-    // only installed again when callers replace the path with a fresh value.
-    guard current.observer == nil else { return }
+    // the first interaction. The observer travels with the path value; the
+    // stack keeps it too, for a path that comes back without it.
+    if let observer = current.observer {
+      historyObserver.observer = observer
+      return
+    }
+    if let observer = historyObserver.observer {
+      // The app replaced the path (code set it, or a typed collection binding
+      // rebuilt it): reattach the observer and record the change, as SwiftUI
+      // shows a path set by code.
+      var observed = current
+      observed.observer = observer
+      binding.wrappedValue = observed
+      observer.changed(to: current)
+      return
+    }
     let observer = _NavigationPathObserver(previous: current, history: history)
+    historyObserver.observer = observer
     var observed = current
     observed.observer = observer
     binding.wrappedValue = observed
@@ -2542,6 +2567,11 @@ extension TabViewCustomization: Codable {}
 /// Bridges a typed collection binding to the stack's `NavigationPath`. The
 /// history observer lives with the NavigationPath value; a typed collection
 /// cannot hold it, so the bridge keeps it beside the binding.
+/// Holds a stack's history observer across renders (`NavigationStack.historyObserver`).
+private final class _NavigationHistoryObserverBox {
+  var observer: _NavigationPathObserver?
+}
+
 private final class _TypedNavigationPathBridge {
   var observer: _NavigationPathObserver?
 }
