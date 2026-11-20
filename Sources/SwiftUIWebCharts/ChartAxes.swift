@@ -296,7 +296,9 @@ func _chartAxisValues(_ spec: AxisMarkValues, lower: Double, upper: Double, isDa
   case .stride:
     step = max(spec.step, range / 500)
   case .automatic:
-    let desired = Double(max(spec.desiredCount ?? 5, 2))
+    // Swift Charts marks a date axis by calendar units, about three of them across a plot (a week apart over two
+    // weeks), and a number axis about five times.
+    let desired = Double(max(spec.desiredCount ?? (isDate ? 3 : 5), 2))
     var automaticStep = isDate ? _chartTimeStep(range: range, desired: desired) : _chartNiceStep(range / desired)
     if let minimum = spec.minimumStride {
       while automaticStep < minimum { automaticStep = _chartNextNiceStep(automaticStep) }
