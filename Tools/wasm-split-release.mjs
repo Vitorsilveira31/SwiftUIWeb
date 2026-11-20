@@ -47,6 +47,7 @@ export const SECONDARY = "app-rest.wasm";
 export const PLACEHOLDER_NAMESPACE = "p";
 export const PRIMARY_NAMESPACE = "primary";
 const MOUNTED = 'html[data-embedded-mounted="true"]';
+const SETTLE_LIMIT_MS = 8_000;
 const QUIET_MS = 400;
 
 // Keeps the instance of an instrumented module where the evaluation below finds it. Prepended to the copy of the
@@ -164,12 +165,17 @@ export async function settle(page, timeout = 60_000) {
   } catch (error) {
     throw new Error(`the app did not mount within ${timeout / 1000} s (${error.message.split("\n")[0]}): the first screen cannot be profiled`);
   }
-  await page.evaluate((quietMs) => new Promise((done) => {
-    let timer = 0;
-    const quiet = () => { clearTimeout(timer); timer = setTimeout(async () => { await document.fonts.ready; done(); }, quietMs); };
+  // The first screen is ready once commits stop for `QUIET_MS`, or after `SETTLE_LIMIT_MS` for an app that never stops
+  // (a TimelineView, data that keeps arriving: Food Truck's animated header and its new orders), which made the release
+  // build wait forever.
+  await page.evaluate(([quietMs, limitMs]) => new Promise((done) => {
+    let timer = 0, finished = false;
+    const finish = async () => { if (finished) return; finished = true; clearTimeout(timer); clearTimeout(limit); window.removeEventListener("commit-phase", quiet); await document.fonts.ready; done(); };
+    const quiet = () => { clearTimeout(timer); timer = setTimeout(finish, quietMs); };
+    const limit = setTimeout(finish, limitMs);
     window.addEventListener("commit-phase", quiet);
     quiet();
-  }), QUIET_MS);
+  }), [QUIET_MS, SETTLE_LIMIT_MS]);
 }
 
 /** Loads the bundle at `base` and returns the profile its first screen wrote, read from the Worker (or the page). */
