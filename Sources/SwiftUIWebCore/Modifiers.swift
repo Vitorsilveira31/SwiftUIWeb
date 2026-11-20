@@ -1312,6 +1312,11 @@ private func _cssRoundedShape<S: Shape>(_ shape: S) -> _CSSRoundedShape? {
   if let capsule = shape as? Capsule {
     return _CSSRoundedShape(radius: "9999px", outlineRadius: "9999px", inset: capsule._insetAmount)
   }
+  // The container's shape is only known to CSS (the inherited radius), so CSS draws it, as it draws a rounded rectangle.
+  if shape is ContainerRelativeShape {
+    let radius = "var(--container-shape-radius, 0px)"
+    return _CSSRoundedShape(radius: radius, outlineRadius: radius, inset: 0)
+  }
   return nil
 }
 
@@ -2396,7 +2401,11 @@ package nonisolated struct ShapeStyleBackgroundModifier<Style: ShapeStyle>: View
     node.attributes["data-background-style"] = style._swiftUIWebCSSValue
     // SwiftUI fills a background without a shape in the container's shape (`containerShape(_:)`): Food Truck's cards,
     // `.background()` in a Grid that declares a 12-point rounded rectangle, are rounded. Without one it is the box.
-    if node.styles["border-radius"] == nil { node.styles["border-radius"] = "var(--container-shape-radius, 0px)" }
+    // Over clipped content (a background or overlay wrapper), the clip's radius is the fallback, so a shadow on the
+    // wrapper still follows the clip when no container declares a shape.
+    if node.styles["border-radius"] == nil {
+      node.styles["border-radius"] = "var(--container-shape-radius, \(_wrappedClippedRadius(of: node) ?? "0px"))"
+    }
     _applyMaterialBackdrop(style, to: node)
   }
 }

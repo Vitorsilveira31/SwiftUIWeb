@@ -56,4 +56,22 @@ struct ChartAutomaticDomainTests {
     let labels = html.components(separatedBy: "°F<").dropLast().compactMap { $0.split(separator: ">").last.map(String.init) }
     #expect(labels == ["55", "60", "65", "70", "75", "80", "85"], "\(labels)")
   }
+
+  @Test
+  func eachGroupOfMarksKeepsTheSpacingItAsksFor() {
+    let html = StaticHTMLFiberRenderer().render(
+      Chart {
+        LineMark(x: .value("X", 0), y: .value("Y", 0))
+        LineMark(x: .value("X", 1), y: .value("Y", 100))
+      }
+      .chartYAxis {
+        AxisMarks(values: .automatic(desiredCount: 2)) { value in AxisValueLabel("a\(Int(value.as(Double.self)!))") }
+        AxisMarks(values: .automatic(desiredCount: 10)) { value in AxisValueLabel("b\(Int(value.as(Double.self)!))") }
+      }
+      .frame(width: 400, height: 240)
+    )
+    #expect(html.contains(">a50<"))
+    #expect(!html.contains(">a10<"))
+    #expect(html.contains(">b10<"), "the second group asks for ten marks")
+  }
 }

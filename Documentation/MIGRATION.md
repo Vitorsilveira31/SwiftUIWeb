@@ -119,6 +119,23 @@ nested in a private type, or a state declared inside an `#if` in the view, is st
 
 ### Looks that changed
 
+- **A `Canvas` has no border or rounded corners** (visual change to the base rule `.draw-canvas`, which drew a 1-pixel
+  border in the border colour and `--radius-lg` corners). A `Canvas` is what its renderer draws, as in SwiftUI: Food
+  Truck's animated header showed a frame and rounded corners the iPad does not. Before, a canvas over a card showed a
+  thin grey outline with 8-point corners; now its drawing reaches its edges. An application that wants the old look
+  writes it: `.clipShape(RoundedRectangle(cornerRadius: 8))` and
+  `.overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator))`.
+- **`containerShape(_:)` shapes the views below it.** `ContainerRelativeShape` was a rectangle; it now takes the
+  corner radius of the nearest `containerShape`, and a `.background()` without a shape fills that shape, as in SwiftUI
+  (Food Truck's cards, `.background()` in a Grid that declares a 12-point rounded rectangle, are rounded). Without a
+  `containerShape` above them both keep a rectangle, and a background over clipped content keeps the clip's corners.
+- **Catalog images use their 2x file.** An image set with a universal 2x file is copied to `catalog-assets/@2x/` and
+  drawn at its size in points (`srcset`, and canvas images and image paints scaled by its density): images are as
+  sharp as on a Retina screen and keep their size. A set with only a 1x file is unchanged.
+- **An automatic chart domain follows the marks its axis asks for.** With `AxisMarks(values: .automatic(minimumStride:
+  desiredCount: roundLowerBound:))` the domain is rounded to the step those marks use, and the step is the round one
+  whose count is closest to the one asked for, as in Swift Charts: Food Truck's forecast spans 55 to 85 °F marked every
+  5 (it spanned 50 to 90, every 10). A chart without custom marks keeps its domain.
 - **An empty background or overlay leaves its view alone.** `.background { if isHovering { … } }` while not hovering
   (or a background of `EmptyView()`) collapsed the view it decorates to 0×0 and stopped clicks on it: the stylesheet's
   rules for the background layer (`contain: size`, no hit testing) picked the layer as the first child, which is the

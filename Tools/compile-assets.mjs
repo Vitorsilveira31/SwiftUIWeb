@@ -554,8 +554,8 @@ function containedFile(contents, name, root) {
 
 /** File of an image set named by its Contents.json, or null, with its scale (1 unless the set gives it). The universal 2x
  * file wins when the set has one: a browser window is usually twice as dense as its CSS pixels, where Food Truck's header,
- * drawn from the 1x files, was half as sharp as on iPad. The page draws it at its size in points (`srcset`, by the `@2x`
- * its name keeps). Then the 1x file, then the first one. */
+ * drawn from the 1x files, was half as sharp as on iPad. The page draws it at its size in points (`srcset`, by the
+ * `catalog-assets/@2x/` folder it is copied to). Then the 1x file, then the first one. */
 export function imagesetSource(contents, root) {
   const entries = asList(jsonGet(readJson(contents), "images", []));
   const candidates = entries.filter((e) => isTruthy(jsonGet(e, "filename", undefined)));
@@ -697,8 +697,9 @@ export function installImages(images, bundle) {
   const target = joinPath(bundle, ASSET_DIRECTORY);
   mkdirSync(target, { recursive: true });
   for (const [name, entry] of images) {
-    // A 2x file keeps `@2x` in its name: the page draws it at half its pixels (embedded-dom.js, `densityOf`).
-    const source = typeof entry === "string" ? entry : entry.path, density = typeof entry === "string" ? "" : "@2x";
+    // A 2x file goes in `catalog-assets/@2x/`, which no catalog name can produce (a name's "/" becomes "__"): the page
+    // draws it at half its pixels (embedded-dom.js, `densityOf`).
+    const source = typeof entry === "string" ? entry : entry.path, density = typeof entry === "string" ? "" : "@2x/";
     // The manifest is written as NAME=path;NAME=path lines, so a name or extension must not carry those separators or a newline.
     if (/[\x00-\x1f=;\\]/.test(name)) {
       console.error(
@@ -722,10 +723,11 @@ export function installImages(images, bundle) {
       destination = joinPath(target, `${stem}.symbol.svg`);
       writeText(destination, svg);
     } else {
-      destination = joinPath(target, stem + density + suffixOf(nameOf(source)).toLowerCase());
+      if (density) mkdirSync(joinPath(target, density), { recursive: true });
+      destination = joinPath(target, density + stem + suffixOf(nameOf(source)).toLowerCase());
       copyFileSync(source, destination);
     }
-    manifest.set(name, `${ASSET_DIRECTORY}/${nameOf(destination)}`);
+    manifest.set(name, `${ASSET_DIRECTORY}/${density}${nameOf(destination)}`);
   }
   return manifest;
 }

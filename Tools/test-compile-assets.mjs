@@ -105,17 +105,33 @@ describe("CompileAssets", () => {
       assert.equal(mod.main(["x", root, join(root, "o.css"), bundle]), 0);
       assert.equal(readFileSync(join(bundle, "catalog-assets", "AppBrand.svg"), "utf8"), "<svg/>");
       assert.equal(
-        readFileSync(join(bundle, "catalog-assets", "Poster@2x.png"), "latin1"),
+        readFileSync(join(bundle, "catalog-assets", "@2x", "Poster.png"), "latin1"),
         "\x89PNG",
-        "the universal 2x file wins, its name keeping its density",
+        "the universal 2x file wins, in the folder that gives its density",
       );
       assert.equal(existsSync(join(bundle, "catalog-assets", "Poster.png")), false);
       assert.equal(existsSync(join(bundle, "catalog-assets", "Gone.png")), false);
       assert.deepEqual(readFileSync(join(bundle, "runtime-environment"), "utf8").split("\n").slice(0, -1), [
         "SWIFTUIWEB_LANGUAGE=pt",
-        "SWIFTUIWEB_IMAGE_ASSETS=AppBrand=catalog-assets/AppBrand.svg;Poster=catalog-assets/Poster@2x.png",
+        "SWIFTUIWEB_IMAGE_ASSETS=AppBrand=catalog-assets/AppBrand.svg;Poster=catalog-assets/@2x/Poster.png",
       ]);
       assert.equal(existsSync(join(root, "o.css")), false, "no color sets, no stylesheet");
+    });
+  });
+
+  test("a 2x file cannot take the name of another set", () => {
+    withTemp((root) => {
+      const bundle = join(root, "bundle");
+      mkdirSync(bundle);
+      for (const [set, file, scale, bytes] of [["Badge", "badge@2x.png", "2x", "two"], ["Badge@2x", "other.png", "1x", "one"]]) {
+        const folder = join(root, "App.xcassets", `${set}.imageset`);
+        mkdirSync(folder, { recursive: true });
+        writeFileSync(join(folder, file), bytes);
+        writeJson(join(folder, "Contents.json"), { images: [{ filename: file, idiom: "universal", scale }] });
+      }
+      assert.equal(mod.main(["x", root, join(root, "o.css"), bundle]), 0);
+      assert.equal(readFileSync(join(bundle, "catalog-assets", "@2x", "Badge.png"), "utf8"), "two");
+      assert.equal(readFileSync(join(bundle, "catalog-assets", "Badge@2x.png"), "utf8"), "one");
     });
   });
 

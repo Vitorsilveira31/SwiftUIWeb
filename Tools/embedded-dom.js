@@ -7,10 +7,10 @@ import {AdaptiveTabShell} from './tab-shell.js';
 import {GeometryHost} from './geometry-host.js';
 import {MediaHost} from './media-host.js';
 import {SplitViewHost} from './split-view-host.js';
-/** The density a catalog image's file was drawn for, from the `@2x` or `@3x` its name keeps (before a release hash): 1
- * otherwise. */
+/** The density a catalog image's file was drawn for, from the folder Tools/compile-assets.mjs puts it in
+ * (`catalog-assets/@2x/`, which no catalog name can produce): 1 otherwise. */
 function densityOf(url) {
-  const match = /@([23])x(?:\.[0-9a-z]+)?\.[a-z0-9]+(?:[?#].*)?$/i.exec(String(url || ''));
+  const match = /(?:^|\/)catalog-assets\/@([23])x\//.exec(String(url || ''));
   return match ? Number(match[1]) : 1;
 }
 
@@ -1018,7 +1018,9 @@ export function mountEmbeddedBrowser(instance, options = {}) {
     // `data-enter-animation` and `data-navigation-motion` are the transition host's: they mark a surface while its entry
     // animation runs, and the screen under a push or a pop while it plays (inert while a push covers it).
     const covered = old.getAttribute('data-navigation-motion') === 'covered';
-    const skip = name => name === 'style' || name === 'data-enter-animation' || name === 'data-navigation-motion' || name === 'data-scrolled' || (covered && name === 'inert') || ownsLayoutAttribute(name) || (nativeDetails && name === 'open') || (hostOwns !== null && hostOwns(name)) || (isIcon && (name === 'data-lucide' || name === 'data-lucide-fallback'));
+    // The density descriptor the page gives a catalog image drawn for a denser screen is the page's, not Swift's.
+    const keepsDensity = old.localName === 'img' && densityOf(next.getAttribute('src')) > 1 && !next.hasAttribute('srcset');
+    const skip = name => (keepsDensity && name === 'srcset') || name === 'style' || name === 'data-enter-animation' || name === 'data-navigation-motion' || name === 'data-scrolled' || (covered && name === 'inert') || ownsLayoutAttribute(name) || (nativeDetails && name === 'open') || (hostOwns !== null && hostOwns(name)) || (isIcon && (name === 'data-lucide' || name === 'data-lucide-fallback'));
     // Backwards over the live list, so a removal does not shift the attributes still to visit.
     const current = old.attributes;
     for (let index = current.length - 1; index >= 0; index--) {
@@ -2046,7 +2048,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   plugins.push({
     needsSync: changes => changes.everything || changes.touches('img', ['src']),
     sync() {
-      for (const image of root.querySelectorAll('img[src*="@2x"],img[src*="@3x"]')) {
+      for (const image of root.querySelectorAll('img[src*="catalog-assets/@2x/"],img[src*="catalog-assets/@3x/"]')) {
         // A candidate's URL cannot hold a space or a comma unescaped (catalog names do: "1 Small Clouds").
         const src=image.getAttribute('src'), density=densityOf(src), wanted=density>1?`${src.replace(/[\s,]/g,c=>encodeURIComponent(c))} ${density}x`:null;
         if (wanted && image.getAttribute('srcset')!==wanted) image.setAttribute('srcset',wanted);
@@ -2678,7 +2680,9 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   // sizes one tile from the source rect times `z`. A not-yet-loaded image yields null (nothing drawn).
   function canvasTile(ctx, shading) {
     const image=canvasImage(shading.src, null); if (!image) return null;
-    const iw=pointWidth(image), ih=pointHeight(image);
+    // The source rect is read in the decoded image's pixels; the tile is drawn in points, so a file drawn for a denser
+    // screen tiles at its pixels divided by its density.
+    const iw=image.naturalWidth, ih=image.naturalHeight, density=imageDensities.get(image)||1;
     let source=image;
     if (shading.sx!==0||shading.sy!==0||shading.sw!==1||shading.sh!==1) {
       const cw=Math.max(1,Math.round(iw*shading.sw)), ch=Math.max(1,Math.round(ih*shading.sh));
@@ -2687,7 +2691,8 @@ export function mountEmbeddedBrowser(instance, options = {}) {
       source=crop;
     }
     const pattern=ctx.createPattern(source,'repeat'); if (!pattern) return null;
-    pattern.setTransform(new DOMMatrix([shading.z,0,0,shading.z,shading.ox,shading.oy]));
+    const scale=shading.z/density;
+    pattern.setTransform(new DOMMatrix([scale,0,0,scale,shading.ox,shading.oy]));
     return pattern;
   }
   function canvasShading(ctx, canvas, shading) {
@@ -2764,7 +2769,8 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   const imagePaintCrops = new Map();
   function imagePaintCrop(image, source, rect) {
     const key=source+'|'+rect.join(','); const cached=imagePaintCrops.get(key); if (cached) return cached;
-    const [x,y,w,h]=rect, iw=pointWidth(image), ih=pointHeight(image);
+    // In the decoded image's pixels: the element sizes the crop in points (`syncImagePaints`).
+    const [x,y,w,h]=rect, iw=image.naturalWidth, ih=image.naturalHeight;
     const cw=Math.max(1,Math.round(iw*w)), ch=Math.max(1,Math.round(ih*h));
     const crop=document.createElement('canvas'); crop.width=cw; crop.height=ch;
     crop.getContext('2d').drawImage(image,iw*x,ih*y,iw*w,ih*h,0,0,cw,ch);
