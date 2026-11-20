@@ -20,14 +20,22 @@ private struct Counter: View {
   }
 }
 
+/// Removes what the suite's tests install, inside the global-state gate after each test (`ProcessGlobalStateTrait`).
+/// A `deinit` would run whenever the instance is released, possibly while the next test holds the gate.
+@MainActor private func resetLiveLiterals() {
+  _LiveLiterals.table.removeAll()
+  _LiveLiterals.unsupported.removeAll()
+  _LiveLiterals.unapplied = false
+  _LiveLiterals.launching = false
+  _LiveLiterals.startupOnly.removeAll()
+}
+
 /// The values the development loop replaces in a running page (`_live`, `_LiveLiterals`): what the lowering's
 /// `live-literals` pass writes must mean the literal until another value arrives, and that value afterwards.
-@Suite(.serialized, .processGlobalState)
+@Suite(.serialized, .processGlobalState(tearDown: resetLiveLiterals))
 @MainActor
 final class LiveLiteralsTests {
   init() { _LiveLiterals.table.removeAll(); _LiveLiterals.unsupported.removeAll(); _LiveLiterals.unapplied = false; _LiveLiterals.launching = false; _LiveLiterals.startupOnly.removeAll() }
-  deinit { _LiveLiterals.table.removeAll(); _LiveLiterals.unsupported.removeAll(); _LiveLiterals.unapplied = false; _LiveLiterals.launching = false; _LiveLiterals.startupOnly.removeAll() }
-
   @Test func aLiteralIsItselfUntilAValueArrives() {
     #expect(_live(1, "Hi") == "Hi")
     #expect(_live(2, 8) == 8)

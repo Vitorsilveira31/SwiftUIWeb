@@ -333,21 +333,23 @@ private final class NativeConnectivityTestProbe: @unchecked Sendable {
   }
 }
 
-@Suite(.serialized, .processGlobalState)
+/// Removes what the suite's tests install, inside the global-state gate after each test (`ProcessGlobalStateTrait`).
+/// A `deinit` would run whenever the instance is released, possibly while the next test holds the gate.
+@MainActor private func resetNativeFacadeHosts() {
+  NetworkRuntime.install(nil)
+  NetworkRuntime.installConfigured(nil)
+  NetworkRuntime.installStreaming(nil)
+  NetworkRuntime.installDownloadMaterializer(nil)
+  NetworkRuntime.installWebSocket(nil)
+  NetworkRuntime.installConnectivityProvider(nil)
+  NetworkRuntime.installConnectivitySubscription(nil)
+  NetworkRuntime.installTimeoutScheduler(nil)
+  NetworkRuntime.installTransferProgress(nil)
+}
+
+@Suite(.serialized, .processGlobalState(tearDown: resetNativeFacadeHosts))
 @MainActor
 final class NativeNetworkingFacadeTests {
-  deinit {
-    NetworkRuntime.install(nil)
-    NetworkRuntime.installConfigured(nil)
-    NetworkRuntime.installStreaming(nil)
-    NetworkRuntime.installDownloadMaterializer(nil)
-    NetworkRuntime.installWebSocket(nil)
-    NetworkRuntime.installConnectivityProvider(nil)
-    NetworkRuntime.installConnectivitySubscription(nil)
-    NetworkRuntime.installTimeoutScheduler(nil)
-    NetworkRuntime.installTransferProgress(nil)
-  }
-
   @Test
   func testNativeAndEmbeddedFacadeUseTheSameAsyncAPI() async throws {
     NetworkRuntime.installConfigured { request, _ in

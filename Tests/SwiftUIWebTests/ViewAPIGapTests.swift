@@ -27,14 +27,16 @@ private enum GapStorageLevel: Int, Hashable, Sendable { case low = 1, high = 2 }
   var body: some View { Text("storage") }
 }
 
-@Suite(.serialized, .processGlobalState)
+/// Removes what the suite's tests install, inside the global-state gate after each test (`ProcessGlobalStateTrait`).
+/// A `deinit` would run whenever the instance is released, possibly while the next test holds the gate.
+@MainActor private func resetViewAPIGapStorage() {
+  StorageRuntime.install(nil)
+}
+
+@Suite(.serialized, .processGlobalState(tearDown: resetViewAPIGapStorage))
 @MainActor
 final class ViewAPIGapTests {
   private var values: [String: String] = [:]
-
-  deinit {
-    StorageRuntime.install(nil)
-  }
 
   private func installStorage() {
     StorageRuntime.install(StorageAdapter(

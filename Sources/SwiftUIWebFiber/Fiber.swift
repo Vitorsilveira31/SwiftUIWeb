@@ -2232,10 +2232,6 @@ package final class FiberTree {
     fibersByIdentity[identity]
   }
 
-  private func releaseChildren(of fiber: Fiber) {
-    for child in fiber.children { releaseSubtree(child) }
-  }
-
   /// Calls `body` on every fiber of the subtree, each after its children and in sibling order: what a recursion does,
   /// without a WebAssembly frame per level of a tree that a deep view hierarchy makes as deep.
   private func forEachFiberChildrenFirst(_ root: Fiber, _ body: (Fiber) -> Void) {
@@ -2288,29 +2284,13 @@ package final class FiberTree {
     removeOwnerIndex(token, for: fiber)
   }
 
-  private func releaseOwnerState(for fiber: Fiber) {
-    releaseOwnerState(for: fiber, preservingStateScopes: [])
-  }
-
   private func releaseOwnerState(for fiber: Fiber, preservingStateScopes activePaths: Set<_FiberPath>) {
     releaseStateScopes(for: fiber, preservingStateScopes: activePaths)
     releaseRenderOwner(for: fiber)
   }
 
-  private func releaseSubtree(_ root: Fiber) {
-    // Debug hook intentionally left silent in release builds; the arena
-    // generation guard below makes double releases harmless.
-    releasingStateScopes {
-      forEachFiberChildrenFirst(root) { fiber in
-        releaseOwnerState(for: fiber)
-        if fibersByIdentity[fiber.identity] === fiber { fibersByIdentity.removeValue(forKey: fiber.identity) }
-        metrics.removedNodes += 1
-        structuralArena.release(fiber.structuralID)
-      }
-    }
-  }
-
   private func releaseSubtree(_ root: Fiber, preservingStateScopes activePaths: Set<_FiberPath>) {
+    // The arena's generation guard makes a second release of a fiber harmless.
     releasingStateScopes {
       forEachFiberChildrenFirst(root) { fiber in
         releaseOwnerState(for: fiber, preservingStateScopes: activePaths)

@@ -194,9 +194,11 @@ await runSuite(async () => {
     await page.getByText("Large detail", { exact: true }).waitFor({ timeout: 10_000 });
     await page.evaluate(SETTLED);
     const large = await page.evaluate(`(${MEASURE})()`);
+    // As iPadOS draws it (#87): the bar's 48-point row on top, even with no items in it, the 34-point title below it in
+    // a bar at least 104 points tall, and the screen below the bar.
     check(
-      "a large title with no bar items starts at the top, with no empty bar row above it, and the screen below it",
-      large.backBottom === null && large.padTop === 0 && large.destinationTop > 0,
+      "a large title sits below the bar's row, as on iPadOS, and the screen below it",
+      large.backBottom === null && large.padTop === 48 && large.destinationTop >= 104,
       `measure=${JSON.stringify(large)}`,
     );
     await openFixture("Open navigation bar fixture");

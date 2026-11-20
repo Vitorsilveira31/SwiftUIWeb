@@ -24,14 +24,16 @@ private struct HardeningOutlineNode: Identifiable {
   var children: [HardeningOutlineNode]?
 }
 
+/// Removes what the suite's tests install, inside the global-state gate after each test (`ProcessGlobalStateTrait`).
+/// A `deinit` would run whenever the instance is released, possibly while the next test holds the gate.
+@MainActor private func resetHardeningStorage() {
+  StorageRuntime.install(nil)
+}
+
 // `StorageRuntime` is process-global, so these tests run serialized, as the other storage suites do.
-@Suite(.serialized, .processGlobalState)
+@Suite(.serialized, .processGlobalState(tearDown: resetHardeningStorage))
 @MainActor
 final class FiberRuntimeHardeningTests {
-  deinit {
-    StorageRuntime.install(nil)
-  }
-
   @Test
   func testInstanceBoundAttributeChangeReachesRetainedStatelessNode() {
     let tree = FiberTree(InstanceAttributeProbe(ratio: "1.0"))

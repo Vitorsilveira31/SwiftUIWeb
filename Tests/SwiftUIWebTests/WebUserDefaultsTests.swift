@@ -2,15 +2,19 @@ import Testing
 @testable import SwiftUIWebCore
 @testable import SwiftUIWebFeatures
 
+/// Removes what the suite's tests install, inside the global-state gate after each test (`ProcessGlobalStateTrait`).
+/// A `deinit` would run whenever the instance is released, possibly while the next test holds the gate.
+@MainActor private func resetUserDefaultsStorage() {
+  StorageRuntime.install(nil)
+}
+
 /// `UserDefaults` in the browser is the app scope of `StorageRuntime` (`localStorage`): typed values
 /// round-trip as the same strings `@AppStorage` writes, suites keep their keys apart, and `nil`
 /// removes a key.
-@Suite(.serialized, .processGlobalState)
+@Suite(.serialized, .processGlobalState(tearDown: resetUserDefaultsStorage))
 @MainActor
 final class WebUserDefaultsTests {
   private var values: [String: String] = [:]
-
-  deinit { StorageRuntime.install(nil) }
 
   private func install() {
     StorageRuntime.install(StorageAdapter(

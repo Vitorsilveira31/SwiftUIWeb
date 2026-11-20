@@ -273,6 +273,10 @@ CI (`.github/workflows/ci.yml`) runs these jobs on every pull request and every 
 - `browser`, on Ubuntu with Chromium: `make architecture-audit` and `make browser-test`.
 - `apple`, on macOS: `make webkit-browser-test security-browser-test` and `make universal-app-test`.
 
+The jobs that build WebAssembly install a pinned Binaryen release (`.github/actions/setup-binaryen`), so CI builds,
+optimizes and splits `app.wasm` as a release ships it. A pull request keeps only its newest run; a run of `main` is never
+cancelled midway, and the nightly and on-demand runs have concurrency groups of their own.
+
 The nightly jobs run on a schedule and on demand:
 
 - `examples`, on Ubuntu: `make release-browser-test example-test`.

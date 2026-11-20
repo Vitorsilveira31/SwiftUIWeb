@@ -1330,10 +1330,8 @@ public final class URLSessionWebSocketTask: URLSessionTask, @unchecked Sendable 
     get { connectionLock.withLock { _connectionFailure } }
     set { connectionLock.withLock { _connectionFailure = newValue } }
   }
-  private var connection: WebSocketConnection? {
-    get { connectionLock.withLock { _connection } }
-    set { connectionLock.withLock { _connection = newValue } }
-  }
+  /// Written only by `publish`, with the task that resolved it.
+  private var connection: WebSocketConnection? { connectionLock.withLock { _connection } }
   /// Stores the connection and drops the task that resolved it in one step. Done in two, a `send` on another thread
   /// could read the connection before it was set and the task after it was dropped, and see neither.
   private func publish(_ connection: WebSocketConnection) {

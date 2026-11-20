@@ -23,13 +23,18 @@ private struct Form: View {
   }
 }
 
+/// Removes what the suite's tests install, inside the global-state gate after each test (`ProcessGlobalStateTrait`).
+/// A `deinit` would run whenever the instance is released, possibly while the next test holds the gate.
+@MainActor private func resetStateSnapshots() {
+  _StateSnapshots.enabled = false
+  _StateSnapshots.pending.removeAll()
+}
+
 /// The values a debug page hands to the page that replaces it (`_StateSnapshots`, StateSnapshot.swift).
-@Suite(.serialized, .processGlobalState)
+@Suite(.serialized, .processGlobalState(tearDown: resetStateSnapshots))
 @MainActor
 final class StateSnapshotTests {
   init() { _StateSnapshots.enabled = true; _StateSnapshots.pending.removeAll() }
-  deinit { _StateSnapshots.enabled = false; _StateSnapshots.pending.removeAll() }
-
   private func html(_ tree: FiberTree) -> String { tree.renderNode.htmlDescription }
 
   // MARK: The text form of a value

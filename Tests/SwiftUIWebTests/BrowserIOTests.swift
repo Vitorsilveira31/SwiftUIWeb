@@ -52,6 +52,11 @@ final class BrowserIOTests {
     #expect(browser_io_result_length(0) == 0)
     #expect(browser_io_result_copy(0, nil, 0) == -7)
     browser_io_result_release(0)
+    // A native host has no shared binary atom table: it writes none and reports none, whatever the buffer.
+    var atoms = [UInt8](repeating: 0xAB, count: 4)
+    #expect(atoms.withUnsafeMutableBufferPointer { browser_io_binary_atoms($0.baseAddress, 4) } == 0)
+    #expect(atoms == [0xAB, 0xAB, 0xAB, 0xAB])
+    #expect(browser_io_binary_atoms(nil, 0) == 0)
   }
 
   @Test
