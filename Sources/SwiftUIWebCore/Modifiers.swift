@@ -2331,6 +2331,22 @@ package nonisolated struct ShapeStyleBackgroundModifier<Style: ShapeStyle>: View
       node.events = .init()
       return
     }
+    // A background already on the element was applied inside this one: SwiftUI draws this one behind it. The inner paint
+    // becomes an image layer over this one, which takes the element's color (or the bottom image layer).
+    if let inner = node.styles["background-color"] ?? node.styles["background"], !inner.isEmpty {
+      let layer = { (paint: String) in _isCSSImage(paint) ? paint : "linear-gradient(\(paint), \(paint))" }
+      let innerLayer = layer(inner)
+      node.styles["background"] = nil
+      node.styles["background-color"] = nil
+      if style._swiftUIWebSolidColor != nil {
+        node.styles["background-image"] = innerLayer
+        node.styles["background-color"] = _paintCSSValue(style)
+      } else {
+        node.styles["background-image"] = "\(innerLayer), \(layer(_paintCSSValue(style)))"
+      }
+      _applyMaterialBackdrop(style, to: node)
+      return
+    }
     // A solid paint (`Color`, hierarchical levels, `.tint`) is a background color, as `background(_:)` always was;
     // other styles use the `background` shorthand for their image or gradient paint.
     if style._swiftUIWebSolidColor != nil {
@@ -2342,6 +2358,18 @@ package nonisolated struct ShapeStyleBackgroundModifier<Style: ShapeStyle>: View
     node.attributes["data-background-style"] = style._swiftUIWebCSSValue
     _applyMaterialBackdrop(style, to: node)
   }
+}
+
+/// Whether a CSS paint is an image (a gradient or a URL), which a background layer takes as it is; a color is not. Byte
+/// matching, as the Embedded build has no Foundation substring search.
+func _isCSSImage(_ paint: String) -> Bool {
+  let bytes = Array(paint.utf8)
+  for needle in [Array("gradient(".utf8), Array("url(".utf8)] where bytes.count >= needle.count {
+    for start in 0...(bytes.count - needle.count) where bytes[start] == needle[0] {
+      if Array(bytes[start..<(start + needle.count)]) == needle { return true }
+    }
+  }
+  return false
 }
 
 private func _meshBackgroundNode(_ mesh: MeshGradient, context: _RenderContext) -> _RenderNode {

@@ -74,7 +74,9 @@ public struct ForegroundStyle: ShapeStyle, Hashable, Sendable {
 /// The environment's background style (the color-scheme aware canvas).
 public struct BackgroundStyle: ShapeStyle, Hashable, Sendable {
   public init() {}
-  public var _swiftUIWebCSSValue: String { Color.systemBackground.cssValue }
+  /// The environment's background style (`backgroundStyle(_:)` sets it for the views inside, as a custom property they
+  /// inherit), or the system background.
+  public var _swiftUIWebCSSValue: String { "var(--swu-background-style, \(Color.systemBackground.cssValue))" }
   public var _swiftUIWebSolidColor: Color? { Color.systemBackground }
 }
 

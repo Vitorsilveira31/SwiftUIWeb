@@ -130,8 +130,11 @@ public extension View {
     modifier(GridCellModifier(name: "data-grid-column-alignment", value: guide.cssValue))
   }
 
-  /// The style `.background()` falls back to. The framework paints its own default background.
-  nonisolated func backgroundStyle<S: ShapeStyle>(_ style: S) -> Self { self }
+  /// The style `.background()` and `background(in:)` paint inside this view: a custom property the views inside inherit,
+  /// as they inherit the environment value in SwiftUI (`BackgroundStyle`).
+  nonisolated func backgroundStyle<S: ShapeStyle>(_ style: S) -> some View {
+    modifier(_SemanticCompatibilityModifier(attributes: [:], styles: ["--swu-background-style": style._swiftUIWebCSSValue]))
+  }
 }
 
 /// Writes one grid attribute onto the cell. Kept as a modifier so the value flows through nested views to the grid row

@@ -1379,6 +1379,7 @@ private enum DynamicTypeSizeEnvironmentKey: EnvironmentKey {
 private enum FocusedEnvironmentKey: EnvironmentKey { static let defaultValue = false }
 private enum DatePickerStyleEnvironmentKey: EnvironmentKey { static let defaultValue = "automatic" }
 private enum TabViewStyleEnvironmentKey: EnvironmentKey { static let defaultValue = "automatic" }
+private enum InSidebarEnvironmentKey: EnvironmentKey { static let defaultValue = false }
 private enum TabViewCustomizationEnvironmentKey: EnvironmentKey { static let defaultValue = TabViewCustomization() }
 // As SwiftUI, a TabView keeps every tab it has shown: going back to one shows its content at once, with its state.
 // Hidden panels are `display: none`, so the browser skips their style and layout. `.tabViewMountPolicy(.recent(n))`
@@ -1737,6 +1738,13 @@ public extension EnvironmentValues {
   package var tabViewMountPolicy: TabViewMountPolicy {
     get { self[TabViewMountPolicyEnvironmentKey.self] }
     set { self[TabViewMountPolicyEnvironmentKey.self] = newValue }
+  }
+
+  /// Whether the view is in a `NavigationSplitView`'s sidebar column, where a list is a source list: a section's rows
+  /// are rows of the list as its other rows are, not the cards of a grouped list.
+  package var _isInSidebar: Bool {
+    get { self[InSidebarEnvironmentKey.self] }
+    set { self[InSidebarEnvironmentKey.self] = newValue }
   }
 
   /// The inherited `TabView` presentation token. The browser host owns the

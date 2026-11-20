@@ -63,6 +63,31 @@ const side = a => a <= 0.25 ? 0 : a >= 0.75 ? 2 : 1;
 const align = value => /start|leading|top/.test(value || '') ? 0 : /end|trailing|bottom/.test(value || '') ? 1 : .5;
 /** A canvas that carries its own frame (`frame(...)` keeps the element): the drawing it holds is a flexible leaf with no element. */
 const framedCanvas = n => n.kind === 'frame' && !n.virtual && n.element.localName === 'canvas' && !n.element.children.length;
+/** A List row (a row of `.list-view`, or a section row's content) spans the row, as a SwiftUI List lays its rows out: its
+ * selection fill and its tap target cover the row, not only its label. In a sidebar the row keeps the stylesheet's padding,
+ * the source list's own row metrics, which a plain stack would zero. */
+const isListRow = element => {
+  const holder = element?.parentElement;
+  return !!holder && element.localName === 'a' && element.classList.contains('navigation-link') &&
+    (holder.classList.contains('list-view') ||
+      (holder.classList.contains('padding-box') && !!holder.parentElement?.classList.contains('section-row')));
+};
+const listRow = (element, declarations) => {
+  // The row's content starts at its leading edge, as a List row's does.
+  if (isListRow(element.parentElement)) {
+    return declarations.map(entry => entry.startsWith('justify-self:') || entry.startsWith('place-self:') ? 'justify-self:start' : entry);
+  }
+  // A section row's inset box spans the section row, so the row inside it can.
+  if (element.classList.contains('padding-box') && element.parentElement?.classList.contains('section-row') &&
+      isListRow(element.firstElementChild)) {
+    return declarations.map(entry => entry.startsWith('justify-self:') || entry.startsWith('place-self:') ? 'justify-self:stretch' : entry);
+  }
+  if (!isListRow(element)) return declarations;
+  const sidebar = !!element.closest('.navigation-sidebar');
+  return declarations
+    .filter(entry => !(sidebar && entry.startsWith('padding:')))
+    .map(entry => entry.startsWith('justify-self:') || entry.startsWith('place-self:') ? 'justify-self:stretch' : entry);
+};
 const LEAVES = new Set(['intrinsic', 'opaque', 'field', 'flexible', 'spacer', 'size']);
 // The kinds the host wraps in a vstack of their own when they hold more than one view.
 const GROUPING = new Set(['frame', 'padding', 'fixed', 'aspect']);
@@ -1768,13 +1793,17 @@ export class CssLayout {
       const ctx = (parent ? parent.ctxKey + '|' + flag + '|' + bits : 'root' + bits) + (n.cap != null ? '|c' + n.cap : '');
       if (n.ctxSeen === ctx && n.applied !== undefined) continue;
       this.stats.nodes++;
-      const value = apply(n.element, this.declarations(n, parent).map(x => x + '!important').join(';'));
+      const value = apply(n.element, listRow(n.element, this.declarations(n, parent)).map(x => x + '!important').join(';'));
       if (!sink) n.applied = value;
       n.ctxSeen = ctx;
       if (n.kind === 'navstack') for (const item of n.bar) apply(item.element, this.barItem(n, item).map(x => x + '!important').join(';'));
       // The element's children are proposed what its innermost layer proposes, and aligned as `chainPlan` says.
       let holder = n;
-      n.heightOut = this.passHeight(n, Infinity);
+      // The height a fitted aspect ratio inside is capped by (`aspectCap`): what the modifiers above propose, carried down
+      // through a GeometryReader, which proposes its own size; a frame with no height of its own passes it on.
+      const inheritedHeight = parent?.heightOut ?? Infinity;
+      const ownHeight = this.passHeight(n, inheritedHeight);
+      n.heightOut = ownHeight != null ? ownHeight : n.kind === 'geometry' ? inheritedHeight : null;
       if (!n.layers && n.kind === 'padding') {
         const m = Object.fromEntries(['top', 'leading', 'bottom', 'trailing'].map(edge => [edge, Math.min(0, num(n.attr('data-padding-' + edge), 0))]));
         n.margin = m.top || m.leading || m.bottom || m.trailing ? m : null;

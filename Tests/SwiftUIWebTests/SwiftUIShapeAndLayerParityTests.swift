@@ -38,12 +38,37 @@ struct SwiftUIShapeAndLayerParityTests {
   }
 
   @Test
+  func aSidebarSectionsRowsHaveNoGroupedListInset() {
+    let sidebar = html(NavigationSplitView {
+      List { Section("Donuts") { Text("Top 5") } }
+    } detail: { Text("Detail") })
+    #expect(sidebar.contains("data-padding-top=\"0\""))
+    let grouped = html(List { Section("Donuts") { Text("Top 5") } })
+    #expect(grouped.contains("data-padding-top=\"12\""))
+  }
+
+  @Test
+  func backgroundStyleReachesTheBackgroundsInside() {
+    let page = html(Text("tag").background(in: .rect(cornerRadius: 5)).backgroundStyle(.red))
+    #expect(page.contains("--swu-background-style:"))
+    #expect(page.contains("var(--swu-background-style, var(--color-swu-background))"))
+  }
+
+  @Test
+  func anOuterBackgroundIsDrawnBehindAnInnerOne() {
+    let page = html(Text("page").background(.red).background(.blue))
+    // The inner (red) paint is an image layer over the outer (blue) color; neither replaces the other.
+    #expect(page.contains("background-image: linear-gradient("))
+    #expect(page.contains("background-color:"))
+  }
+
+  @Test
   func paintFormsOfOverlayAndBackgroundCoverSwiftUISpellings() {
     #expect(html(Text("p").overlay(.red, in: .capsule)).contains("data-shape=\"capsule\""))
     #expect(html(Text("p").background(.yellow, in: .capsule)).contains("data-background-shape=\"capsule\""))
     #expect(html(Text("p").background(.white, in: .rect(cornerRadius: 8), fillStyle: FillStyle())).contains("data-background-shape=\"rounded-rectangle-8\""))
     #expect(html(Text("p").background(in: .rect(cornerRadius: 4))).contains("data-background-shape=\"rounded-rectangle-4\""))
-    #expect(html(Text("p").background()).contains("data-background-style=\"var(--color-swu-background)\""))
+    #expect(html(Text("p").background()).contains("data-background-style=\"var(--swu-background-style, var(--color-swu-background))\""))
     #expect(html(Text("p").background(.ultraThinMaterial, ignoresSafeAreaEdges: .all)).contains("backdrop-filter"))
   }
 

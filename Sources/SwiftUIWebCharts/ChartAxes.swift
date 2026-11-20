@@ -229,9 +229,12 @@ public struct AxisMarks: AxisContent {
   /// True for marks built with the Swift Charts initializers: they replace
   /// the default axis instead of only toggling its visibility.
   let isCustom: Bool
+  /// The side the marks sit on. Swift Charts puts y marks on the trailing side unless they ask for `.leading`.
+  let position: AxisMarkPosition
 
   public init(_ visibility: Visibility, values: [Double]? = nil) {
     isCustom = false
+    position = .automatic
     self.visibility = visibility
     self.values = values
     valueSpec = .automatic
@@ -243,8 +246,9 @@ public struct AxisMarks: AxisContent {
   public static var visible: AxisMarks { AxisMarks(.visible) }
   public static var hidden: AxisMarks { AxisMarks(.hidden) }
 
-  private init(valueSpec: AxisMarkValues, explicitValues: [ChartValue]?, stroke: StrokeStyle?, content: (@MainActor (AxisValue) -> [_AxisItem])?) {
+  private init(position: AxisMarkPosition, valueSpec: AxisMarkValues, explicitValues: [ChartValue]?, stroke: StrokeStyle?, content: (@MainActor (AxisValue) -> [_AxisItem])?) {
     isCustom = true
+    self.position = position
     visibility = .visible
     values = nil
     self.valueSpec = valueSpec
@@ -253,20 +257,20 @@ public struct AxisMarks: AxisContent {
     self.content = content
   }
 
-  /// Marks for the axis's automatically chosen values. `preset` and
-  /// `position` are accepted for source compatibility and have no effect:
-  /// x marks sit below the plot and y marks to its leading side.
+  /// Marks for the axis's automatically chosen values. `preset` is accepted for source compatibility and has no
+  /// effect; x marks sit below the plot, and y marks on its trailing side, as in Swift Charts, or on its leading side
+  /// for `position: .leading`.
   public init<Marks: AxisMark>(preset: AxisMarkPreset = .automatic, position: AxisMarkPosition = .automatic, values: AxisMarkValues = .automatic, stroke: StrokeStyle? = nil, @AxisMarkBuilder content: @escaping @MainActor (AxisValue) -> Marks) {
-    self.init(valueSpec: values, explicitValues: nil, stroke: stroke, content: { content($0)._axisItems() })
+    self.init(position: position, valueSpec: values, explicitValues: nil, stroke: stroke, content: { content($0)._axisItems() })
   }
   public init(preset: AxisMarkPreset = .automatic, position: AxisMarkPosition = .automatic, values: AxisMarkValues = .automatic, stroke: StrokeStyle? = nil) {
-    self.init(valueSpec: values, explicitValues: nil, stroke: stroke, content: nil)
+    self.init(position: position, valueSpec: values, explicitValues: nil, stroke: stroke, content: nil)
   }
   public init<V: Plottable, Marks: AxisMark>(preset: AxisMarkPreset = .automatic, position: AxisMarkPosition = .automatic, values: [V], stroke: StrokeStyle? = nil, @AxisMarkBuilder content: @escaping @MainActor (AxisValue) -> Marks) {
-    self.init(valueSpec: .automatic, explicitValues: values.map { $0._chartValue(label: "") }, stroke: stroke, content: { content($0)._axisItems() })
+    self.init(position: position, valueSpec: .automatic, explicitValues: values.map { $0._chartValue(label: "") }, stroke: stroke, content: { content($0)._axisItems() })
   }
   public init<V: Plottable>(preset: AxisMarkPreset = .automatic, position: AxisMarkPosition = .automatic, values: [V], stroke: StrokeStyle? = nil) {
-    self.init(valueSpec: .automatic, explicitValues: values.map { $0._chartValue(label: "") }, stroke: stroke, content: nil)
+    self.init(position: position, valueSpec: .automatic, explicitValues: values.map { $0._chartValue(label: "") }, stroke: stroke, content: nil)
   }
 
   public func _axisMarksList() -> [AxisMarks] { [self] }

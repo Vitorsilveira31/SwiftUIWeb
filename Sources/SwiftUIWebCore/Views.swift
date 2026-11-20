@@ -1685,6 +1685,7 @@ public struct Section<Header: View, Content: View, Footer: View> {
     let node = _RenderNode.element("section")
     node.classes = ["section-block"]
     let headerContent = header._render(in: context)
+    let sidebar = context.environment._isInSidebar
     // The rows and the footer are laid out from what the content renders, so a deep render builds them where the
     // content renders, in the same order (content, then footer).
     if _RenderStaging.wantsDeferral {
@@ -1692,12 +1693,12 @@ public struct Section<Header: View, Content: View, Footer: View> {
       _deferBuiltChildren(of: node) {
         let c = content._render(in: context.child(_FiberKey("content")))
         let f = footer._render(in: context.child(_FiberKey("footer")))
-        return Self.sectionChildren(header: headerContent, content: c, footer: f)
+        return Self.sectionChildren(header: headerContent, content: c, footer: f, sidebar: sidebar)
       }
     } else {
       let c = content._render(in: context.child(_FiberKey("content")))
       let f = footer._render(in: context.child(_FiberKey("footer")))
-      node.children = Self.sectionChildren(header: headerContent, content: c, footer: f)
+      node.children = Self.sectionChildren(header: headerContent, content: c, footer: f, sidebar: sidebar)
     }
     // A section fills the width of its form or list and lays its rows out from the leading edge, as in SwiftUI;
     // left alone the browser layout shrinks it to its widest row and centres that.
@@ -1711,7 +1712,9 @@ public struct Section<Header: View, Content: View, Footer: View> {
   }
 
   /// The children of a section for what its header, content and footer rendered.
-  @MainActor private static func sectionChildren(header headerContent: _RenderNode, content c: _RenderNode, footer f: _RenderNode) -> [_RenderNode] {
+  /// In a sidebar (`sidebar`) a row keeps the sidebar's own row metrics, as the list's other rows do: no grouped-list
+  /// inset around it.
+  @MainActor private static func sectionChildren(header headerContent: _RenderNode, content c: _RenderNode, footer f: _RenderNode, sidebar: Bool = false) -> [_RenderNode] {
     var children: [_RenderNode] = []
     if !headerContent.isEmpty {
       let h = _RenderNode.element("div")
@@ -1736,8 +1739,9 @@ public struct Section<Header: View, Content: View, Footer: View> {
       padded.classes = ["padding-box"]
       padded.attributes["data-layout-kind"] = "padding"
       padded.attributes["data-layout-schema"] = "1"
-      padded.attributes["data-padding-top"] = "12"; padded.attributes["data-padding-bottom"] = "12"
-      padded.attributes["data-padding-leading"] = "16"; padded.attributes["data-padding-trailing"] = "16"
+      let vertical = sidebar ? "0" : "12", horizontal = sidebar ? "0" : "16"
+      padded.attributes["data-padding-top"] = vertical; padded.attributes["data-padding-bottom"] = vertical
+      padded.attributes["data-padding-leading"] = horizontal; padded.attributes["data-padding-trailing"] = horizontal
       padded.children = [row]
       // The row fills the card so its divider spans it, whatever the row's own width.
       let rowFill = _RenderNode.element("div")

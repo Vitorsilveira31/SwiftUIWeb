@@ -2139,7 +2139,9 @@ public nonisolated struct NavigationSplitView<Sidebar: View, Content: View, Deta
     node.classes = ["navigation-column", "navigation-\(name)"]
     node.attributes["data-navigation-column"] = name
     node.attributes["role"] = role
-    let rendered = content._render(in: context.child(_FiberKey(name)))
+    var columnContext = context.child(_FiberKey(name))
+    if name == "sidebar" { columnContext.environment._isInSidebar = true }
+    let rendered = content._render(in: columnContext)
     node.children = rendered.isEmpty ? [] : [rendered]
     if name == "detail" {
       // Shown only in a compact viewport, where the detail replaces the sidebar; the host handles the tap.
