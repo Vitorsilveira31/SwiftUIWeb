@@ -186,11 +186,13 @@ final class GeometryCoordinateSpaceTests {
     #expect(sizeTree.renderNode.htmlDescription.contains("w=50"))
     let rendersAfterMeasurement = SizeOnlyReaderHost.renders
     #expect(rendersAfterMeasurement > rendersBeforeMeasurement)
-    // Scrolling only moves the reader: no visible change, no re-render.
-    sizeTree.dispatch(event: "geometry", value: "0,-120,50,20", on: sizeNode)
+    // Scrolling only moves the reader: no visible change, no re-render. The page measures the reader it shows, the node
+    // the last render committed (a node drawn for an older size tells the reader to draw again).
+    let shown = try #require(sizeTree.findNode(withEvent: "geometry", in: sizeTree.renderNode))
+    sizeTree.dispatch(event: "geometry", value: "0,-120,50,20", on: shown)
     #expect(sizeTree.renderNode.htmlDescription.contains("w=50"))
     #expect(SizeOnlyReaderHost.renders == rendersAfterMeasurement)
-    sizeTree.dispatch(event: "geometry", value: "0,-120,60,20", on: sizeNode)
+    sizeTree.dispatch(event: "geometry", value: "0,-120,60,20", on: try #require(sizeTree.findNode(withEvent: "geometry", in: sizeTree.renderNode)))
     #expect(sizeTree.renderNode.htmlDescription.contains("w=60"))
 
     let positional = GeometryReader { proxy in

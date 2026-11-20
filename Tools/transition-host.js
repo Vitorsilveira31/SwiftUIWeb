@@ -259,7 +259,7 @@ export class TransitionHost {
     const boxes = new Map();
     for (const child of children) {
       const box = child.getBoundingClientRect();
-      boxes.set(child, {x: box.left - originX, y: box.top - originY});
+      boxes.set(child, {x: box.left - originX, y: box.top - originY, width: box.width, height: box.height});
     }
     this.parents.set(parent, boxes);
   }
@@ -610,8 +610,14 @@ export class TransitionHost {
       for (const [child, was] of before) {
         if (child.parentNode !== parent || this.leaving.has(child)) continue;
         const box = child.getBoundingClientRect();
-        const dx = was.x - (box.left - originX), dy = was.y - (box.top - originY);
-        if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) { const [x, y] = toLocal(basis, dx, dy); moves.push({child, dx: x, dy: y, timing}); }
+        // A sibling that changed size the way a scale would (the hero of Food Truck's New Orders becoming a small tile) grows
+        // or shrinks from its old size about its centre, as SwiftUI animates its frame; one whose proportions changed (a row
+        // that only widened) moves without a scale, which would distort what it holds.
+        const scaleX = box.width > 0 ? was.width / box.width : 1, scaleY = box.height > 0 ? was.height / box.height : 1;
+        const scales = (Math.abs(was.width - box.width) > 0.5 || Math.abs(was.height - box.height) > 0.5) && scaleX > 0 && scaleY > 0 && Math.abs(scaleX / scaleY - 1) < 0.1;
+        const dx = scales ? was.x + was.width / 2 - (box.left - originX + box.width / 2) : was.x - (box.left - originX);
+        const dy = scales ? was.y + was.height / 2 - (box.top - originY + box.height / 2) : was.y - (box.top - originY);
+        if (scales || Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) { const [x, y] = toLocal(basis, dx, dy); moves.push({child, dx: x, dy: y, scale: scales ? [scaleX, scaleY] : null, timing}); }
       }
     }
     // The identity values the inserted and removed elements animate from or to.
@@ -625,8 +631,10 @@ export class TransitionHost {
     });
     this.resume(texts);
     for (const text of texts) if (text.node.parentNode && text.node.isConnected) this.playText(text);
-    for (const {child, dx, dy, timing} of moves) {
-      child.animate([{translate: `${dx}px ${dy}px`}, {translate: '0px 0px'}], {...this.options(timing), composite: 'add'});
+    for (const {child, dx, dy, scale, timing} of moves) {
+      const from = {translate: `${dx}px ${dy}px`}, to = {translate: '0px 0px'};
+      if (scale) { from.scale = `${scale[0]} ${scale[1]}`; to.scale = '1 1'; }
+      child.animate([from, to], {...this.options(timing), composite: 'add'});
     }
     for (const {node, active, identity, timing} of enteringFrames) {
       node.animate([{...identity, ...this.composeActive(identity, active, node)}, identity], {...this.options(timing), fill: 'backwards'});

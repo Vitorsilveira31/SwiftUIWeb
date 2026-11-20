@@ -166,6 +166,15 @@ function withLocal(frame, rect, local, element) {
 /** The size a payload reports: the one the view lays out at when it carries one, else its box's. */
 const payloadSize = payload => { const head = payload.split(RS, 1)[0].split(','); return (head.length >= 6 ? head.slice(4, 6) : head.slice(-2)).join(','); };
 const pixels = value => { const n = parseFloat(value); return Number.isFinite(n) ? n : 0; };
+/** Whether a GeometryReader's content was drawn for the size in `payload` (`data-geometry-rendered`). One drawn at a guess while
+ * its box kept the size already sent (a new view in an element the patch kept, a reader Swift built again without its
+ * measurement) is sent that size again: Food Truck's New Orders tiles kept donuts drawn for the whole page. */
+const drawnFor = (element, payload) => {
+  const rendered = element.getAttribute('data-geometry-rendered');
+  if (rendered === null) return true;
+  const [width, height] = rendered.split(',').map(Number), [measuredWidth, measuredHeight] = payloadSize(payload).split(',').map(Number);
+  return Math.abs(width - measuredWidth) < 0.5 && Math.abs(height - measuredHeight) < 0.5;
+};
 
 /** The axis functions the text layout measurement (text-layout-host.js) takes as its `axes`. */
 export const GEOMETRY_AXES = Object.freeze({axisMap, axisScales, turnedAxes});
@@ -231,7 +240,7 @@ export class GeometryHost {
     const send = (name, position) => {
       if (!names.includes(name)) return;
       const key = id + '|' + (position ? payload : payloadSize(payload));
-      if (sent[name] === key) return;
+      if (sent[name] === key && (name !== 'geometry' || drawnFor(element, payload))) return;
       sent[name] = key; this.trace.dispatches++;
       this.trace.log?.push([name, payload.split(RS, 1)[0], element.tagName + '.' + String(element.className).slice(0, 60), element.closest('[role=tabpanel]')?.id || '']);
       this.dispatch(element, name, payload);

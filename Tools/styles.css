@@ -5584,10 +5584,26 @@
 .navigation-split-view[data-column-count="2"]:not([data-column-visibility="detailOnly"]) {
   grid-template-columns: var(--navigation-sidebar-width, 320px) minmax(0, 1fr);
 }
-/* A column `columnVisibility` hides takes no track (the layer's sidebar rule would display it). */
-.navigation-split-view > .navigation-column[data-column-hidden="true"] { display: none; }
-.navigation-split-view[data-column-visibility="detailOnly"] { grid-template-columns: minmax(0, 1fr); }
-.navigation-split-view[data-column-count="3"][data-column-visibility="doubleColumn"] { grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); }
+/* A column `columnVisibility` hides slides away, as on iPad: its track closes to nothing while the column keeps its width
+   against the track's trailing edge (the split view clips it), the columns after it widen with their tracks, and the
+   column is hidden once its track has closed. Shown again, it slides back the same way. The tracks of both states have
+   the same kinds, so the browser interpolates them. */
+.navigation-split-view {
+  transition: grid-template-columns 0.4s var(--swu-ease-present), column-gap 0.4s var(--swu-ease-present);
+}
+.navigation-split-view > .navigation-column { transition: visibility 0s; }
+.navigation-split-view > .navigation-column[data-column-hidden="true"] { visibility: hidden; transition: visibility 0s 0.4s; }
+.navigation-split-view[data-column-count="2"] > .navigation-sidebar { justify-self: end; width: var(--navigation-sidebar-width, 320px); }
+.navigation-split-view[data-column-count="2"][data-column-visibility="detailOnly"] { grid-template-columns: 0px minmax(0, 1fr); column-gap: 0px; }
+.navigation-split-view[data-column-count="3"] > .navigation-sidebar[data-column-hidden="true"] { justify-self: end; width: 240px; }
+.navigation-split-view[data-column-count="3"] > .navigation-content[data-column-hidden="true"] { justify-self: end; width: 280px; }
+.navigation-split-view[data-column-count="3"][data-column-visibility="doubleColumn"] {
+  grid-template-columns: minmax(0px, 0px) minmax(180px, 280px) minmax(0, 1fr);
+}
+.navigation-split-view[data-column-count="3"][data-column-visibility="doubleColumn"] > .navigation-content { margin-inline-start: calc(var(--spacing) * -4); }
+.navigation-split-view[data-column-count="3"][data-column-visibility="detailOnly"] {
+  grid-template-columns: minmax(0px, 0px) minmax(0px, 0px) minmax(0, 1fr); column-gap: 0px;
+}
 .navigation-split-view > .navigation-sidebar {
   padding-block-start: 3.5rem;
   padding-inline: 1rem;
@@ -5612,6 +5628,12 @@
   color: var(--color-swu-foreground); font-size: 1.25rem; line-height: 1;
 }
 .navigation-split-view[data-sidebar-hidden] > .navigation-sidebar-toggle { inset-inline-start: 1rem; }
+/* The toggle rides with the sidebar's edge, and the detail's title makes room for it as the sidebar goes. */
+.navigation-split-view > .navigation-sidebar-toggle { transition: inset-inline-start 0.4s var(--swu-ease-present); }
+.navigation-split-view > .navigation-detail > .navigation-stack::before,
+.navigation-split-view > .navigation-detail > .frame-box > .navigation-stack::before {
+  transition: padding-inline-start 0.4s var(--swu-ease-present);
+}
 .navigation-sidebar-toggle:hover { background: color-mix(in srgb, var(--color-swu-foreground) 8%, var(--color-swu-background)); }
 .navigation-sidebar-toggle:focus-visible { outline: 2px solid var(--tint-color, var(--color-swu-primary)); outline-offset: 2px; }
 /* The detail's title moves over for the toggle beside it. */

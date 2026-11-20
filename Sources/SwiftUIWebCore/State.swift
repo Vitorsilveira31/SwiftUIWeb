@@ -401,6 +401,21 @@ enum EnvironmentObjectKey<ObjectType: AnyObject>: EnvironmentKey {
 }
 
 @MainActor package final class StateStore {
+  /// The paths of the views above a GeometryReader drawn again for a new size, whose remembered renders
+  /// (`_RenderOwnerRegistry._reusedView`) still hold its old drawing.
+  package var _staleViewPaths = Set<_FiberPath>()
+
+  /// Marks every view above `path` as holding a stale drawing of the reader at `path`.
+  package func _forgetViews(above path: _FiberPath) {
+    // A bound, as a safeguard: a path no render visits again would otherwise stay.
+    if _staleViewPaths.count > 4096 { _staleViewPaths.removeAll(keepingCapacity: true) }
+    var current = path.parent
+    while current.link != nil {
+      _staleViewPaths.insert(current)
+      current = current.parent
+    }
+  }
+
 #if hasFeature(Embedded)
   // Property wrappers own their observation links. This static is only a
   // constant-initialized allocator and does not need a lazy global lookup.

@@ -377,6 +377,14 @@ func _describedRenderer(_ render: @escaping @MainActor (_RenderContext) -> _Rend
   /// same inputs (`_ViewRenderer.hasSameInputs`); it runs only when there is a memo at `path`.
   func _reusedView(at path: _FiberPath, context: _RenderContext, sameInputs: (_AnyViewRenderer) -> Bool) -> _RenderNode? {
     guard let memo = viewMemos[path], let holder = viewMemoValues[path], sameInputs(holder) else { return nil }
+    // A GeometryReader below has been drawn for a new size since (`StateStore._forgetViews(above:)`): what was remembered
+    // holds its old drawing, and an owner's own render does not always tell (a custom Layout renders its subviews again to
+    // measure them, under other owners). Food Truck's tiles kept donuts drawn for 23 points in 155-point boxes.
+    let stateStore = context.stateStore
+    if !stateStore._staleViewPaths.isEmpty, stateStore._staleViewPaths.remove(path) != nil {
+      viewMemos.removeValue(forKey: path)
+      return nil
+    }
     for read in memo.reads where context.environment._stamp(for: read.key) != read.stamp { return nil }
     let remembered = memo.node
     var owners = Set<UInt64>()
