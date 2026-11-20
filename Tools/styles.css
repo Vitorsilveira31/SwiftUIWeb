@@ -1401,6 +1401,10 @@
     box-shadow: var(--ring-layer, 0 0 #0000), var(--shadow-layer, 0 0 #0000);
   }
 
+  /* A segment shows its label's title, as UISegmentedControl does on iPadOS: a Label's icon is not drawn beside it. */
+  .segmented-picker .segment-item .icon-label:has(> :not(.symbol-icon)) > .symbol-icon {
+    display: none;
+  }
   .segmented-picker[style*="--tint-color"] .segment-item[aria-checked="true"] {
     background-color: var(--tint-color);
     color: var(--color-swu-primary-foreground);

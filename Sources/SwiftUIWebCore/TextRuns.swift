@@ -89,7 +89,7 @@ extension Text {
       anchor.attributes["href"] = safeHref
       // A link takes the tint, as SwiftUI paints it, and a tap is the environment's `openURL` action (which may
       // handle an in-document link itself) rather than the browser's navigation, so the default is prevented.
-      anchor.styles["color"] = (runContext.environment.tint ?? Color.accentColor).cssValue
+      anchor.styles["color"] = (runContext.environment.tint ?? Color._currentTint).cssValue
       let openURL = runContext.environment.openURL
       anchor.events["click"] = _EventHandler(name: "click", action: { openURL(URL(href)) }, preventsDefault: true)
       anchor.children = [child]

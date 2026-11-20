@@ -64,7 +64,9 @@ final class ColorTests {
 
     ColorSchemeRuntime.install(.dark)
     _expectEqual(EnvironmentValues().colorScheme, .dark)
-    _expectEqual(Color.accentColor.cssValue, "var(--tint-color, var(--color-swu-primary))")
+    // The app's accent (its catalog's AccentColor), which a `.tint(_:)` above a view does not change; the tint is `.tint`.
+    _expectEqual(Color.accentColor.cssValue, "var(--asset-color-AccentColor, var(--color-swu-primary))")
+    _expectEqual(TintShapeStyle()._swiftUIWebCSSValue, "var(--tint-color, var(--color-swu-primary))")
     _expectEqual(Color.systemBackground.cssValue, "var(--color-swu-background)")
 
     let html = StaticHTMLFiberRenderer().render(
@@ -75,16 +77,19 @@ final class ColorTests {
     _expectTrue(html.contains("color: CanvasText;"))
     _expectTrue(html.contains("background-color: var(--color-swu-surface);"))
 
+    // Under a `.tint(_:)`, `Color.accentColor` is still the app's accent, as in SwiftUI; the `.tint` style is the tint.
     let tinted = StaticHTMLFiberRenderer().render(
       Color.accentColor.frame(width: 16, height: 16).tint(Color.pink)
     )
-    _expectTrue(tinted.contains("background: var(--tint-color, var(--color-swu-primary));"))
+    _expectTrue(tinted.contains("background: var(--asset-color-AccentColor, var(--color-swu-primary));"))
     _expectTrue(tinted.contains("--tint-color: \(Color.pink.cssValue);"))
+    let tintStyle = StaticHTMLFiberRenderer().render(Rectangle().fill(.tint).frame(width: 16, height: 16).tint(Color.pink))
+    _expectTrue(tintStyle.contains("var(--tint-color, var(--color-swu-primary))"))
   }
 
   @Test
   func testTintWithTheAppAccentDoesNotMakeTheTintPropertyRefertoItself() {
-    // `Color.accentColor` is `var(--tint-color, …)`; as the value of `--tint-color` it would be a cycle.
+    // `.tint(.accentColor)` writes the app's accent into `--tint-color`, never a reference to `--tint-color` itself.
     let html = StaticHTMLFiberRenderer().render(Text("accent").tint(Color.accentColor))
     _expectTrue(!html.contains("--tint-color: var(--tint-color"))
     _expectTrue(html.contains("--tint-color: var(--asset-color-AccentColor, var(--color-swu-primary));"))

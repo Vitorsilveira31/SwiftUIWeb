@@ -3632,9 +3632,11 @@ public struct Color: Hashable, Sendable {
 
   // The system palette is Apple's (light and dark values); the neutral and label colors are CSS system colors that follow the active `color-scheme` and therefore remain
   // environment-dependent without resolving a color during Swift rendering.
-  // `accentColor` also observes SwiftUIWeb's private tint variable when a
-  // `.tint` modifier is present, then falls back to the semantic primary.
-  public static let accentColor = Color("var(--tint-color, var(--color-swu-primary))")
+  /// The app's accent: its asset catalog's `AccentColor`, or the theme's primary without one. As in SwiftUI, a `.tint(_:)`
+  /// above a view does not change it (Food Truck's "Get Started" is `.tint(.white)` with an accent-colored label).
+  public static let accentColor = Color("var(--asset-color-AccentColor, var(--color-swu-primary))")
+  /// The tint where a view is drawn: the nearest `.tint(_:)` above it, or the app's accent (`--tint-color`).
+  package static let _currentTint = Color("var(--tint-color, var(--color-swu-primary))")
   package static let systemBackground = Color("var(--color-swu-background)")
   package static let secondarySystemBackground = Color("var(--color-swu-surface)")
   package static let tertiarySystemBackground = Color("var(--color-swu-card)")

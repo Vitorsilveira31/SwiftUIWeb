@@ -60,8 +60,8 @@ public extension ShapeStyle where Self == HierarchicalShapeStyle {
 /// The view's tint (`.tint(_:)`), falling back to the accent color.
 public struct TintShapeStyle: ShapeStyle, Hashable, Sendable {
   public init() {}
-  public var _swiftUIWebCSSValue: String { Color.accentColor.cssValue }
-  public var _swiftUIWebSolidColor: Color? { Color.accentColor }
+  public var _swiftUIWebCSSValue: String { Color._currentTint.cssValue }
+  public var _swiftUIWebSolidColor: Color? { Color._currentTint }
 }
 
 /// The inherited foreground style.
