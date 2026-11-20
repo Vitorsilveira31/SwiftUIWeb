@@ -101,6 +101,22 @@ pt_BR, `74%` for `0.736.formatted(.percent.precision(.fractionLength(0)))`, and 
   Greek and Cyrillic letters while other scripts keep theirs (kana voicing, Hebrew points). Tests that expected the
   raw value natively expect Foundation's text now.
 
+### A view's state is installed before its body and its actions
+
+A view's `@State` and `@StateObject` used to join the view's identity when something first read them during a render.
+An action that ran before that (`onAppear`, a button's action) read the value its own value of the view was created
+with, and a property the body reads only later (behind a condition, or inside a `GeometryReader`) took the initial value
+of whichever value of the view the parent made on that render. With a state assigned in `init` (`_engine =
+State(wrappedValue: makeEngine())`) a parent that rendered again therefore left the action and the body on different
+objects: a player whose `onAppear` started one engine while its picture showed another. Now, as in SwiftUI, every
+`@State` and `@StateObject` of a view is installed before its body is first evaluated, so the body and the view's actions
+share the storage of the view's identity, and a later value of the view keeps it: its initial value is discarded.
+
+Nothing changes in an application unless it relied on the old behaviour, for example a view value that a parent
+re-creates expecting its new initial value to replace the state: give the view another `.id(_:)` for that, as in
+SwiftUI. The source lowering writes `_installState()` for each view that keeps state (`state-installation`); a view
+nested in a private type, or a state declared inside an `#if` in the view, is still installed on its first read.
+
 ### Looks that changed
 
 - **On a phone the page scrolls the document.** The screen's ScrollView scrolled inside a box of the window's height, so

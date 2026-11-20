@@ -112,6 +112,7 @@ public struct LoweringPipeline: Sendable {
     PublishedImportTransform(),
     StateMemberIDTransform(),
     ViewInputComparisonTransform(),
+    StateInstallationTransform(),
     RendererSPITransform(),
     BrowserExportsTransform(),
     EmbeddedConditionTransform(),
