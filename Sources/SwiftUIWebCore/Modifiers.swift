@@ -2535,6 +2535,22 @@ package nonisolated struct SearchableModifier: ViewModifier {
       field.attributes["aria-disabled"] = "true"
     }
 
+    // In a navigation stack the field is an item of the bar, at its trailing end after the screen's own items, as iPadOS
+    // places an automatic search field (Food Truck's Orders and Donuts). The stack collects it with the screen's
+    // toolbars; when only the screen renders again, the field it placed stays and keeps the text the input holds.
+    if placement == .automatic, let navigation = context.navigationContext {
+      field.attributes["role"] = "searchbox"
+      let item = _RenderNode.element("div")
+      item.classes = ["toolbar-item", "search-toolbar-item"]
+      item.attributes["data-toolbar-placement"] = ToolbarItemPlacement.navigationBarTrailing.rawValue
+      item.children = [field]
+      let toolbar = _RenderNode.fragment()
+      toolbar.attributes["role"] = "toolbar"
+      toolbar.children = [item]
+      _renderRegistersWithAncestors()
+      if navigation.collectingToolbars { navigation.toolbarSink.append(toolbar) }
+      return
+    }
     node.kind = .element("div")
     node.text = nil
     node.attributes = ["role": "search", "data-searchable": "true"]
@@ -3640,8 +3656,8 @@ public struct Color: Hashable, Sendable {
   package static let systemBackground = Color("var(--color-swu-background)")
   package static let secondarySystemBackground = Color("var(--color-swu-surface)")
   package static let tertiarySystemBackground = Color("var(--color-swu-card)")
-  package static let systemGroupedBackground = Color("var(--color-swu-background)")
-  package static let secondarySystemGroupedBackground = Color("var(--color-swu-surface)")
+  package static let systemGroupedBackground = Color("var(--color-swu-grouped-background)")
+  package static let secondarySystemGroupedBackground = Color("var(--color-swu-grouped-surface)")
   package static let tertiarySystemGroupedBackground = Color("var(--color-swu-card)")
   package static let separator = Color("var(--color-swu-border)")
   package static let opaqueSeparator = Color("var(--color-swu-border)")

@@ -116,6 +116,8 @@
     --color-swu-background: oklch(1 0 0);
     --color-swu-foreground: oklch(0.145 0 0);
     --color-swu-surface: oklch(1 0 0);
+    --color-swu-grouped-background: #f2f2f7;
+    --color-swu-grouped-surface: #ffffff;
     --color-swu-card: oklch(1 0 0);
     --color-swu-card-foreground: oklch(0.145 0 0);
     --color-swu-popover: oklch(1 0 0);
@@ -327,6 +329,8 @@
     --color-swu-background: oklch(1 0 0);
     --color-swu-foreground: oklch(0.145 0 0);
     --color-swu-surface: oklch(1 0 0);
+    --color-swu-grouped-background: #f2f2f7;
+    --color-swu-grouped-surface: #ffffff;
     --color-swu-card: oklch(1 0 0);
     --color-swu-card-foreground: oklch(0.145 0 0);
     --color-swu-popover: oklch(1 0 0);
@@ -353,6 +357,8 @@
     --color-swu-background: oklch(0.145 0 0);
     --color-swu-foreground: oklch(0.985 0 0);
     --color-swu-surface: oklch(0.205 0 0);
+    --color-swu-grouped-background: #000000;
+    --color-swu-grouped-surface: #1c1c1e;
     --color-swu-card: oklch(0.205 0 0);
     --color-swu-card-foreground: oklch(0.985 0 0);
     --color-swu-popover: oklch(0.205 0 0);
@@ -379,6 +385,8 @@
       --color-swu-background: oklch(0.145 0 0);
       --color-swu-foreground: oklch(0.985 0 0);
       --color-swu-surface: oklch(0.205 0 0);
+      --color-swu-grouped-background: #000000;
+      --color-swu-grouped-surface: #1c1c1e;
       --color-swu-card: oklch(0.205 0 0);
       --color-swu-card-foreground: oklch(0.985 0 0);
       --color-swu-popover: oklch(0.205 0 0);
@@ -637,6 +645,36 @@
     padding: calc(var(--spacing) * 4);
   }
 
+  /* A list or form of sections in its automatic style is inset grouped, as on iPadOS: the grouped background, each
+     section's rows in a rounded card inset from the sides, the section's title above its card. (The sidebar's list has
+     its own look, below.) */
+  .list-view:not([data-list-style]):has(> * > .section-block):not(.navigation-sidebar .list-view),
+  .form-view:has(.section-block) {
+    border-width: 0;
+    border-radius: 0;
+    padding-inline: 1.25rem;
+    background-color: var(--color-swu-grouped-background);
+  }
+  .list-view:not([data-list-style]):has(> * > .section-block):not(.navigation-sidebar .list-view) > *,
+  .form-view:has(.section-block) > * {
+    border-width: 0;
+    padding-inline: 0;
+  }
+  /* A row background (`listRowBackground`) is the card's own fill, rounded as the card. */
+  .list-view:not([data-list-style]):has(> * > .section-block):not(.navigation-sidebar .list-view) .section-card:not(.shape-layer + .section-card),
+  .form-view .section-card:not(.shape-layer + .section-card) {
+    background-color: var(--color-swu-grouped-surface);
+  }
+  .list-view:not([data-list-style]):has(> * > .section-block):not(.navigation-sidebar .list-view) .section-block > .shape-layer {
+    clip-path: inset(0 round 1.625rem);
+  }
+  /* A text field in a form's row is the row itself, as on iPadOS: no field border or fill of its own. */
+  .form-view .section-card input.field-input {
+    border-width: 0;
+    background-color: transparent;
+    box-shadow: none;
+    padding-inline: 0;
+  }
   /* A plain list runs edge to edge: no frame, only the hairlines between rows. */
   /* SwiftUI Text keeps the line breaks in its string. */
   [data-layout-leaf="text"] {
@@ -3099,6 +3137,18 @@
 
   .search-input {
     max-width: 100%;
+  }
+
+  /* A search field in the navigation bar, as iPadOS draws it: a grey capsule with a magnifying glass, 15rem wide. */
+  .search-toolbar-item > .search-input {
+    width: 15rem;
+    height: 2.25rem;
+    border: 0;
+    border-radius: 9999px;
+    padding-inline: 2.25rem 0.75rem;
+    background: color-mix(in srgb, var(--color-swu-foreground) 7%, transparent) no-repeat 0.75rem center / 1rem
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='10.5' cy='10.5' r='6.5'/%3E%3Cpath d='m20 20-4.8-4.8'/%3E%3C/svg%3E");
+    font-size: 1.0625rem;
   }
 
   .toolbar-item,

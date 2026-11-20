@@ -415,20 +415,6 @@ public extension Picker {
   }
 }
 
-public enum EditMode: Hashable, Sendable {
-  case inactive, transient, active
-  public var isEditing: Bool { self != .inactive }
-}
-
-private enum EditModeKey: EnvironmentKey { static var defaultValue: Binding<EditMode>? { nil } }
-
-public extension EnvironmentValues {
-  /// Rows of an editable list show their handles when this is `.active`.
-  var editMode: Binding<EditMode>? {
-    get { self[EditModeKey.self] }
-    set { self[EditModeKey.self] = newValue }
-  }
-}
 
 public extension Animation {
   static var snappy: Animation { snappy() }
