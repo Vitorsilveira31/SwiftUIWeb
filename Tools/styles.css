@@ -5537,15 +5537,6 @@
 .navigation-split-view[data-sidebar-hidden] > .navigation-detail > .frame-box > .navigation-stack::before {
   padding-inline-start: calc(var(--spacing) * 6 + 36px);
 }
-/* The toggle's view transition (the split view names its columns for that one commit): the sidebar slides out or in, and
-   the detail's box follows it while its content keeps its scale. */
-::view-transition-group(navigation-split-detail) { overflow: clip; }
-::view-transition-old(navigation-split-detail),
-::view-transition-new(navigation-split-detail) { height: 100%; width: auto; object-fit: none; object-position: left top; }
-::view-transition-old(navigation-split-sidebar):only-child { animation-name: swu-split-sidebar-out; }
-::view-transition-new(navigation-split-sidebar):only-child { animation-name: swu-split-sidebar-in; }
-@keyframes swu-split-sidebar-out { to { transform: translateX(-100%); } }
-@keyframes swu-split-sidebar-in { from { transform: translateX(-100%); } }
 
 /* A compact NavigationSplitView is a push navigation: the sidebar is the root and the detail replaces it (the host
    sets data-compact-detail when something in the sidebar is chosen; the back button clears it). */

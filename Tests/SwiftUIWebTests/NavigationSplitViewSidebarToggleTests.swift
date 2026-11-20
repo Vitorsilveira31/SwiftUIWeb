@@ -35,15 +35,15 @@ struct NavigationSplitViewSidebarToggleTests {
     sidebar = try #require(column("sidebar", in: split))
     #expect(sidebar.attributes["data-column-hidden"] == "true")
     #expect(findSplit(in: split)?.attributes["data-sidebar-hidden"] == "true")
-    // Hidden: the same toggle (now at the detail's bar), the detail's children unchanged so its views are kept, and the
-    // render the toggle caused names the columns for the view transition that moves them.
+    // Hidden: the same toggle (now at the detail's bar), the detail's children unchanged so its views are kept, and no
+    // column named for a view transition: the columns change at once.
     let detail = try #require(column("detail", in: split))
     #expect(detail.children.count == detailChildren)
     toggle = try #require(findSplit(in: split)?.children.last)
     #expect(toggle.classes.contains("navigation-sidebar-toggle"))
     #expect(toggle.attributes["aria-expanded"] == "false")
-    #expect(sidebar.styles["view-transition-name"] == "navigation-split-sidebar")
-    #expect(detail.styles["view-transition-name"] == "navigation-split-detail")
+    #expect(sidebar.styles["view-transition-name"] == nil)
+    #expect(detail.styles["view-transition-name"] == nil)
 
     tree.dispatch(event: "click", value: "", on: toggle)
     split = tree.renderNode
@@ -51,20 +51,6 @@ struct NavigationSplitViewSidebarToggleTests {
     #expect(sidebar.attributes["data-column-hidden"] == nil)
     #expect(findSplit(in: split)?.attributes["data-sidebar-hidden"] == nil)
     #expect(find("navigation-sidebar-header", in: sidebar) != nil)
-  }
-
-  @Test
-  func onlyTheTogglesRenderNamesTheColumnsForATransition() throws {
-    let tree = FiberTree(Counter())
-    defer { tree._dispose() }
-    let toggle = try #require(find("navigation-sidebar-toggle", in: tree.renderNode))
-    tree.dispatch(event: "click", value: "", on: toggle)
-    #expect(column("detail", in: tree.renderNode)?.styles["view-transition-name"] != nil)
-    // Another change in the page renders the split view again without the names: no transition.
-    let increment = try #require(button(labeled: "0", in: tree.root))
-    tree.dispatch(event: "click", at: increment.identity)
-    #expect(texts(tree.renderNode).contains("1"))
-    #expect(column("detail", in: tree.renderNode)?.styles["view-transition-name"] == nil)
   }
 
   @Test
@@ -106,17 +92,6 @@ struct NavigationSplitViewSidebarToggleTests {
     #expect(!html.contains("data-sidebar-title"))
   }
 
-  private struct Counter: View {
-    @State var count = 0
-    var body: some View {
-      NavigationSplitView {
-        Text("Sidebar")
-      } detail: {
-        Button("\(count)") { count += 1 }
-      }
-    }
-  }
-
   private struct BoundSplit: View {
     @State var visibility = NavigationSplitViewVisibility.automatic
     var body: some View {
@@ -126,12 +101,6 @@ struct NavigationSplitViewSidebarToggleTests {
         Text("visibility: \(visibility._attributeValue)")
       }
     }
-  }
-
-  private func button(labeled label: String, in fiber: Fiber) -> Fiber? {
-    if fiber.renderNode.attributes["data-control-kind"] == "button", texts(fiber.renderNode) == [label] { return fiber }
-    for child in fiber.children { if let found = button(labeled: label, in: child) { return found } }
-    return nil
   }
 
   private func findSplit(in node: _RenderNode) -> _RenderNode? { find("navigation-split-view", in: node) }
