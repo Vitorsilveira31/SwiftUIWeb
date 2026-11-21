@@ -126,8 +126,13 @@ nested in a private type, or a state declared inside an `#if` in the view, is st
   and the dark yellow and gray changed too, and so did the catalog references (`"reference": "systemIndigoColor"`) and
   `UIColor.systemBlue`. Food Truck's indigo accent was a darker purple than on iPad. An application that wants the old
   value writes it: `Color(red: 0.345, green: 0.337, blue: 0.839)` for the old indigo.
+- **A sidebar has iPad's metrics.** In a NavigationSplitView's sidebar a `Label` puts its icon in a 30-point column,
+  7 points before its title, so titles line up; the icon is 26 points with a 1.5-point line; a section header has
+  18.75 points above its text and 9.5 below, in the secondary label colour at medium weight; the first row starts
+  6 points lower. Labels elsewhere are unchanged.
 - **A NavigationSplitView's columns meet** (visual change to the base rules `.navigation-split-view`, which put a
-  16-pixel gap between the columns, and `.navigation-sidebar + .navigation-detail`, which drew a 1-pixel divider). As on
+  16-pixel gap between the columns, and `.navigation-sidebar` and `.navigation-sidebar + .navigation-detail`, which drew
+  1-pixel dividers). As on
   iPad, the detail starts at the sidebar's edge: Food Truck's header and cards sat 17 pixels away from the sidebar,
   behind a grey line. An application that wants the space pads the detail (`.padding(.leading, 16)`).
 - **A `Canvas` has no border or rounded corners** (visual change to the base rule `.draw-canvas`, which drew a 1-pixel

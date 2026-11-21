@@ -286,8 +286,9 @@ public struct Image: @unchecked Sendable {
       node.attributes["role"] = "img"
       _AccessibilityBackend.setLabel(alt ?? self.source, on: node)
       node.styles["display"] = "inline-block"
-      node.styles["width"] = "1.4em"
-      node.styles["height"] = "1.4em"
+      // 1.4 times the text, unless a container sizes its symbols (a sidebar row, `--custom-symbol-width` and `-height`).
+      node.styles["width"] = "var(--custom-symbol-width, 1.4em)"
+      node.styles["height"] = "var(--custom-symbol-height, 1.4em)"
       node.styles["background-color"] = "currentColor"
       node.styles["-webkit-mask"] = "\(_cssQuotedURL(source)) center / contain no-repeat"
       node.styles["mask"] = "\(_cssQuotedURL(source)) center / contain no-repeat"
@@ -1721,7 +1722,9 @@ public struct Section<Header: View, Content: View, Footer: View> {
       h.classes = ["section-heading"]
       h.attributes["data-layout-kind"] = "padding"
       h.attributes["data-layout-schema"] = "1"
-      h.attributes["data-padding-top"] = "4"; h.attributes["data-padding-bottom"] = "4"
+      // A sidebar's header has the room iPad gives it: 18.75 points above its text and 9.5 below (Food Truck's
+      // sidebar, measured on an iPad mini); a list's header keeps 4 and 4.
+      h.attributes["data-padding-top"] = sidebar ? "18.75" : "4"; h.attributes["data-padding-bottom"] = sidebar ? "9.5" : "4"
       h.attributes["data-padding-leading"] = "16"; h.attributes["data-padding-trailing"] = "16"
       h.children = _semanticHeld(headerContent)
       children.append(h)
