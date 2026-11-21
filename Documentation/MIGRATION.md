@@ -146,9 +146,10 @@ nested in a private type, or a state declared inside an `#if` in the view, is st
   (Food Truck's cards, `.background()` in a Grid that declares a 12-point rounded rectangle, are rounded). Without a
   `containerShape` above them, `ContainerRelativeShape` is a rectangle and a background leaves the view's own corners
   alone (a button's, a clip's).
-- **Catalog images use their 2x file.** An image set with a universal 2x file is copied to `catalog-assets/@2x/` and
-  drawn at its size in points (`srcset`, and canvas images and image paints scaled by its density): images are as
-  sharp as on a Retina screen and keep their size. A set with only a 1x file is unchanged.
+- **Catalog images use their 2x file.** An image set with a universal 2x file whose size the asset compiler can read
+  (PNG, JPEG, GIF, WebP) is copied to `catalog-assets/@2x/`, and the image is laid out at its size in points
+  (`width` and `height` from `SWIFTUIWEB_IMAGE_SIZES`; canvas images and image paints are scaled by the density): images
+  are as sharp as on a Retina screen and keep their size on every screen. Other sets are unchanged.
 - **An automatic chart domain follows the marks its axis asks for.** With `AxisMarks(values: .automatic(minimumStride:
   desiredCount: roundLowerBound:))` the domain is rounded to the step those marks use, and the step is the round one
   whose count is closest to the one asked for, as in Swift Charts: Food Truck's forecast spans 55 to 85 °F marked every

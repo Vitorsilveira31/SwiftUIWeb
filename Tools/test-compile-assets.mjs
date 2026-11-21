@@ -42,6 +42,17 @@ function srgb(r, g, b, a = "1.000", space = "srgb") {
 
 const DARK = [{ appearance: "luminosity", value: "dark" }];
 
+/** The first bytes of a PNG of `width` by `height` pixels: enough for its size to be read. */
+function pngHeader(width, height) {
+  const bytes = Buffer.alloc(33);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(bytes, 0);
+  bytes.writeUInt32BE(13, 8);
+  bytes.write("IHDR", 12, "latin1");
+  bytes.writeUInt32BE(width, 16);
+  bytes.writeUInt32BE(height, 20);
+  return bytes;
+}
+
 // Maps are compared as plain objects; the key order itself is covered by the golden comparison.
 const plain = (map) => Object.fromEntries(map);
 
@@ -90,7 +101,7 @@ describe("CompileAssets", () => {
       writeJson(join(brand, "Contents.json"), { images: [{ filename: "logo.svg", idiom: "universal" }] });
       const poster = join(root, "App.xcassets", "Poster.imageset");
       mkdirSync(poster);
-      writeFileSync(join(poster, "poster@2x.png"), Buffer.from("\x89PNG", "latin1"));
+      writeFileSync(join(poster, "poster@2x.png"), pngHeader(200, 100));
       writeFileSync(join(poster, "poster.png"), Buffer.from("\x89PNG1x", "latin1"));
       writeJson(join(poster, "Contents.json"), {
         images: [
@@ -104,9 +115,9 @@ describe("CompileAssets", () => {
       writeFileSync(join(bundle, "runtime-environment"), "SWIFTUIWEB_LANGUAGE=pt\nSWIFTUIWEB_IMAGE_ASSETS=stale=old.png\n");
       assert.equal(mod.main(["x", root, join(root, "o.css"), bundle]), 0);
       assert.equal(readFileSync(join(bundle, "catalog-assets", "AppBrand.svg"), "utf8"), "<svg/>");
-      assert.equal(
-        readFileSync(join(bundle, "catalog-assets", "@2x", "Poster.png"), "latin1"),
-        "\x89PNG",
+      assert.deepEqual(
+        readFileSync(join(bundle, "catalog-assets", "@2x", "Poster.png")),
+        pngHeader(200, 100),
         "the universal 2x file wins, in the folder that gives its density",
       );
       assert.equal(existsSync(join(bundle, "catalog-assets", "Poster.png")), false);
@@ -114,6 +125,7 @@ describe("CompileAssets", () => {
       assert.deepEqual(readFileSync(join(bundle, "runtime-environment"), "utf8").split("\n").slice(0, -1), [
         "SWIFTUIWEB_LANGUAGE=pt",
         "SWIFTUIWEB_IMAGE_ASSETS=AppBrand=catalog-assets/AppBrand.svg;Poster=catalog-assets/@2x/Poster.png",
+        "SWIFTUIWEB_IMAGE_SIZES=Poster=100x50",
       ]);
       assert.equal(existsSync(join(root, "o.css")), false, "no color sets, no stylesheet");
     });
@@ -123,15 +135,47 @@ describe("CompileAssets", () => {
     withTemp((root) => {
       const bundle = join(root, "bundle");
       mkdirSync(bundle);
-      for (const [set, file, scale, bytes] of [["Badge", "badge@2x.png", "2x", "two"], ["Badge@2x", "other.png", "1x", "one"]]) {
+      for (const [set, file, scale, bytes] of [["Badge", "badge@2x.png", "2x", pngHeader(64, 32)], ["Badge@2x", "other.png", "1x", "one"]]) {
         const folder = join(root, "App.xcassets", `${set}.imageset`);
         mkdirSync(folder, { recursive: true });
         writeFileSync(join(folder, file), bytes);
         writeJson(join(folder, "Contents.json"), { images: [{ filename: file, idiom: "universal", scale }] });
       }
       assert.equal(mod.main(["x", root, join(root, "o.css"), bundle]), 0);
-      assert.equal(readFileSync(join(bundle, "catalog-assets", "@2x", "Badge.png"), "utf8"), "two");
+      assert.deepEqual(readFileSync(join(bundle, "catalog-assets", "@2x", "Badge.png")), pngHeader(64, 32));
       assert.equal(readFileSync(join(bundle, "catalog-assets", "Badge@2x.png"), "utf8"), "one");
+    });
+  });
+
+  test("a 2x file whose size cannot be read is used as a plain file", () => {
+    withTemp((root) => {
+      const bundle = join(root, "bundle");
+      mkdirSync(bundle);
+      const folder = join(root, "App.xcassets", "Mark.imageset");
+      mkdirSync(folder, { recursive: true });
+      writeFileSync(join(folder, "mark@2x.png"), "not a png");
+      writeJson(join(folder, "Contents.json"), { images: [{ filename: "mark@2x.png", idiom: "universal", scale: "2x" }] });
+      writeFileSync(join(bundle, "runtime-environment"), "SWIFTUIWEB_IMAGE_SIZES=Old=1x1\n");
+      assert.equal(mod.main(["x", root, join(root, "o.css"), bundle]), 0);
+      assert.equal(readFileSync(join(bundle, "catalog-assets", "Mark.png"), "utf8"), "not a png");
+      assert.deepEqual(readFileSync(join(bundle, "runtime-environment"), "utf8").split("\n").slice(0, -1), [
+        "SWIFTUIWEB_IMAGE_ASSETS=Mark=catalog-assets/Mark.png",
+        "SWIFTUIWEB_IMAGE_SIZES=",
+      ]);
+    });
+  });
+
+  test("image sizes are read from PNG, GIF and JPEG headers", () => {
+    withTemp((root) => {
+      const png = join(root, "a.png"), gif = join(root, "a.gif"), jpeg = join(root, "a.jpg");
+      writeFileSync(png, pngHeader(300, 150));
+      const g = Buffer.alloc(10); g.write("GIF89a", 0, "latin1"); g.writeUInt16LE(40, 6); g.writeUInt16LE(20, 8); writeFileSync(gif, g);
+      // SOI, an APP0 segment of 4 bytes, then SOF0 with height 60 and width 80.
+      writeFileSync(jpeg, Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x00, 0x00, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0x3c, 0x00, 0x50, 0x03]));
+      assert.deepEqual(mod.imagePixelSize(png), [300, 150]);
+      assert.deepEqual(mod.imagePixelSize(gif), [40, 20]);
+      assert.deepEqual(mod.imagePixelSize(jpeg), [80, 60]);
+      assert.equal(mod.imagePixelSize(join(root, "missing.png")), null);
     });
   });
 

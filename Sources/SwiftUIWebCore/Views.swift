@@ -296,6 +296,10 @@ public struct Image: @unchecked Sendable {
     }
     let node = _RenderNode.element("img"); node.classes = ["picture-view"]
     if !source.isEmpty { node.attributes["src"] = source }
+    // A catalog image drawn for a denser screen is laid out at its size in points, whichever screen shows it, as on iPad.
+    if let size = _ImageAssets.pointSize(of: self.source) {
+      node.attributes["width"] = size.width.clean; node.attributes["height"] = size.height.clean
+    }
     // Let the browser schedule ordinary media without blocking first paint.
     // Relative/local resources benefit from the same hints as remote URLs in
     // feed-style applications. Data/blob URLs are already resident in the
