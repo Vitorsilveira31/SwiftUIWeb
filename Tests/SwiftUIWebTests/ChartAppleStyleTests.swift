@@ -105,4 +105,54 @@ struct ChartAppleStyleTests {
     // The title is drawn at x = 12; the labels' column ("200": 10 + 17.4 + 4 points) starts after its 24 points.
     if let (left, _) = plotEdges(html) { #expect(left >= 24 + 31, "plot starts at \(left)") } else { Issue.record("no grid line: \(html)") }
   }
+
+  /// The baseline of the legend under the chart (its `translate`), and its swatches' top (9 points above it).
+  private func legendBaseline(_ html: String) -> Double? {
+    guard let legend = html.range(of: "data-chart-legend"), let comma = html[legend.upperBound...].range(of: ", ") else { return nil }
+    return Double(html[comma.upperBound...].prefix { "0123456789.".contains($0) })
+  }
+
+  @Test
+  func anAxisTitleAndALegendUnderTheChartHaveRowsOfTheirOwn() {
+    let html = StaticHTMLFiberRenderer().render(
+      Chart {
+        BarMark(x: .value("Day", "Mon"), y: .value("Sales", 3)).foregroundStyle(by: .value("City", "London"))
+        BarMark(x: .value("Day", "Tue"), y: .value("Sales", 5)).foregroundStyle(by: .value("City", "Paris"))
+      }.chartXAxisLabel("Weekday").chartLegend(position: .bottom).frame(width: 300, height: 200)
+    )
+    var titleY: Double?
+    if let title = html.range(of: ">Weekday<"), let open = html[..<title.lowerBound].lastIndex(of: "<"),
+       let y = html[open..<title.lowerBound].range(of: " y=\"") {
+      titleY = Double(html[y.upperBound...].prefix { "0123456789.".contains($0) })
+    }
+    let legendY = legendBaseline(html)
+    #expect(titleY != nil && legendY != nil, "\(html)")
+    if let titleY, let legendY { #expect(legendY - 9 >= titleY + 3, "title at \(titleY), legend at \(legendY)") }
+  }
+
+  @Test
+  func viewLabelsAndALegendUnderTheChartDoNotOverlap() {
+    let html = StaticHTMLFiberRenderer().render(
+      Chart {
+        BarMark(x: .value("Day", "Mon"), y: .value("Sales", 3)).foregroundStyle(by: .value("City", "London"))
+        BarMark(x: .value("Day", "Tue"), y: .value("Sales", 5)).foregroundStyle(by: .value("City", "Paris"))
+      }
+        .chartXAxis { AxisMarks { _ in AxisValueLabel { Text("Day") } } }
+        .chartLegend(position: .bottom)
+        .frame(width: 300, height: 260)
+    )
+    // The labels' views end where their row ends; the legend's swatches start under it.
+    var labelBottom: Double?
+    if let object = html.range(of: "<foreignObject") {
+      let tag = html[object.lowerBound...].prefix { $0 != ">" }
+      func value(_ name: String) -> Double? {
+        guard let start = tag.range(of: " \(name)=\"") else { return nil }
+        return Double(tag[start.upperBound...].prefix { "0123456789.".contains($0) })
+      }
+      if let y = value("y"), let height = value("height") { labelBottom = y + height }
+    }
+    let legendY = legendBaseline(html)
+    #expect(labelBottom != nil && legendY != nil, "\(html)")
+    if let labelBottom, let legendY { #expect(legendY - 9 >= labelBottom, "labels end at \(labelBottom), legend at \(legendY)") }
+  }
 }

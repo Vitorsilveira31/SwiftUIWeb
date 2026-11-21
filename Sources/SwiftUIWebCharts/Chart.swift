@@ -178,6 +178,8 @@ struct _ChartLayout {
   let bottom: Double
   /// Whether this is the size the host laid the chart out at, rather than the 640 pt wide fallback.
   let measured: Bool
+  /// The height of the x axis labels' row under the plot; an axis title's row comes after it, then a legend's.
+  var labelRow: Double = 17
   /// `labelColumn`: the width the y axis labels take beside the plot (Swift Charts sizes it to its widest label);
   /// `edgeMargin`: the room on the plot's other side, nothing when the x labels start at their marks (a date axis).
   init(bottom: Double = 42, size: CGSize = CGSize(width: 0, height: 0), legendAbove: Bool = false, yAxisLeading: Bool = false,
@@ -297,17 +299,20 @@ struct _SVGChartRenderer: _ChartRenderer {
     let xLabelsStart = xDomain.isDate && !xDomain.categoryMode && xAxis?.hasViewLabels != true
     // A legend under the chart has a row of its own below the x labels.
     let legendBelow = configuration.legendPosition == .bottom && model.marks.contains { $0.foregroundStyleValue != nil }
+    // Rows under the plot, top to bottom: the x labels, the axis title, the legend.
+    let labelRow = xAxis?.hasViewLabels == true ? 104.0 : configuration.xAxis.visibility == .hidden ? 4 : 17
     let titleRoom = (configuration.xAxisLabel == nil ? 0 : 18.0) + (legendBelow ? 22 : 0)
     // A y axis title is drawn on the leading side: its room goes there, in the label column when the axis is leading.
     let yTitleRoom = configuration.yAxisLabel == nil ? 0.0 : 24.0
     let yAxisLeading = configuration.yAxisCustom?.first?.position == .leading
-    let layout = _ChartLayout(
-      bottom: xAxis?.hasViewLabels == true ? 104 : configuration.xAxis.visibility == .hidden ? 4 + titleRoom : 17 + titleRoom,
+    var layout = _ChartLayout(
+      bottom: labelRow + titleRoom,
       size: model.size, legendAbove: legendAbove,
       yAxisLeading: yAxisLeading,
       labelColumn: labelColumn + (yAxisLeading ? yTitleRoom : 0),
       edgeMargin: !yAxisLeading && yTitleRoom > 0 ? yTitleRoom : xLabelsStart ? 0 : 12
     )
+    layout.labelRow = labelRow
     let xScale = { (value: ChartValue) -> Double in
       layout.left + xDomain.fraction(value) * layout.plotWidth
     }
@@ -855,7 +860,7 @@ struct _SVGChartRenderer: _ChartRenderer {
           if let view = item.view {
             if isX {
               let width = domainBand(domain, extent: layout.plotWidth) ?? 80
-              nodes.append(foreignView(view, x: position - width / 2, y: bottomEdge + pad, width: width, height: layout.bottom - pad - 4, justify: "center", align: "flex-start", env: env, key: "axis-x-\(entryIndex)", role: "axis-label"))
+              nodes.append(foreignView(view, x: position - width / 2, y: bottomEdge + pad, width: width, height: layout.labelRow - pad - 4, justify: "center", align: "flex-start", env: env, key: "axis-x-\(entryIndex)", role: "axis-label"))
             } else {
               let x = layout.yAxisLeading ? layout.left - pad - 64 : layout.left + layout.plotWidth + pad
               nodes.append(foreignView(view, x: x, y: position - 12, width: 64, height: 24, justify: layout.yAxisLeading ? "flex-end" : "flex-start", align: "center", env: env, key: "axis-y-\(entryIndex)", role: "axis-label"))
@@ -920,7 +925,8 @@ struct _SVGChartRenderer: _ChartRenderer {
         for (raw, labelValue) in values { let fraction = ((raw - xDomain.lower) / max(xDomain.upper - xDomain.lower, 0.000001)); let x = layout.left + (xDomain.reversed ? 1 - fraction : fraction) * layout.plotWidth; let startsAtMark = xDomain.isDate && !xDomain.categoryMode; if startsAtMark && x + 2 + _chartLabelWidth(labelValue) > layout.left + layout.plotWidth + 1 { continue }; let label = svgText(labelValue, x: startsAtMark ? x + 2 : x, y: layout.top + layout.plotHeight + 12, anchor: startsAtMark ? "start" : "middle"); label.styles["fill"] = _chartAxisLabelColor; label.attributes["font-size"] = _chartNumber(_chartAxisFontSize); nodes.append(label) }
       }
     }
-    if let label = config.xAxisLabel { nodes.append(svgText(label, x: layout.left + layout.plotWidth / 2, y: layout.height - 4, anchor: "middle")) }
+    // The title's row follows the labels' row (the legend's, when there is one, comes last).
+    if let label = config.xAxisLabel { nodes.append(svgText(label, x: layout.left + layout.plotWidth / 2, y: layout.top + layout.plotHeight + layout.labelRow + 13, anchor: "middle")) }
     if let label = config.yAxisLabel { let node = svgText(label, x: 12, y: layout.top + layout.plotHeight / 2, anchor: "middle"); node.attributes["transform"] = "rotate(-90 12 \(layout.top + layout.plotHeight / 2))"; nodes.append(node) }
     return nodes
   }
