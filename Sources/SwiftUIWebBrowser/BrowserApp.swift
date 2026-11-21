@@ -1140,6 +1140,7 @@ public extension BrowserAppLauncher {
     WebEnvironment.install(provider: { key in _embeddedEnvironmentValue(key) })
     #if !SWIFTUIWEB_RELEASE || SWIFTUIWEB_RELEASE_HAS_IMAGES
     _ImageAssets.install(manifest: _embeddedEnvironmentValue("SWIFTUIWEB_IMAGE_ASSETS") ?? "")
+    _ImageAssets.install(sizes: _embeddedEnvironmentValue("SWIFTUIWEB_IMAGE_SIZES") ?? "")
     #endif
     // The host passes navigator.language unless the application pinned a
     // language meta; nil keeps the development language of the strings table.

@@ -119,6 +119,41 @@ nested in a private type, or a state declared inside an `#if` in the view, is st
 
 ### Looks that changed
 
+- **`listItemTint(_:)` tints a list row's icon** (it had no effect): Food Truck's city rows in the sidebar,
+  `.listItemTint(.secondary)`, have grey icons, as on iPad. It now returns `some View`, as in SwiftUI.
+- **System colors are Apple's current palette** (iOS 26 and macOS 26): `Color.indigo` is `#6155F5` (dark `#6D7CFF`),
+  `.blue` `#0088FF`, `.red` `#FF383C`, `.orange` `#FF8D28`, `.purple` `#CB30E0`, `.mint`, `.teal`, `.cyan`, `.brown`
+  and the dark yellow and gray changed too, and so did the catalog references (`"reference": "systemIndigoColor"`) and
+  `UIColor.systemBlue`. Food Truck's indigo accent was a darker purple than on iPad. An application that wants the old
+  value writes it: `Color(red: 0.345, green: 0.337, blue: 0.839)` for the old indigo.
+- **A sidebar has iPad's metrics.** In a NavigationSplitView's sidebar a `Label` puts its icon in a 30-point column,
+  7 points before its title, so titles line up; the icon is 26 points with a 1.5-point line; a section header has
+  18.75 points above its text and 9.5 below, in the secondary label colour at medium weight; the first row starts
+  6 points lower. Labels elsewhere are unchanged.
+- **A NavigationSplitView's columns meet** (visual change to the base rules `.navigation-split-view`, which put a
+  16-pixel gap between the columns, and `.navigation-sidebar` and `.navigation-sidebar + .navigation-detail`, which drew
+  1-pixel dividers). As on
+  iPad, the detail starts at the sidebar's edge: Food Truck's header and cards sat 17 pixels away from the sidebar,
+  behind a grey line. An application that wants the space pads the detail (`.padding(.leading, 16)`).
+- **A `Canvas` has no border or rounded corners** (visual change to the base rule `.draw-canvas`, which drew a 1-pixel
+  border in the border colour and `--radius-lg` corners). A `Canvas` is what its renderer draws, as in SwiftUI: Food
+  Truck's animated header showed a frame and rounded corners the iPad does not. Before, a canvas over a card showed a
+  thin grey outline with 8-point corners; now its drawing reaches its edges. An application that wants the old look
+  writes it: `.clipShape(RoundedRectangle(cornerRadius: 8))` and
+  `.overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator))`.
+- **`containerShape(_:)` shapes the views below it.** `ContainerRelativeShape` was a rectangle; it now takes the
+  corner radius of the nearest `containerShape`, and a `.background()` without a shape fills that shape, as in SwiftUI
+  (Food Truck's cards, `.background()` in a Grid that declares a 12-point rounded rectangle, are rounded). Without a
+  `containerShape` above them, `ContainerRelativeShape` is a rectangle and a background leaves the view's own corners
+  alone (a button's, a clip's).
+- **Catalog images use their 2x file.** An image set with a universal 2x file whose size the asset compiler can read
+  (PNG, JPEG, GIF, WebP) is copied to `catalog-assets/@2x/`, and the image is laid out at its size in points
+  (`width` and `height` from `SWIFTUIWEB_IMAGE_SIZES`; canvas images and image paints are scaled by the density): images
+  are as sharp as on a Retina screen and keep their size on every screen. Other sets are unchanged.
+- **An automatic chart domain follows the marks its axis asks for.** With `AxisMarks(values: .automatic(minimumStride:
+  desiredCount: roundLowerBound:))` the domain is rounded to the step those marks use, and the step is the round one
+  whose count is closest to the one asked for, as in Swift Charts: Food Truck's forecast spans 55 to 85 °F marked every
+  5 (it spanned 50 to 90, every 10). A chart without custom marks keeps its domain.
 - **An empty background or overlay leaves its view alone.** `.background { if isHovering { … } }` while not hovering
   (or a background of `EmptyView()`) collapsed the view it decorates to 0×0 and stopped clicks on it: the stylesheet's
   rules for the background layer (`contain: size`, no hit testing) picked the layer as the first child, which is the

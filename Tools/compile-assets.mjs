@@ -51,6 +51,8 @@ export const SKIPPED = new Set([".build", ".git", "node_modules", "DerivedData"]
 export const ASSET_DIRECTORY = "catalog-assets";
 export const ENVIRONMENT_FILE = "runtime-environment";
 export const IMAGE_VARIABLE = "SWIFTUIWEB_IMAGE_ASSETS";
+/** The size in points of each image whose file was drawn for a denser screen: `Name=128x64;...`. */
+export const IMAGE_SIZE_VARIABLE = "SWIFTUIWEB_IMAGE_SIZES";
 
 // ---------------------------------------------------------------------------
 // Text, path, number and repr helpers (str, Path, float, round, %g, %.Nf, repr).
@@ -335,18 +337,18 @@ function hex2(number) {
  * same ones `Color.indigo` and its siblings use in the framework.
  */
 const SYSTEM_COLORS = new Map([
-  ["Red", ["#FF3B30", "#FF453A"]],
-  ["Orange", ["#FF9500", "#FF9F0A"]],
-  ["Yellow", ["#FFCC00", "#FFD60A"]],
+  ["Red", ["#FF383C", "#FF4245"]],
+  ["Orange", ["#FF8D28", "#FF9230"]],
+  ["Yellow", ["#FFCC00", "#FFD600"]],
   ["Green", ["#34C759", "#30D158"]],
-  ["Mint", ["#00C7BE", "#63E6E2"]],
-  ["Teal", ["#30B0C7", "#40C8E0"]],
-  ["Cyan", ["#32ADE6", "#64D2FF"]],
-  ["Blue", ["#007AFF", "#0A84FF"]],
-  ["Indigo", ["#5856D6", "#5E5CE6"]],
-  ["Purple", ["#AF52DE", "#BF5AF2"]],
+  ["Mint", ["#00C8B3", "#00DAC3"]],
+  ["Teal", ["#00C3D0", "#00D2E0"]],
+  ["Cyan", ["#00C0E8", "#3CD3FE"]],
+  ["Blue", ["#0088FF", "#0091FF"]],
+  ["Indigo", ["#6155F5", "#6D7CFF"]],
+  ["Purple", ["#CB30E0", "#DB34F2"]],
   ["Pink", ["#FF2D55", "#FF375F"]],
-  ["Brown", ["#A2845E", "#AC8E68"]],
+  ["Brown", ["#AC7F5E", "#B78A66"]],
 ]);
 
 /** CSS color of a color entry, or null when it has none. */
@@ -552,18 +554,69 @@ function containedFile(contents, name, root) {
   return path;
 }
 
-/** File of an image set named by its Contents.json, or null. */
-export function imagesetFile(contents, root) {
-  const entries = asList(jsonGet(readJson(contents), "images", []));
-  const candidates = entries.filter((e) => isTruthy(jsonGet(e, "filename", undefined)));
-  const preferred = candidates.filter(
-    (e) => jsonGet(e, "idiom", "universal") === "universal" && jsonGet(e, "scale", "1x") === "1x",
-  );
-  for (const entry of new Set([...preferred, ...candidates])) {
-    const path = containedFile(contents, fileField(entry, "filename", undefined), root);
-    if (path !== null) return path;
+/** The pixel size of a PNG, GIF, JPEG or WebP file, or null when its header does not say. */
+export function imagePixelSize(path) {
+  let bytes;
+  try { bytes = readFileSync(path); } catch { return null; }
+  const u32 = (i) => bytes.readUInt32BE(i), u16 = (i) => bytes.readUInt16BE(i), le16 = (i) => bytes.readUInt16LE(i);
+  const ascii = (i, n) => bytes.subarray(i, i + n).toString("latin1");
+  if (bytes.length >= 24 && bytes[0] === 0x89 && ascii(1, 3) === "PNG" && ascii(12, 4) === "IHDR") return [u32(16), u32(20)];
+  if (bytes.length >= 10 && ascii(0, 3) === "GIF") return [le16(6), le16(8)];
+  if (bytes.length >= 30 && ascii(0, 4) === "RIFF" && ascii(8, 4) === "WEBP") {
+    const chunk = ascii(12, 4);
+    if (chunk === "VP8X") return [1 + (bytes[24] | (bytes[25] << 8) | (bytes[26] << 16)), 1 + (bytes[27] | (bytes[28] << 8) | (bytes[29] << 16))];
+    if (chunk === "VP8 ") return [le16(26) & 0x3fff, le16(28) & 0x3fff];
+    if (chunk === "VP8L") { const b = bytes.readUInt32LE(21); return [1 + (b & 0x3fff), 1 + ((b >> 14) & 0x3fff)]; }
+    return null;
+  }
+  if (bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+    // The first start-of-frame marker (SOF0 to SOF15, not DHT, JPG or DAC) carries the size.
+    let i = 2;
+    while (i + 9 < bytes.length) {
+      if (bytes[i] !== 0xff) return null;
+      const marker = bytes[i + 1];
+      if (marker === 0xd8 || (marker >= 0xd0 && marker <= 0xd7) || marker === 0x01) { i += 2; continue; }
+      const length = u16(i + 2);
+      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) return [u16(i + 7), u16(i + 5)];
+      i += 2 + length;
+    }
   }
   return null;
+}
+
+/** File of an image set named by its Contents.json, or null, with its scale (1 unless the set gives it). The universal 2x
+ * file wins when the set has one: a browser window is usually twice as dense as its CSS pixels, where Food Truck's header,
+ * drawn from the 1x files, was half as sharp as on iPad. The page draws it at its size in points (`srcset`, by the
+ * `catalog-assets/@2x/` folder it is copied to). Then the 1x file, then the first one. */
+export function imagesetSource(contents, root) {
+  const entries = asList(jsonGet(readJson(contents), "images", []));
+  const candidates = entries.filter((e) => isTruthy(jsonGet(e, "filename", undefined)));
+  const universal = (scale) =>
+    candidates.filter((e) => jsonGet(e, "idiom", "universal") === "universal" && jsonGet(e, "scale", "1x") === scale);
+  const doubled = new Set(universal("2x"));
+  // Each entry's file is looked up once (one that leaves its set is reported once).
+  const paths = new Map();
+  const pathOf = (entry) => {
+    if (!paths.has(entry)) paths.set(entry, containedFile(contents, fileField(entry, "filename", undefined), root));
+    return paths.get(entry);
+  };
+  // A 2x file is used as one when its size is known, so the page lays it out in points before it loads.
+  for (const entry of doubled) {
+    const path = pathOf(entry);
+    const pixels = path === null ? null : imagePixelSize(path);
+    if (pixels && pixels[0] > 0 && pixels[1] > 0) return { path, scale: 2, points: [pixels[0] / 2, pixels[1] / 2] };
+  }
+  // Otherwise the 1x file, then the first file there is, drawn at its own size.
+  for (const entry of new Set([...universal("1x"), ...candidates])) {
+    const path = pathOf(entry);
+    if (path !== null) return { path, scale: 1 };
+  }
+  return null;
+}
+
+/** File of an image set named by its Contents.json, or null (`imagesetSource`). */
+export function imagesetFile(contents, root) {
+  return imagesetSource(contents, root)?.path ?? null;
 }
 
 /** File of a symbol set named by its Contents.json, or null. */
@@ -660,8 +713,8 @@ export function symbolSvg(template) {
 export function compileImages(root) {
   const images = new Map();
   for (const [name, contents] of catalogEntries(root, ".imageset")) {
-    const path = imagesetFile(contents, root);
-    if (path !== null) images.set(name, path);
+    const source = imagesetSource(contents, root);
+    if (source !== null) images.set(name, source.scale === 2 ? { path: source.path, scale: 2, points: source.points } : source.path);
   }
   for (const [name, contents] of catalogEntries(root, ".symbolset")) {
     const path = symbolsetFile(contents, root);
@@ -684,10 +737,15 @@ export function render(values) {
 /** `install_images(images, bundle)`: copies the files, returns name -> bundle-relative path. */
 export function installImages(images, bundle) {
   const manifest = new Map();
+  // Each 2x image's size in points (`IMAGE_SIZE_VARIABLE`).
+  manifest.sizes = new Map();
   if (images.size === 0) return manifest;
   const target = joinPath(bundle, ASSET_DIRECTORY);
   mkdirSync(target, { recursive: true });
-  for (const [name, source] of images) {
+  for (const [name, entry] of images) {
+    // A 2x file goes in `catalog-assets/@2x/`, which no catalog name can produce (a name's "/" becomes "__"): the page
+    // draws it at half its pixels (embedded-dom.js, `densityOf`).
+    const source = typeof entry === "string" ? entry : entry.path, density = typeof entry === "string" ? "" : "@2x/";
     // The manifest is written as NAME=path;NAME=path lines, so a name or extension must not carry those separators or a newline.
     if (/[\x00-\x1f=;\\]/.test(name)) {
       console.error(
@@ -711,10 +769,12 @@ export function installImages(images, bundle) {
       destination = joinPath(target, `${stem}.symbol.svg`);
       writeText(destination, svg);
     } else {
-      destination = joinPath(target, stem + suffixOf(nameOf(source)).toLowerCase());
+      if (density) mkdirSync(joinPath(target, density), { recursive: true });
+      destination = joinPath(target, density + stem + suffixOf(nameOf(source)).toLowerCase());
       copyFileSync(source, destination);
     }
-    manifest.set(name, `${ASSET_DIRECTORY}/${nameOf(destination)}`);
+    manifest.set(name, `${ASSET_DIRECTORY}/${density}${nameOf(destination)}`);
+    if (typeof entry !== "string") manifest.sizes.set(name, entry.points);
   }
   return manifest;
 }
@@ -722,6 +782,11 @@ export function installImages(images, bundle) {
 /** `environment_line(manifest)`: the environment line for a manifest. */
 export function environmentLine(manifest) {
   return IMAGE_VARIABLE + "=" + [...manifest].map(([name, path]) => `${name}=${path}`).join(";");
+}
+
+/** The environment line giving each 2x image's size in points. */
+export function sizeEnvironmentLine(sizes) {
+  return IMAGE_SIZE_VARIABLE + "=" + [...sizes].map(([name, [w, h]]) => `${name}=${w}x${h}`).join(";");
 }
 
 /** `write_environment(bundle, lines)`: replaces lines with the same key, keeps the others. */
@@ -750,7 +815,8 @@ export function main(argv) {
     const bundle = normalizePath(argv[3]);
     const manifest = installImages(compileImages(root), bundle);
     if (manifest.size > 0) {
-      writeEnvironment(bundle, [environmentLine(manifest)]);
+      // The sizes line is written even when empty, so one from an earlier build does not outlive its images.
+      writeEnvironment(bundle, [environmentLine(manifest), sizeEnvironmentLine(manifest.sizes)]);
       console.log(`Copied ${manifest.size} asset-catalog images`);
     }
   }

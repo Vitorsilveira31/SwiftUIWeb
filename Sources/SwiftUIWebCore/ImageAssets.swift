@@ -12,6 +12,7 @@
   /// Replaces the table; nil clears it (tests, session disposal).
   @MainActor public static func install(_ images: [String: String]?) {
     table = images ?? .init()
+    if images == nil { pointSizes = .init() }
   }
 
   /// Parses the generated `Name=path;Name=path` manifest text.
@@ -27,6 +28,26 @@
   }
 
   @MainActor public static func resolve(_ name: String) -> String? { table[name] }
+
+  /// Each image drawn for a denser screen by its size in points (Tools/compile-assets.mjs, `SWIFTUIWEB_IMAGE_SIZES`):
+  /// the page lays it out at that size whatever the screen, before its file has loaded.
+  @MainActor private static var pointSizes: [String: (width: Double, height: Double)] = .init()
+
+  /// Parses the generated `Name=128x64;Name=...` text; an empty one clears the sizes.
+  @MainActor public static func install(sizes manifest: String) {
+    var sizes: [String: (width: Double, height: Double)] = .init()
+    for entry in manifest.split(separator: ";") {
+      guard let separator = entry.lastIndex(of: "=") else { continue }
+      let dimensions = entry[entry.index(after: separator)...].split(separator: "x")
+      guard dimensions.count == 2, let width = Double(String(dimensions[0])), let height = Double(String(dimensions[1])),
+            width > 0, height > 0 else { continue }
+      sizes[String(entry[..<separator])] = (width, height)
+    }
+    pointSizes = sizes
+  }
+
+  /// The size in points of the asset `name`, when its file was drawn for a denser screen.
+  @MainActor public static func pointSize(of name: String) -> (width: Double, height: Double)? { pointSizes[name] }
 
   /// Inside the framework's own strings (an image interpolated into `Text`, a canvas image), a source that may be remote
   /// (`Image(_:alt:)`, an `AsyncImage` load) carries this prefix. Applications cannot write it: the image markers it

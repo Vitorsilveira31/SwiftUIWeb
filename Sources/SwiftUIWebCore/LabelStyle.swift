@@ -97,11 +97,16 @@ extension Label {
     // as an opaque box that a parent stack can squeeze.
     node.attributes["data-layout-kind"] = "hstack"
     node.attributes["data-layout-schema"] = "1"
-    node.attributes["data-layout-gap"] = _semanticNumber(8)
+    // In a sidebar, as on iPad, the icon sits in a column of its own, 30 points wide, so every title starts at the same
+    // place whatever its icon's width, 7 points after it (Food Truck's sidebar, measured on an iPad mini).
+    let sidebar = context.environment._isInSidebar
+    node.attributes["data-layout-gap"] = _semanticNumber(sidebar ? 7 : 8)
     node.attributes["data-align-x"] = "0.5"
     node.attributes["data-align-y"] = "0.5"
     let kind = style?.kind ?? .automatic
-    let iconNode = icon._render(in: context.child(_FiberKey("icon")))
+    let iconNode = sidebar
+      ? icon.frame(width: 30)._render(in: context.child(_FiberKey("icon")))
+      : icon._render(in: context.child(_FiberKey("icon")))
     let titleNode = title._render(in: context.child(_FiberKey("title")))
     switch kind {
     case .iconOnly:

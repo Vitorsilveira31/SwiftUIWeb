@@ -1070,9 +1070,9 @@ public extension ContainerRelativeShape {
   }
 }
 
-/// Matches SwiftUI's container-relative shape spelling.  CSS uses the
-/// container's own box, so this is represented as a rounded rectangle with a
-/// zero radius marker rather than a browser-specific shape object.
+/// SwiftUI's container-relative shape: the shape of the nearest container that declares one (`containerShape(_:)`), drawn
+/// in the view's own box. CSS rounds the box with the corner radius that container hands down
+/// (`--container-shape-radius`); without one it is a rectangle.
 public struct ContainerRelativeShape: Shape, Hashable, Sendable {
   public typealias Body = Never
   public init() {}
@@ -1092,7 +1092,15 @@ public extension Shape where Self == RoundedRectangle {
 public extension Shape {
   nonisolated func _render(in context: _RenderContext) -> _RenderNode {
     // A shape with animatable data draws the path of the data its animation has reached (`Animator.swift`).
-    guard Self._swiftUIWebAnimates else { return _filledWithForeground(_svgShapeNode(shape: self, context: context)) }
+    guard Self._swiftUIWebAnimates else {
+      let node = _filledWithForeground(_svgShapeNode(shape: self, context: context))
+      // The container's shape is only known to CSS (the inherited radius): its box is rounded and clipped to it.
+      if self is ContainerRelativeShape {
+        node.styles["border-radius"] = "var(--container-shape-radius, 0px)"
+        node.styles["overflow"] = "hidden"
+      }
+      return node
+    }
     nonisolated(unsafe) let shape = self
     return _assumeMainActor {
       AnyView(_ownerBoundaryOf: _AnimatedShape(shape: shape) { shape, context in
@@ -1311,6 +1319,11 @@ private func _cssRoundedShape<S: Shape>(_ shape: S) -> _CSSRoundedShape? {
   }
   if let capsule = shape as? Capsule {
     return _CSSRoundedShape(radius: "9999px", outlineRadius: "9999px", inset: capsule._insetAmount)
+  }
+  // The container's shape is only known to CSS (the inherited radius), so CSS draws it, as it draws a rounded rectangle.
+  if shape is ContainerRelativeShape {
+    let radius = "var(--container-shape-radius, 0px)"
+    return _CSSRoundedShape(radius: radius, outlineRadius: radius, inset: 0)
   }
   return nil
 }
@@ -2194,7 +2207,28 @@ private func _shapeRadius<S: Shape>(_ shape: S) -> String {
   if shape is Circle || shape is Capsule || shape is DefaultGlassEffectShape { return "9999px" }
   if let rounded = shape as? RoundedRectangle { return "\(max(0, rounded.cornerRadius - rounded._insetAmount).clean)px" }
   if let uneven = shape as? UnevenRoundedRectangle { return uneven._cssBorderRadius }
+  // The shape of the nearest container that declares one (`containerShape`), as the page inherits it.
+  if shape is ContainerRelativeShape { return "var(--container-shape-radius, 0px)" }
   return "0"
+}
+
+private struct _ContainerShapeRadiusKey: EnvironmentKey {
+  static var defaultValue: String? { nil }
+}
+
+extension EnvironmentValues {
+  /// The corner radius (CSS) of the shape the nearest `containerShape(_:)` above declares, nil without one: a background
+  /// without a shape fills it.
+  package var _containerShapeRadius: String? {
+    get { self[_ContainerShapeRadiusKey.self] }
+    set { self[_ContainerShapeRadiusKey.self] = newValue }
+  }
+}
+
+/// The corner radius of `shape` in CSS, for `containerShape(_:)` to hand its descendants' `ContainerRelativeShape`.
+package func _containerShapeRadius<S: Shape>(_ shape: S) -> String {
+  if shape is ContainerRelativeShape { return "var(--container-shape-radius, 0px)" }
+  return _shapeRadius(shape)
 }
 
 /// CSS corner declarations for a CSS-realized shape boundary. Uneven
@@ -2352,6 +2386,11 @@ package nonisolated struct ShapeStyleBackgroundModifier<Style: ShapeStyle>: View
       let content = _backgroundContent(node)
       let original = content.content
       let background = _meshBackgroundNode(mesh, context: context.child(_FiberKey("background-mesh-gradient")))
+      // Under a `containerShape` the gradient fills that shape; the content is not clipped.
+      if let radius = context.environment._containerShapeRadius {
+        background.styles["border-radius"] = radius
+        background.styles["overflow"] = "hidden"
+      }
       node.kind = .element("div")
       node.text = nil
       node.attributes = content.attributes
@@ -2374,6 +2413,9 @@ package nonisolated struct ShapeStyleBackgroundModifier<Style: ShapeStyle>: View
       } else {
         node.styles["background-image"] = "\(innerLayer), \(layer(_paintCSSValue(style)))"
       }
+      if node.styles["border-radius"] == nil, let radius = context.environment._containerShapeRadius {
+        node.styles["border-radius"] = radius
+      }
       _applyMaterialBackdrop(style, to: node)
       return
     }
@@ -2386,6 +2428,13 @@ package nonisolated struct ShapeStyleBackgroundModifier<Style: ShapeStyle>: View
       _applyImagePaintMarkers(style, to: node)
     }
     node.attributes["data-background-style"] = style._swiftUIWebCSSValue
+    // SwiftUI fills a background without a shape in the container's shape (`containerShape(_:)`): Food Truck's cards,
+    // `.background()` in a Grid that declares a 12-point rounded rectangle, are rounded. Without one it is the box.
+    // Only under a `containerShape`: elsewhere the view keeps its own corners (a button's from the stylesheet, a clip's
+    // for a shadow on a wrapper over clipped content).
+    if node.styles["border-radius"] == nil, let radius = context.environment._containerShapeRadius {
+      node.styles["border-radius"] = radius
+    }
     _applyMaterialBackdrop(style, to: node)
   }
 }
@@ -3674,7 +3723,7 @@ public struct Color: Hashable, Sendable {
       self.cssValue = "rgba(\(Int(red * 255)), \(Int(green * 255)), \(Int(blue * 255)), \(opacity))"
     }
   }
-  public static let red = Color(css: "light-dark(#FF3B30, #FF453A)"); public static let blue = Color(css: "light-dark(#007AFF, #0A84FF)"); public static let green = Color(css: "light-dark(#34C759, #30D158)"); public static let black = Color(css: "black"); public static let white = Color(css: "white"); public static let gray = Color(css: "light-dark(#8E8E93, #8E8E93)"); public static let clear = Color(css: "transparent"); public static let orange = Color(css: "light-dark(#FF9500, #FF9F0A)"); public static let purple = Color(css: "light-dark(#AF52DE, #BF5AF2)"); public static let yellow = Color(css: "light-dark(#FFCC00, #FFD60A)"); public static let indigo = Color(css: "light-dark(#5856D6, #5E5CE6)"); public static let mint = Color(css: "light-dark(#00C7BE, #63E6E2)"); public static let teal = Color(css: "light-dark(#30B0C7, #40C8E0)"); public static let cyan = Color(css: "light-dark(#32ADE6, #64D2FF)"); public static let pink = Color(css: "light-dark(#FF2D55, #FF375F)"); public static let brown = Color(css: "light-dark(#A2845E, #AC8E68)"); public static let primary = Color(css: "CanvasText"); public static let secondary = Color(css: "GrayText")
+  public static let red = Color(css: "light-dark(#FF383C, #FF4245)"); public static let blue = Color(css: "light-dark(#0088FF, #0091FF)"); public static let green = Color(css: "light-dark(#34C759, #30D158)"); public static let black = Color(css: "black"); public static let white = Color(css: "white"); public static let gray = Color(css: "light-dark(#8E8E93, #98989D)"); public static let clear = Color(css: "transparent"); public static let orange = Color(css: "light-dark(#FF8D28, #FF9230)"); public static let purple = Color(css: "light-dark(#CB30E0, #DB34F2)"); public static let yellow = Color(css: "light-dark(#FFCC00, #FFD600)"); public static let indigo = Color(css: "light-dark(#6155F5, #6D7CFF)"); public static let mint = Color(css: "light-dark(#00C8B3, #00DAC3)"); public static let teal = Color(css: "light-dark(#00C3D0, #00D2E0)"); public static let cyan = Color(css: "light-dark(#00C0E8, #3CD3FE)"); public static let pink = Color(css: "light-dark(#FF2D55, #FF375F)"); public static let brown = Color(css: "light-dark(#AC7F5E, #B78A66)"); public static let primary = Color(css: "CanvasText"); public static let secondary = Color(css: "GrayText")
 
   // The system palette is Apple's (light and dark values); the neutral and label colors are CSS system colors that follow the active `color-scheme` and therefore remain
   // environment-dependent without resolving a color during Swift rendering.

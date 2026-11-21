@@ -103,8 +103,11 @@ public enum Prominence: Hashable, Sendable {
 }
 
 public extension View {
-  /// Tints the row's accessory color in a list; the browser list has no such accessory.
-  nonisolated func listItemTint(_ tint: Color?) -> Self { self }
+  /// The tint of a list row's icon, over the app's tint (`--list-item-tint`): Food Truck's city rows in the sidebar,
+  /// `.listItemTint(.secondary)`, have grey icons, as on iPad. nil leaves the row's icon in the app's tint.
+  nonisolated func listItemTint(_ tint: Color?) -> some View {
+    modifier(_SemanticCompatibilityModifier(styles: tint.map { ["--list-item-tint": $0.cssValue] } ?? .init()))
+  }
 
   nonisolated func headerProminence(_ prominence: Prominence) -> Self { self }
 

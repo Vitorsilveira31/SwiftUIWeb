@@ -37,7 +37,7 @@ struct CoreVisualValueContractTests {
     #expect(Color("light-dark(#fff, #000)").cssValue == "light-dark(#fff, #000)")
     #expect(Color("rgba(0, 0, 0, 0.5)").cssValue == "rgba(0, 0, 0, 0.5)")
     #expect(Color(css: "red").cssValue == "red")
-    #expect(Color.red.cssValue == "light-dark(#FF3B30, #FF453A)", "system colors are Apple's palette")
+    #expect(Color.red.cssValue == "light-dark(#FF383C, #FF4245)", "system colors are Apple's palette")
 
     #expect(Color.red.mix(with: .blue, by: -0.5) == .red)
     #expect(Color.red.mix(with: .blue, by: 1.5) == .blue)

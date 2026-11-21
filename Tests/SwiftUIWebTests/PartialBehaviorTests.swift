@@ -1590,7 +1590,7 @@ final class PartialBehaviorTests {
     let html = tree.renderNode.htmlDescription
 
     _expectTrue(html.contains("type=\"color\""))
-    _expectTrue(html.contains("value=\"#ff3b30\""))
+    _expectTrue(html.contains("value=\"#ff383c\""))
     _expectTrue(html.contains("data-supports-opacity=\"false\""))
     tree.dispatch(event: "change", value: "#336699")
     _expectEqual(color.cssValue, "#336699")

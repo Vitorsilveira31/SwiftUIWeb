@@ -1,8 +1,8 @@
 // A browser stand-in for WeatherKit, so Apple's Food Truck weather screens run unmodified.
 //
-// WeatherKit needs an Apple developer entitlement and has no browser API. The forecast here is a deterministic
-// demonstration (a mild day that warms into the afternoon and rains a little later), so the cards, the chart and the
-// recommendation logic all have data to show.
+// WeatherKit needs an Apple developer entitlement and has no browser API. Without the entitlement, as Apple's sample
+// runs out of the box, a request fails and the screens show what Food Truck shows then (the Truck card's placeholder
+// forecast): the requests here fail the same way, so the web shows what the iPad shows.
 import SwiftUIWeb
 import SwiftUIWebCoreLocation
 
@@ -70,6 +70,11 @@ public struct WeatherAttribution: Sendable {
   public let combinedMarkDarkURL: URL
 }
 
+/// What WeatherKit throws when the app has no WeatherKit entitlement.
+public enum WeatherError: Error, Sendable {
+  case permissionDenied
+}
+
 public final class WeatherService: Sendable {
   public static let shared = WeatherService()
 
@@ -81,6 +86,11 @@ public final class WeatherService: Sendable {
   }
 
   public func weather(for location: CLLocation) async throws -> Weather {
+    throw WeatherError.permissionDenied
+  }
+
+  /// The forecast a granted request would bring, kept for a build that wants data to show.
+  func demonstrationWeather(for location: CLLocation) -> Weather {
     let hours = DemoWeather.hours(for: location)
     let now = Date()
     let minutes = (0 ..< 60).map { MinuteWeather(date: now.addingTimeInterval(Double($0) * 60), precipitationChance: 0.05) }
@@ -95,7 +105,7 @@ public final class WeatherService: Sendable {
   }
 
   public func weather<Result>(for location: CLLocation, including query: WeatherQuery<Result>) async throws -> Result {
-    query.make(location)
+    throw WeatherError.permissionDenied
   }
 }
 

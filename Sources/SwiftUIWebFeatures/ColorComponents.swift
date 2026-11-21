@@ -138,7 +138,7 @@ public extension UIColor {
   static let clear = UIColor(css: "transparent")
   static let black = UIColor(css: "#000000")
   static let white = UIColor(css: "#FFFFFF")
-  static let systemBlue = UIColor(css: "light-dark(#007AFF, #0A84FF)")
+  static let systemBlue = UIColor(css: "light-dark(#0088FF, #0091FF)")
 
   func getRed(_ red: UnsafeMutablePointer<CGFloat>?, green: UnsafeMutablePointer<CGFloat>?, blue: UnsafeMutablePointer<CGFloat>?, alpha: UnsafeMutablePointer<CGFloat>?) -> Bool {
     let value = _CSSColorComponents.parse(css)
