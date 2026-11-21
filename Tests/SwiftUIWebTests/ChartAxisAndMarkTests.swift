@@ -139,7 +139,8 @@ final class ChartAxisAndMarkTests {
       node.children.forEach(walk)
     }
     walk(node)
-    _expectEqual(labels, 9)
+    // Swift Charts leaves out a date label that starts at its mark and would run past the plot: the last hour.
+    _expectEqual(labels, 8)
     _expectEqual(ticks, 9)
   }
 

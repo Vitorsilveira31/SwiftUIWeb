@@ -178,12 +178,27 @@ struct _ChartLayout {
   let bottom: Double
   /// Whether this is the size the host laid the chart out at, rather than the 640 pt wide fallback.
   let measured: Bool
-  init(bottom: Double = 42, size: CGSize = CGSize(width: 0, height: 0), legendAbove: Bool = false, yAxisLeading: Bool = false) {
+  /// The height of the x axis labels' row under the plot; an axis title's row comes after it, then a legend's.
+  var labelRow: Double = 17
+  /// `labelColumn`: the width the y axis labels take beside the plot (Swift Charts sizes it to its widest label);
+  /// `edgeMargin`: the room on the plot's other side, nothing when the x labels start at their marks (a date axis).
+  init(bottom: Double = 42, size: CGSize = CGSize(width: 0, height: 0), legendAbove: Bool = false, yAxisLeading: Bool = false,
+       labelColumn: Double = 52, edgeMargin: Double = 16) {
     self.bottom = bottom
     self.yAxisLeading = yAxisLeading
-    left = yAxisLeading ? 52 : 16
-    right = yAxisLeading ? 16 : 52
-    top = legendAbove ? 32 : 16
+    let chartWidth = size.width > 0 && size.height > 0 ? Double(size.width) : 640
+    // Long labels never take more than 40 % of the chart, and both margins together leave the plot at least a fifth
+    // of it, however narrow the chart: the plot keeps a positive width and the labels run over.
+    var column = min(labelColumn, max(24, chartWidth * 0.4)), margin = edgeMargin
+    let room = chartWidth * 0.8
+    if column + margin > room, column + margin > 0 {
+      let scale = room / (column + margin)
+      column *= scale; margin *= scale
+    }
+    left = yAxisLeading ? column : margin
+    right = yAxisLeading ? margin : column
+    // Half a label above the top mark, as Swift Charts leaves; more when the legend is drawn there.
+    top = legendAbove ? 32 : 8
     measured = size.width > 0 && size.height > 0
     width = measured ? Double(size.width) : 640
     plotHeight = measured ? max(Double(size.height) - top - bottom, 24) : 278 - top
@@ -269,10 +284,35 @@ struct _SVGChartRenderer: _ChartRenderer {
     let yAxis = configuration.yAxisCustom.map { resolveAxis($0, domain: yDomain) }
     let legendAbove = configuration.legendPosition != .hidden && configuration.legendPosition != .bottom
       && configuration.legendPosition != .trailing && model.marks.contains { $0.foregroundStyleValue != nil }
-    let layout = _ChartLayout(
-      bottom: xAxis?.hasViewLabels == true ? 104 : 42, size: model.size, legendAbove: legendAbove,
-      yAxisLeading: configuration.yAxisCustom?.first?.position == .leading
+    // Swift Charts' axis metrics, measured on an iPad (Food Truck's forecast): labels under the plot take 13 points
+    // and an axis title 18 more; the y labels' column is as wide as its widest label, and a date x axis whose labels
+    // start at their marks needs no room before the plot.
+    let yLabels: [String]
+    if let yAxis {
+      yLabels = yAxis.entries.flatMap { entry in entry.items.filter { $0.kind == .label && $0.view == nil }.map { labelText($0, value: entry.value, domain: yDomain) } }
+    } else {
+      yLabels = (configuration.yAxis.values ?? _chartAxisValues(.automatic, lower: yDomain.lower, upper: yDomain.upper, isDate: false, step: yDomain.markStep(for: .automatic))).map { _chartNumber($0) }
+    }
+    let yViewLabels = yAxis?.hasViewLabels == true
+    let widestLabel = yLabels.map { _chartLabelWidth($0) }.max() ?? 0
+    let labelColumn = configuration.yAxis.visibility == .hidden ? 8 : yViewLabels ? 72 : 10 + widestLabel + 4
+    let xLabelsStart = xDomain.isDate && !xDomain.categoryMode && xAxis?.hasViewLabels != true
+    // A legend under the chart has a row of its own below the x labels.
+    let legendBelow = configuration.legendPosition == .bottom && model.marks.contains { $0.foregroundStyleValue != nil }
+    // Rows under the plot, top to bottom: the x labels, the axis title, the legend.
+    let labelRow = xAxis?.hasViewLabels == true ? 104.0 : configuration.xAxis.visibility == .hidden ? 4 : 17
+    let titleRoom = (configuration.xAxisLabel == nil ? 0 : 18.0) + (legendBelow ? 22 : 0)
+    // A y axis title is drawn on the leading side: its room goes there, in the label column when the axis is leading.
+    let yTitleRoom = configuration.yAxisLabel == nil ? 0.0 : 24.0
+    let yAxisLeading = configuration.yAxisCustom?.first?.position == .leading
+    var layout = _ChartLayout(
+      bottom: labelRow + titleRoom,
+      size: model.size, legendAbove: legendAbove,
+      yAxisLeading: yAxisLeading,
+      labelColumn: labelColumn + (yAxisLeading ? yTitleRoom : 0),
+      edgeMargin: !yAxisLeading && yTitleRoom > 0 ? yTitleRoom : xLabelsStart ? 0 : 12
     )
+    layout.labelRow = labelRow
     let xScale = { (value: ChartValue) -> Double in
       layout.left + xDomain.fraction(value) * layout.plotWidth
     }
@@ -446,7 +486,23 @@ struct _SVGChartRenderer: _ChartRenderer {
       definition.attributes["x2"] = "\(_chartNumber(gradient.endPoint.x * 100))%"
       definition.attributes["y2"] = "\(_chartNumber(gradient.endPoint.y * 100))%"
     }
-    for stop in gradient.gradient.stops {
+    // Swift Charts blends a gradient's colours in a perceptual space (OKLab: Food Truck's forecast, measured on an iPad,
+    // is lighter halfway than an sRGB blend). An SVG gradient blends in sRGB, so stops between each pair of colours
+    // are mixed in OKLab by the browser (`color-mix`), close enough that the sRGB blend between them is not seen.
+    let stops = gradient.gradient.stops
+    for (index, stop) in stops.enumerated() {
+      if index > 0 {
+        let previous = stops[index - 1]
+        if previous.color.cssValue != stop.color.cssValue {
+          for step in 1..<8 {
+            let t = Double(step) / 8
+            let node = _RenderNode.element("stop")
+            node.attributes["offset"] = _chartNumber(previous.location + (stop.location - previous.location) * t)
+            node.styles["stop-color"] = "color-mix(in oklab, \(previous.color.cssValue) \(_chartNumber((1 - t) * 100))%, \(stop.color.cssValue))"
+            definition.children.append(node)
+          }
+        }
+      }
       let node = _RenderNode.element("stop")
       node.attributes["offset"] = _chartNumber(stop.location)
       node.styles["stop-color"] = stop.color.cssValue
@@ -757,10 +813,15 @@ struct _SVGChartRenderer: _ChartRenderer {
     return _chartNumber(number)
   }
 
-  private func strokeLine(_ line: _RenderNode, stroke: StrokeStyle?, opacity: String) {
-    line.attributes["stroke"] = "currentColor"
-    line.attributes["stroke-opacity"] = opacity
-    guard let stroke else { return }
+  /// An axis line: a hairline in the separator colour, as Swift Charts draws its grid and ticks (a grid line across the
+  /// x axis is dashed, 3 on 3); a `StrokeStyle` given to the mark sets its width and dashes.
+  private func strokeLine(_ line: _RenderNode, stroke: StrokeStyle?, opacity: String, dashed: Bool = false) {
+    line.styles["stroke"] = _chartGridColor
+    line.attributes["stroke-width"] = "0.5"
+    guard let stroke else {
+      if dashed { line.attributes["stroke-dasharray"] = "3 3" }
+      return
+    }
     line.attributes["stroke-width"] = _chartNumber(stroke.lineWidth)
     if !stroke.dash.isEmpty { line.attributes["stroke-dasharray"] = stroke.dash.map { _chartNumber($0) }.joined(separator: " ") }
   }
@@ -779,7 +840,7 @@ struct _SVGChartRenderer: _ChartRenderer {
           let line = _RenderNode.element("line")
           if isX { line.attributes["x1"] = _chartNumber(position); line.attributes["x2"] = _chartNumber(position); line.attributes["y1"] = _chartNumber(layout.top); line.attributes["y2"] = _chartNumber(bottomEdge) }
           else { line.attributes["x1"] = _chartNumber(layout.left); line.attributes["x2"] = _chartNumber(layout.left + layout.plotWidth); line.attributes["y1"] = _chartNumber(position); line.attributes["y2"] = _chartNumber(position) }
-          strokeLine(line, stroke: item.stroke, opacity: "0.12")
+          strokeLine(line, stroke: item.stroke, opacity: "0.12", dashed: isX)
           line.attributes["data-chart-axis-grid"] = isX ? "x" : "y"
           nodes.append(line)
         case .tick:
@@ -799,17 +860,22 @@ struct _SVGChartRenderer: _ChartRenderer {
           if let view = item.view {
             if isX {
               let width = domainBand(domain, extent: layout.plotWidth) ?? 80
-              nodes.append(foreignView(view, x: position - width / 2, y: bottomEdge + pad, width: width, height: layout.bottom - pad - 4, justify: "center", align: "flex-start", env: env, key: "axis-x-\(entryIndex)", role: "axis-label"))
+              nodes.append(foreignView(view, x: position - width / 2, y: bottomEdge + pad, width: width, height: layout.labelRow - pad - 4, justify: "center", align: "flex-start", env: env, key: "axis-x-\(entryIndex)", role: "axis-label"))
             } else {
               let x = layout.yAxisLeading ? layout.left - pad - 64 : layout.left + layout.plotWidth + pad
               nodes.append(foreignView(view, x: x, y: position - 12, width: 64, height: 24, justify: layout.yAxisLeading ? "flex-end" : "flex-start", align: "center", env: env, key: "axis-y-\(entryIndex)", role: "axis-label"))
             }
           } else {
             let text = labelText(item, value: entry.value, domain: domain)
-            let label = isX ? svgText(text, x: position, y: bottomEdge + 12 + pad, anchor: "middle")
-              : layout.yAxisLeading ? svgText(text, x: layout.left - pad - 2, y: position + 4, anchor: "end")
-              : svgText(text, x: layout.left + layout.plotWidth + pad + 2, y: position + 4, anchor: "start")
-            label.attributes["fill"] = "currentColor"; label.attributes["font-size"] = "11"
+            // A date label starts at its mark, a number label is centred on it, as in Swift Charts.
+            let startsAtMark = domain.isDate && !domain.categoryMode
+            // A label that starts at its mark and would run past the plot is left out, as Swift Charts leaves out the
+            // last hour of Food Truck's forecast.
+            if isX && startsAtMark && position + 2 + _chartLabelWidth(text) > layout.left + layout.plotWidth + 1 { continue }
+            let label = isX ? svgText(text, x: startsAtMark ? position + 2 : position, y: bottomEdge + 12, anchor: startsAtMark ? "start" : "middle")
+              : layout.yAxisLeading ? svgText(text, x: layout.left - 6, y: position + 3.5, anchor: "end")
+              : svgText(text, x: layout.left + layout.plotWidth + 6, y: position + 3.5, anchor: "start")
+            label.styles["fill"] = _chartAxisLabelColor; label.attributes["font-size"] = _chartNumber(_chartAxisFontSize)
             label.attributes["data-chart-axis-label"] = isX ? "x" : "y"
             nodes.append(label)
           }
@@ -833,16 +899,16 @@ struct _SVGChartRenderer: _ChartRenderer {
         let yValues = config.yAxis.values ?? _chartAxisValues(.automatic, lower: yDomain.lower, upper: yDomain.upper, isDate: false, step: yDomain.markStep(for: .automatic))
         for value in yValues {
           let fraction = (value - yDomain.lower) / max(yDomain.upper - yDomain.lower, 0.000001); let y = layout.top + layout.plotHeight - (yDomain.reversed ? 1 - fraction : fraction) * layout.plotHeight
-          let grid = _RenderNode.element("line"); grid.attributes["x1"] = _chartNumber(layout.left); grid.attributes["x2"] = _chartNumber(layout.left + layout.plotWidth); grid.attributes["y1"] = _chartNumber(y); grid.attributes["y2"] = _chartNumber(y); grid.attributes["stroke"] = "currentColor"; grid.attributes["stroke-opacity"] = "0.12"; nodes.append(grid)
+          let grid = _RenderNode.element("line"); grid.attributes["x1"] = _chartNumber(layout.left); grid.attributes["x2"] = _chartNumber(layout.left + layout.plotWidth); grid.attributes["y1"] = _chartNumber(y); grid.attributes["y2"] = _chartNumber(y); grid.styles["stroke"] = _chartGridColor; grid.attributes["stroke-width"] = "0.5"; nodes.append(grid)
           let label = layout.yAxisLeading
-            ? svgText(_chartNumber(value), x: layout.left - 8, y: y + 4, anchor: "end")
-            : svgText(_chartNumber(value), x: layout.left + layout.plotWidth + 8, y: y + 4, anchor: "start")
-          label.attributes["fill"] = "currentColor"; label.attributes["font-size"] = "11"; nodes.append(label)
+            ? svgText(_chartNumber(value), x: layout.left - 6, y: y + 3.5, anchor: "end")
+            : svgText(_chartNumber(value), x: layout.left + layout.plotWidth + 6, y: y + 3.5, anchor: "start")
+          label.styles["fill"] = _chartAxisLabelColor; label.attributes["font-size"] = _chartNumber(_chartAxisFontSize); nodes.append(label)
         }
       }
     }
     if config.xAxis.visibility != .hidden {
-      let base = _RenderNode.element("line"); base.attributes["x1"] = _chartNumber(layout.left); base.attributes["x2"] = _chartNumber(layout.left + layout.plotWidth); base.attributes["y1"] = _chartNumber(layout.top + layout.plotHeight); base.attributes["y2"] = _chartNumber(layout.top + layout.plotHeight); base.attributes["stroke"] = "currentColor"; base.attributes["stroke-opacity"] = "0.35"; nodes.append(base)
+      let base = _RenderNode.element("line"); base.attributes["x1"] = _chartNumber(layout.left); base.attributes["x2"] = _chartNumber(layout.left + layout.plotWidth); base.attributes["y1"] = _chartNumber(layout.top + layout.plotHeight); base.attributes["y2"] = _chartNumber(layout.top + layout.plotHeight); base.styles["stroke"] = _chartGridColor; base.attributes["stroke-width"] = "0.5"; nodes.append(base)
       if let xAxis {
         nodes.append(contentsOf: customAxisNodes(xAxis, isX: true, env: env))
       } else {
@@ -856,10 +922,11 @@ struct _SVGChartRenderer: _ChartRenderer {
           let numericValues = config.xAxis.values ?? _chartAxisValues(.automatic, lower: xDomain.lower, upper: xDomain.upper, isDate: xDomain.isDate, step: xDomain.markStep(for: .automatic))
           values = numericValues.map { ($0, xDomain.isDate ? _chartDefaultDateLabel($0, range: xDomain.upper - xDomain.lower) : _chartNumber($0)) }
         }
-        for (raw, labelValue) in values { let fraction = ((raw - xDomain.lower) / max(xDomain.upper - xDomain.lower, 0.000001)); let x = layout.left + (xDomain.reversed ? 1 - fraction : fraction) * layout.plotWidth; let label = svgText(labelValue, x: x, y: layout.top + layout.plotHeight + 18, anchor: "middle"); label.attributes["fill"] = "currentColor"; label.attributes["font-size"] = "11"; nodes.append(label) }
+        for (raw, labelValue) in values { let fraction = ((raw - xDomain.lower) / max(xDomain.upper - xDomain.lower, 0.000001)); let x = layout.left + (xDomain.reversed ? 1 - fraction : fraction) * layout.plotWidth; let startsAtMark = xDomain.isDate && !xDomain.categoryMode; if startsAtMark && x + 2 + _chartLabelWidth(labelValue) > layout.left + layout.plotWidth + 1 { continue }; let label = svgText(labelValue, x: startsAtMark ? x + 2 : x, y: layout.top + layout.plotHeight + 12, anchor: startsAtMark ? "start" : "middle"); label.styles["fill"] = _chartAxisLabelColor; label.attributes["font-size"] = _chartNumber(_chartAxisFontSize); nodes.append(label) }
       }
     }
-    if let label = config.xAxisLabel { nodes.append(svgText(label, x: layout.left + layout.plotWidth / 2, y: layout.height - 4, anchor: "middle")) }
+    // The title's row follows the labels' row (the legend's, when there is one, comes last).
+    if let label = config.xAxisLabel { nodes.append(svgText(label, x: layout.left + layout.plotWidth / 2, y: layout.top + layout.plotHeight + layout.labelRow + 13, anchor: "middle")) }
     if let label = config.yAxisLabel { let node = svgText(label, x: 12, y: layout.top + layout.plotHeight / 2, anchor: "middle"); node.attributes["transform"] = "rotate(-90 12 \(layout.top + layout.plotHeight / 2))"; nodes.append(node) }
     return nodes
   }
@@ -913,9 +980,9 @@ struct _SVGChartRenderer: _ChartRenderer {
       if let explicit = styleValues[value.rawValue] { return explicit }
       let color = palette[nextPalette % palette.count]; nextPalette += 1; return color
     }
-    // Unstyled marks belong to the default series; keeping one stable color
-    // avoids rainbow point clouds for large data sets.
-    return palette[0]
+    // Unstyled marks belong to the default series and take the app's accent colour, as in Swift Charts (Food Truck's
+    // night bands are its indigo); one stable color avoids rainbow point clouds for large data sets.
+    return _chartAccentColor
   }
 
   func svgText(_ text: String, x: Double, y: Double, anchor: String) -> _RenderNode {
@@ -1029,3 +1096,15 @@ private func _chartSquareRoot(_ value: Double) -> Double {
 func _chartMarkRequest(_ spec: AxisMarkValues) -> String {
   "\(spec.desiredCount ?? -1)|\(spec.minimumStride ?? -1)"
 }
+
+/// Swift Charts' axis label: 10 points in the secondary label colour.
+let _chartAxisFontSize = 10.0
+let _chartAxisLabelColor = "light-dark(rgb(60 60 67 / 0.6), rgb(235 235 245 / 0.6))"
+/// Swift Charts' grid lines and ticks: the separator colour.
+let _chartGridColor = "light-dark(rgb(60 60 67 / 0.29), rgb(84 84 88 / 0.6))"
+/// The colour of marks with no style of their own: the app's tint (its catalog `AccentColor`, or `.tint(_:)`), else
+/// the system blue, as iOS draws an app without an accent colour.
+let _chartAccentColor = Color(css: "var(--tint-color, light-dark(#0088FF, #0091FF))")
+
+/// About how wide an axis label is drawn (10-point system text).
+func _chartLabelWidth(_ text: String) -> Double { Double(text.count) * _chartAxisFontSize * 0.58 }

@@ -119,6 +119,13 @@ nested in a private type, or a state declared inside an `#if` in the view, is st
 
 ### Looks that changed
 
+- **Charts look like Swift Charts on iPad** (measured on Food Truck's forecast). A mark with no style of its own takes
+  the app's accent colour (`--tint-color`: the catalog's `AccentColor` or `.tint(_:)`), not blue; a gradient blends in
+  OKLab, so its middle is lighter, as on iPad; axis labels are 10-point text in the secondary label colour; grid lines
+  and ticks are 0.5-point separator lines, dashed (3 on 3) across the x axis; the plot keeps only the room its labels
+  need (the y labels' column is as wide as its widest label, half a label above, 17 points below), and a date axis's
+  labels start at their marks, the last one left out when it would run past the plot. A chart that relied on the
+  blue default writes `.foregroundStyle(.blue)`.
 - **`listItemTint(_:)` tints a list row's icon** (it had no effect): Food Truck's city rows in the sidebar,
   `.listItemTint(.secondary)`, have grey icons, as on iPad. It now returns `some View`, as in SwiftUI.
 - **System colors are Apple's current palette** (iOS 26 and macOS 26): `Color.indigo` is `#6155F5` (dark `#6D7CFF`),
