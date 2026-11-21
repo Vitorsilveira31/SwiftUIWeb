@@ -167,7 +167,7 @@ await runSuite(async () => {
       `(() => { const c = [...document.querySelectorAll('canvas[data-draw-canvas]')]
         .find(c => c.previousElementSibling && c.previousElementSibling.textContent === 'Framed height');
         if (!c) return false; const p = c.getContext('2d').getImageData(c.width >> 1, c.height >> 1, 1, 1).data;
-        return Math.abs(p[0] - 255) <= 4 && Math.abs(p[1] - 69) <= 4 && Math.abs(p[2] - 58) <= 4; })()`,
+        return Math.abs(p[0] - 255) <= 4 && Math.abs(p[1] - 66) <= 4 && Math.abs(p[2] - 69) <= 4; })()`,
       undefined,
       { timeout: 5000 },
     );
@@ -181,7 +181,7 @@ await runSuite(async () => {
       `(() => { const c = [...document.querySelectorAll('canvas[data-draw-canvas]')]
         .find(c => c.previousElementSibling && c.previousElementSibling.textContent === 'Framed height');
         if (!c) return false; const p = c.getContext('2d').getImageData(c.width >> 1, c.height >> 1, 1, 1).data;
-        return Math.abs(p[0] - 255) <= 4 && Math.abs(p[1] - 59) <= 4 && Math.abs(p[2] - 48) <= 4; })()`,
+        return Math.abs(p[0] - 255) <= 4 && Math.abs(p[1] - 56) <= 4 && Math.abs(p[2] - 60) <= 4; })()`,
       undefined,
       { timeout: 5000 },
     ).catch(async (error) => { throw new Error(`light scheme did not repaint the canvas to #FF383C: ${JSON.stringify(await measure("Framed height"))} ${JSON.stringify(await page.evaluate(() => ({ attr: document.documentElement.getAttribute("data-color-scheme"), dark: matchMedia("(prefers-color-scheme: dark)").matches, style: document.documentElement.style.colorScheme })))} (${error.message})`); });
@@ -194,13 +194,13 @@ await runSuite(async () => {
       return c ? [...c.getContext('2d').getImageData(c.width >> 1, c.height >> 1, 1, 1).data.slice(0, 3)] : null;
     }, label);
     const near = (pixel, color) => pixel !== null && pixel.every((a, i) => Math.abs(a - color[i]) <= 4);
-    await page.waitForFunction(`(() => { const c = [...document.querySelectorAll('canvas[data-draw-canvas]')].find(c => c.previousElementSibling && c.previousElementSibling.textContent === 'Subtree scheme'); if (!c) return false; const p = c.getContext('2d').getImageData(c.width >> 1, c.height >> 1, 1, 1).data; return Math.abs(p[0] - 255) <= 4 && Math.abs(p[1] - 59) <= 4; })()`, undefined, { timeout: 5000 });
+    await page.waitForFunction(`(() => { const c = [...document.querySelectorAll('canvas[data-draw-canvas]')].find(c => c.previousElementSibling && c.previousElementSibling.textContent === 'Subtree scheme'); if (!c) return false; const p = c.getContext('2d').getImageData(c.width >> 1, c.height >> 1, 1, 1).data; return Math.abs(p[0] - 255) <= 4 && Math.abs(p[1] - 56) <= 4; })()`, undefined, { timeout: 5000 });
     await page.getByRole("button", { name: "Toggle subtree scheme", exact: true }).click();
-    await page.waitForFunction(`(() => { const c = [...document.querySelectorAll('canvas[data-draw-canvas]')].find(c => c.previousElementSibling && c.previousElementSibling.textContent === 'Subtree scheme'); if (!c) return false; const p = c.getContext('2d').getImageData(c.width >> 1, c.height >> 1, 1, 1).data; return Math.abs(p[0] - 255) <= 4 && Math.abs(p[1] - 69) <= 4; })()`, undefined, { timeout: 5000 })
+    await page.waitForFunction(`(() => { const c = [...document.querySelectorAll('canvas[data-draw-canvas]')].find(c => c.previousElementSibling && c.previousElementSibling.textContent === 'Subtree scheme'); if (!c) return false; const p = c.getContext('2d').getImageData(c.width >> 1, c.height >> 1, 1, 1).data; return Math.abs(p[0] - 255) <= 4 && Math.abs(p[1] - 66) <= 4; })()`, undefined, { timeout: 5000 })
       .catch(async () => { throw new Error(`a subtree switched to dark did not repaint its canvas to #FF4245: ${JSON.stringify(await pixelOf("Subtree scheme"))}`); });
     assert.ok(near(await pixelOf("Framed height"), [255, 56, 60]), "the canvas outside the subtree keeps the page's scheme");
     await page.getByRole("button", { name: "Toggle subtree scheme", exact: true }).click();
-    await page.waitForFunction(`(() => { const c = [...document.querySelectorAll('canvas[data-draw-canvas]')].find(c => c.previousElementSibling && c.previousElementSibling.textContent === 'Subtree scheme'); if (!c) return false; const p = c.getContext('2d').getImageData(c.width >> 1, c.height >> 1, 1, 1).data; return Math.abs(p[0] - 255) <= 4 && Math.abs(p[1] - 59) <= 4; })()`, undefined, { timeout: 5000 });
+    await page.waitForFunction(`(() => { const c = [...document.querySelectorAll('canvas[data-draw-canvas]')].find(c => c.previousElementSibling && c.previousElementSibling.textContent === 'Subtree scheme'); if (!c) return false; const p = c.getContext('2d').getImageData(c.width >> 1, c.height >> 1, 1, 1).data; return Math.abs(p[0] - 255) <= 4 && Math.abs(p[1] - 56) <= 4; })()`, undefined, { timeout: 5000 });
     check("a canvas repaints when its subtree's color scheme switches");
 
     if (errors.length) throw new Error("browser runtime errors: " + errors.join("; "));
