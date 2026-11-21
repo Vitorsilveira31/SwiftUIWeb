@@ -25,6 +25,7 @@
     "SwiftUIWebCharts",
     "SwiftUIWebAVFoundation",
     "SwiftUIWebAVKit",
+    "SwiftUIWebMotion",
     "SwiftUIWebUserNotifications",
     "SwiftUIWebBrowserIO"
   ],
@@ -11090,7 +11091,19 @@
     {
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/ImageAssets.swift",
+      "signature": "public static func install(sizes manifest: String)",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebCore",
+      "file": "Sources/SwiftUIWebCore/ImageAssets.swift",
       "signature": "public static func isLocalPath(_ name: String) -> Bool",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebCore",
+      "file": "Sources/SwiftUIWebCore/ImageAssets.swift",
+      "signature": "public static func pointSize(of name: String) -> (width: Double, height: Double)?",
       "availability": []
     },
     {
@@ -36755,6 +36768,102 @@
       "target": "SwiftUIWebAVKit",
       "file": "Sources/SwiftUIWebAVKit/AVKit.swift",
       "signature": "public typealias Body = Never",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebMotion",
+      "file": "Sources/SwiftUIWebMotion/MotionView.swift",
+      "signature": "public enum MotionContentMode: Hashable, Sendable",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebMotion",
+      "file": "Sources/SwiftUIWebMotion/MotionView.swift",
+      "signature": "public enum MotionLoopMode: Hashable, Sendable",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebMotion",
+      "file": "Sources/SwiftUIWebMotion/MotionView.swift",
+      "signature": "public func _render(in context: _RenderContext) -> _RenderNode",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebMotion",
+      "file": "Sources/SwiftUIWebMotion/MotionView.swift",
+      "signature": "public init(data lottieData: Data) throws",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebMotion",
+      "file": "Sources/SwiftUIWebMotion/MotionView.swift",
+      "signature": "public init(lottie lottieContainer: LottieContainer, animationSpeed: Double = 1.0, loopMode: MotionLoopMode = .loop, isPlaying: Bool = true, contentMode: MotionContentMode = .fit, currentProgress: Double? = nil, fromProgress: Double? = nil, toProgress: Double? = nil, enableMergePaths: Bool = false, currentFrame: CGFloat? = nil, onComplete: ((Bool) -> Void)? = nil)",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebMotion",
+      "file": "Sources/SwiftUIWebMotion/MotionView.swift",
+      "signature": "public init(lottie lottieData: Data, animationSpeed: Double = 1.0, loopMode: MotionLoopMode = .loop, isPlaying: Bool = true, contentMode: MotionContentMode = .fit, currentProgress: Double? = nil, fromProgress: Double? = nil, toProgress: Double? = nil, enableMergePaths: Bool = false, currentFrame: CGFloat? = nil, onComplete: ((Bool) -> Void)? = nil)",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebMotion",
+      "file": "Sources/SwiftUIWebMotion/MotionView.swift",
+      "signature": "public struct LottieContainer: Sendable",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebMotion",
+      "file": "Sources/SwiftUIWebMotion/MotionView.swift",
+      "signature": "public struct MotionView: View",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebMotion",
+      "file": "Sources/SwiftUIWebMotion/MotionView.swift",
+      "signature": "public typealias Body = Never",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebMotion",
+      "file": "Sources/SwiftUIWebMotion/MotionView.swift",
+      "signature": "public var bounds: CGRect",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebMotion",
+      "file": "Sources/SwiftUIWebMotion/MotionView.swift",
+      "signature": "public var duration: TimeInterval",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebMotion",
+      "file": "Sources/SwiftUIWebMotion/MotionView.swift",
+      "signature": "public var endFrame: CGFloat",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebMotion",
+      "file": "Sources/SwiftUIWebMotion/MotionView.swift",
+      "signature": "public var framerate: Double",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebMotion",
+      "file": "Sources/SwiftUIWebMotion/MotionView.swift",
+      "signature": "public var height: Double",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebMotion",
+      "file": "Sources/SwiftUIWebMotion/MotionView.swift",
+      "signature": "public var startFrame: CGFloat",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebMotion",
+      "file": "Sources/SwiftUIWebMotion/MotionView.swift",
+      "signature": "public var width: Double",
       "availability": []
     },
     {

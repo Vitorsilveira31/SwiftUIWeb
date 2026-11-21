@@ -121,6 +121,46 @@ What SwiftUIWeb does not have, such as UIKit, Combine, reflection and some Apple
 instead in [limitations](LIMITATIONS.md). Code that must also build for the web avoids those or keeps them on the Apple
 side.
 
+## Lottie animations shared with a Skip app
+
+A Skip app (iOS and Android) that plays Lottie animations with [SkipMotion](https://source.skip.dev/skip-motion) keeps
+those views on the web too: `SwiftUIWebMotion` has the same `MotionView`, `LottieContainer`, `MotionLoopMode` and
+`MotionContentMode`, drawn by [lottie-web](https://github.com/airbnb/lottie-web). Map the module in the web targets:
+
+```swift
+let alias: [SwiftSetting] = [.unsafeFlags(["-module-alias", "SwiftUI=SwiftUIWeb", "-module-alias", "SkipMotion=SwiftUIWebMotion"])]
+// ...
+.target(
+  name: "Shared",
+  dependencies: [
+    .product(name: "SwiftUIWeb", package: "swiftuiweb"),
+    .product(name: "SwiftUIWebMotion", package: "swiftuiweb"),
+  ],
+  swiftSettings: alias
+),
+```
+
+and the shared views read as they do with Skip:
+
+```swift
+import SwiftUI
+import SkipMotion
+
+struct Celebration: View {
+  let animation: Data   // a Lottie JSON file
+
+  var body: some View {
+    MotionView(lottie: animation, loopMode: .playOnce) { finished in print("done: \(finished)") }
+      .frame(width: 240, height: 240)
+  }
+}
+```
+
+The player is not in the page's first download: the browser fetches it (about 40 KB compressed) the first time a
+`MotionView` is on screen, from the app's own origin, so it works under the bundle's Content-Security-Policy. It is
+lottie-web's SVG player without After Effects expressions, which lottie-web runs with `eval`; an animation that uses
+expressions plays without them. `enableMergePaths` changes nothing, since lottie-web always draws merge paths.
+
 ## Examples
 
 - [`Examples/UniversalApp`](../Examples/UniversalApp/README.md): one settings screen shared by an iOS/iPadOS Xcode

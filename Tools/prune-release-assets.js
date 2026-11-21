@@ -32,6 +32,7 @@ const knownHelpers = new Set([
   "image-pipeline.js",
   "avfoundation.js",
   "shaka-loader.js",
+  "lottie-loader.js",
   "mesh-gradient.js",
   "icon-adapter.js"
 ]);

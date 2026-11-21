@@ -7,6 +7,7 @@ import {AdaptiveTabShell} from './tab-shell.js';
 import {GeometryHost} from './geometry-host.js';
 import {MediaHost} from './media-host.js';
 import {SplitViewHost} from './split-view-host.js';
+import {LottieHost} from './lottie-host.js';
 /** The density a catalog image's file was drawn for, from the folder Tools/compile-assets.mjs puts it in
  * (`catalog-assets/@2x/`, which no catalog name can produce): 1 otherwise. */
 function densityOf(url) {
@@ -2040,6 +2041,8 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   if (typeof SWIFTUIWEB_HAS_MEDIA === 'undefined' || SWIFTUIWEB_HAS_MEDIA) plugins.push(new MediaHost(root, {dispatchNamed, dispatchHeadless, window}));
   // Divider drag and keys for HSplitView and VSplitView: the panes move here and report their settled positions to Swift.
   if (typeof SWIFTUIWEB_HAS_SPLIT_VIEWS === 'undefined' || SWIFTUIWEB_HAS_SPLIT_VIEWS) plugins.push(new SplitViewHost(root, {dispatchNamed, window}));
+  // Lottie animations of a MotionView (SwiftUIWebMotion): lottie-web is imported the first time one is on the page.
+  if (typeof SWIFTUIWEB_HAS_LOTTIE === 'undefined' || SWIFTUIWEB_HAS_LOTTIE) plugins.push(new LottieHost(root, {dispatchNamed, window}));
   plugins.push(new SplitColumnMorph(root, {window}));
   function syncTimelines() {
     if (typeof api.timeline_tick !== 'function' || !markerSeen('timeline')) return;

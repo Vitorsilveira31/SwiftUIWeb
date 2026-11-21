@@ -40,6 +40,8 @@ export const HOST_FEATURES = Object.freeze({
   SWIFTUIWEB_HAS_MEDIA: "media",
   // split-view-host.js.
   SWIFTUIWEB_HAS_SPLIT_VIEWS: "splitViews",
+  // lottie-host.js, the player of a MotionView (lottie-loader.js is a lazy helper of its own, release-reachability.js).
+  SWIFTUIWEB_HAS_LOTTIE: "lottie",
   // tab-shell.js, the `.sidebarAdaptable` TabView presentation: a TabView is navigation evidence.
   SWIFTUIWEB_HAS_ADAPTIVE_TABS: "navigation",
   // NativeDragDropCoordinator in transfer-host.js, which deferred-hosts.js gathers.

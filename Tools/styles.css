@@ -3295,6 +3295,16 @@
     background-color: var(--color-swu-surface);
   }
 
+  /* A MotionView (SwiftUIWebMotion) takes the space it is offered, as a resizable LottieView does (the CSS layout treats
+     it as flexible, css-layout.js); lottie-web draws an SVG that fills it at the animation's proportions. */
+  .motion-view {
+    display: block;
+
+    & > svg {
+      display: block;
+    }
+  }
+
   .responsive-compact {
     display: block;
   }

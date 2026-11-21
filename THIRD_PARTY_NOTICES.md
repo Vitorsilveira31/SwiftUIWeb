@@ -66,6 +66,7 @@ These are fetched by SwiftPM or Bun when a consumer builds the product that need
 | --- | --- | --- |
 | [swift-crypto](https://github.com/apple/swift-crypto) 4.3.1 and [swift-asn1](https://github.com/apple/swift-asn1) 1.7.3 | `SwiftUIWebCrypto` and the products that depend on it | Apache-2.0 |
 | [shaka-player](https://github.com/shaka-project/shaka-player) 5.3.4 | Adaptive media (`SwiftUIWebAVFoundation`); bundled into `shaka-loader.js` for the apps that use it | Apache-2.0 |
+| [lottie-web](https://github.com/airbnb/lottie-web) 5.13.0 | Lottie animations (`SwiftUIWebMotion`); its light SVG player is bundled into `lottie-loader.js` for the apps that use it | MIT |
 
 The Apache License 2.0 text is in [LICENSES/Apache-2.0.txt](LICENSES/Apache-2.0.txt). Shaka Player ships
 under it; keep its copyright notice with any bundle that contains it.

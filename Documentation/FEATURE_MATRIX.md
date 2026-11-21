@@ -6,6 +6,7 @@ This is the runtime contract for the canonical Embedded Swift + browser host. `s
 | --- | --- | --- |
 | `images` | **supported** | `Sources/SwiftUIWebBrowser/BrowserApp.swift`, `Tools/image-pipeline.js` |
 | `adaptiveMedia` | **supported** | `Sources/SwiftUIWebAVFoundation`, `Tools/avfoundation.js` |
+| `lottie` | **supported** | `Sources/SwiftUIWebMotion/MotionView.swift`, `Tools/lottie-host.js`, `Tools/test-lottie-browser.mjs` |
 | `maps` | **fallback** | `Sources/SwiftUIWebMapKit/MapKit.swift`, `Sources/SwiftUIWebMapKit/MapLibreBackend.swift` |
 | `charts` | **supported** | `Sources/SwiftUIWebCharts/Charts.swift` |
 | `datePickers` | **fallback** | `Sources/SwiftUIWebInternationalization/DatePickers.swift`, `Tools/BrowserIO/browser-io.mjs` |

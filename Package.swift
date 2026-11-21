@@ -72,6 +72,7 @@ let package = Package(
     .library(name: "SwiftUIWebCharts", targets: ["SwiftUIWebCharts"]),
     .library(name: "SwiftUIWebAVFoundation", targets: ["SwiftUIWebAVFoundation"]),
     .library(name: "SwiftUIWebAVKit", targets: ["SwiftUIWebAVKit"]),
+    .library(name: "SwiftUIWebMotion", targets: ["SwiftUIWebMotion"]),
     .library(name: "SwiftUIWebUserNotifications", targets: ["SwiftUIWebUserNotifications"]),
     .library(name: "SwiftUIWebSecurity", targets: ["SwiftUIWebSecurity"]),
     .library(name: "SwiftUIWebBrowserIO", targets: ["SwiftUIWebBrowserIO"]),
@@ -92,6 +93,7 @@ let package = Package(
     .executable(name: "MapKitExample", targets: ["MapKitExample"]),
     .executable(name: "MediaExample", targets: ["MediaExample"]),
     .executable(name: "MediaProbeApp", targets: ["MediaProbeApp"]),
+    .executable(name: "LottieProbeApp", targets: ["LottieProbeApp"]),
     .executable(name: "SecurityExample", targets: ["SecurityExample"]),
     .executable(name: "PhotosPickerExample", targets: ["PhotosPickerExample"])
   ],
@@ -186,6 +188,8 @@ let package = Package(
     // exclusively in SwiftUIWebAVFoundation, keeping this target independently
     // tree-shakeable for applications that do not need video UI.
     .target(name: "SwiftUIWebAVKit", dependencies: ["SwiftUIWeb", "SwiftUIWebAVFoundation"], path: "Sources/SwiftUIWebAVKit"),
+    // Lottie animations with the API of Skip's SkipMotion, drawn by lottie-web (Tools/lottie-host.js).
+    .target(name: "SwiftUIWebMotion", dependencies: ["SwiftUIWeb"], path: "Sources/SwiftUIWebMotion"),
     // This target is intentionally independent from SwiftUIWebCore.  It is a
     // small, internal Embedded Swift compatibility probe used to measure the
     // minimum retained structural/runtime slice without compiling the full
@@ -213,6 +217,7 @@ let package = Package(
     .executableTarget(name: "WebKitExample", dependencies: ["SwiftUIWebBrowser", "SwiftUIWebWeb"], path: "Examples/WebKitExample", swiftSettings: appFoundationAlias),
     .executableTarget(name: "MediaExample", dependencies: ["SwiftUIWebBrowser", "SwiftUIWebAVFoundation", "SwiftUIWebAVKit"], path: "Examples/MediaExample", swiftSettings: appFoundationAlias),
     .executableTarget(name: "MediaProbeApp", dependencies: ["SwiftUIWebBrowser", "SwiftUIWebBrowserIO", "SwiftUIWebAVFoundation", "SwiftUIWebAVKit"], path: "Tests/Apps/MediaProbeApp", swiftSettings: appFoundationAlias),
+    .executableTarget(name: "LottieProbeApp", dependencies: ["SwiftUIWebBrowser", "SwiftUIWebMotion"], path: "Tests/Apps/LottieProbeApp", swiftSettings: appFoundationAlias),
     .executableTarget(name: "SecurityExample", dependencies: ["SwiftUIWebBrowser", "SwiftUIWebSecurity"], path: "Examples/SecurityExample", swiftSettings: appFoundationAlias),
     .executableTarget(name: "AVKitExample", dependencies: ["SwiftUIWebBrowser", "SwiftUIWebAVKit"], path: "Examples/AVKitExample", swiftSettings: appFoundationAlias),
     .executableTarget(name: "PhotosPickerExample", dependencies: ["SwiftUIWebBrowser", "SwiftUIWebPhotosUI"], path: "Examples/PhotosPickerExample", swiftSettings: appFoundationAlias),
@@ -249,6 +254,7 @@ let package = Package(
       "SwiftUIWebUniformTypeIdentifiers",
       "SwiftUIWebAVFoundation",
       "SwiftUIWebAVKit",
+      "SwiftUIWebMotion",
       "SwiftUIWebNetworking",
       "SwiftUIWebBrowserIO",
       "SwiftUIWebLocking",

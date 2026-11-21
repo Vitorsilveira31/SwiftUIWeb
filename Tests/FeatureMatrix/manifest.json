@@ -3,6 +3,7 @@
   "features": [
     {"id":"images","status":"supported","evidence":["Sources/SwiftUIWebBrowser/BrowserApp.swift","Tools/image-pipeline.js"]},
     {"id":"adaptiveMedia","status":"supported","evidence":["Sources/SwiftUIWebAVFoundation","Tools/avfoundation.js"]},
+    {"id":"lottie","status":"supported","evidence":["Sources/SwiftUIWebMotion/MotionView.swift","Tools/lottie-host.js","Tools/test-lottie-browser.mjs"]},
     {"id":"maps","status":"fallback","evidence":["Sources/SwiftUIWebMapKit/MapKit.swift","Sources/SwiftUIWebMapKit/MapLibreBackend.swift"]},
     {"id":"charts","status":"supported","evidence":["Sources/SwiftUIWebCharts/Charts.swift"]},
     {"id":"datePickers","status":"fallback","evidence":["Sources/SwiftUIWebInternationalization/DatePickers.swift","Tools/BrowserIO/browser-io.mjs"]},

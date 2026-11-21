@@ -13,6 +13,7 @@ const MARKERS = {
   SWIFTUIWEB_HAS_MOTION: "swu-navigation-cover",
   SWIFTUIWEB_HAS_MEDIA: "media-tracks-report",
   SWIFTUIWEB_HAS_SPLIT_VIEWS: "data-split-min",
+  SWIFTUIWEB_HAS_LOTTIE: "lottie-loader.js",
   SWIFTUIWEB_HAS_ADAPTIVE_TABS: "tab-labels",
   SWIFTUIWEB_HAS_DRAG_DROP: "dragenter",
   SWIFTUIWEB_HAS_PREDICATES: "BEGINSWITH",

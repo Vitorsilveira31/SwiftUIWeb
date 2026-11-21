@@ -71,6 +71,7 @@ Each target under `Sources/` has one job (the full description, with the depende
 | `SwiftUIWebMapKit` | `Map`, drawn by MapLibre. |
 | `SwiftUIWebAVFoundation` | `AVPlayer`-shaped playback that controls a native media element. |
 | `SwiftUIWebAVKit` | `VideoPlayer` with ready-made controls, on top of AVFoundation. |
+| `SwiftUIWebMotion` | `MotionView` and `LottieContainer` with SkipMotion's API, drawn by lottie-web. |
 | `SwiftUIWebPhotosUI` | `PhotosPicker`, reading files from the browser. |
 | `SwiftUIWebWeb` | `WebContentView`, `DOMViewRepresentable`, the document head and credentials. |
 | `SwiftUIWebEmbeddedCoreProbe` | Not shipped. A target the size tools build to measure the minimum WebAssembly artifact. |

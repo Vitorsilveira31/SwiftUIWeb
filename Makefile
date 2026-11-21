@@ -36,7 +36,7 @@ SELECTED_EXAMPLE := $(if $(REQUESTED_EXAMPLE),$(REQUESTED_EXAMPLE),$(EXAMPLE))
 
 .PHONY: plugin-test-quick cross-package-test
 .PHONY: swiftui-parity swiftui-parity-update swiftui-parity-rewrite-baseline browser-release geometry-test geometry-browser-test tools-test test-layout docs-test feature-matrix feature-matrix-write plugin-test server-test universal-app-test universal-app-ios-test universal-app-web-test universal-app-browser-test api-diff api-diff-update api-availability doctor bundle-sizes coverage
-.PHONY: media-worker-test markdown-probe-test trio-web trio-web-build trio-browser-test
+.PHONY: media-worker-test lottie-browser-test markdown-probe-test trio-web trio-web-build trio-browser-test
 .PHONY: example-web example-web-build example-web-build-all example-browser-test
 .PHONY: setup help toolchain build test architecture-check architecture-audit full-test reachability-test browser-test-setup integration-release-test run snapshot styles wasm-size wasm-size-check clean list \
         site lumio quill seekr neighborly stayly mailo web-mount webmount media media-example avkit avkit-example photos-picker photospicker map mapkit notifications user-notifications security webkit
@@ -137,7 +137,7 @@ EXAMPLE_GROUPS = \
 	"showcase: embedded-showcase-test integration-release-test" \
 	"board-site: lazy-rows-browser-test lazy-cell-state-browser-test showcase-site-test first-paint-browser-test wasm-split-browser-test" \
 	"apps: lumio-test quill-test seekr-test neighborly-test stayly-test mailo-test" \
-	"media: media-worker-test" "universal: universal-app-browser-test first-route-browser-test" \
+	"media: media-worker-test lottie-browser-test" "universal: universal-app-browser-test first-route-browser-test" \
 	"consumers: cross-package-test consumer-regression plugin-test web-command-test" \
 	"hostile-values: hostile-values-browser-test" \
 	"variants: dev-profile-test live-literals-embedded-test state-reload-embedded-test" \
@@ -173,6 +173,7 @@ csp-bundles-test:
 	BUILD_ONLY=1 CONFIGURATION=release Tools/run-browser.sh site
 	BUILD_ONLY=1 CONFIGURATION=release Tools/run-browser.sh board
 	SWIFTUIWEB_PRODUCT=MediaProbeApp BUILD_ONLY=1 CONFIGURATION=release Tools/run-browser.sh media
+	SWIFTUIWEB_PRODUCT=LottieProbeApp BUILD_ONLY=1 CONFIGURATION=release Tools/run-browser.sh lottie
 	SWIFTUIWEB_PRODUCT=SecurityExample BUILD_ONLY=1 CONFIGURATION=release Tools/run-browser.sh x
 	BUILD_ONLY=1 CONFIGURATION=release Tools/run-browser.sh neighborly
 	BUILD_ONLY=1 CONFIGURATION=release Tools/run-browser.sh mailo
@@ -267,6 +268,7 @@ help:
 	@echo "  make browser-contract-test      Real Chromium adapters with explicit wire fixtures"
 	@echo "  make lazy-rows-browser-test    Board benchmark: a selection and a favorite show in the publication that answers the click, and after a scroll"
 	@echo "  make motion-browser-test         Transitions in and out, sliding siblings, numeric text and springs in Chromium and WebKit"
+	@echo "  make lottie-browser-test         MotionView (Lottie, lottie-web) in the Worker and on the main thread, Chromium and WebKit"
 	@echo "  make live-literals-browser-test  A save that only changes literal values is shown by the running page, state kept (both development profiles)"
 	@echo "  make state-reload-browser-test   A reload of the development loop keeps the page's plain state (both development profiles)"
 	@echo "  make hot-swap-browser-test       An application edit is loaded into the running page as a side module: no reload, the state kept"
@@ -912,6 +914,12 @@ media-worker-test:
 	bun Tools/test-media-worker-browser.mjs
 	# VideoPlayer's AVKit-style controls over the same fixture and clip (section 12.24), Chromium and WebKit, Worker and main thread.
 	bun Tools/test-avkit-controls-browser.mjs
+
+# MotionView (SwiftUIWebMotion): lottie-web loads on first use under the release CSP and plays what Swift asks, Worker and
+# main thread, Chromium and WebKit.
+lottie-browser-test:
+	SWIFTUIWEB_PRODUCT=LottieProbeApp BUILD_ONLY=1 CONFIGURATION=release Tools/run-browser.sh lottie
+	bun Tools/test-lottie-browser.mjs
 
 security-browser-test:
 	SWIFTUIWEB_PRODUCT=SecurityExample BUILD_ONLY=1 CONFIGURATION=$(SUITE_CONFIGURATION) Tools/run-browser.sh x

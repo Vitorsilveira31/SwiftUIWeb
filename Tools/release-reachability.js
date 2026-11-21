@@ -297,6 +297,8 @@ const rules = {
   media: /\b(?:AV[A-Z]\w*|VideoPlayer)\b|\bimport\s+AV(?:Foundation|Kit)\b/.test(applicationText),
   // Divider drag and keys (split-view-host.js).
   splitViews: /\b[HV]SplitView\b/.test(applicationText),
+  // A Lottie animation (lottie-host.js, and lottie-loader.js on first use): SkipMotion's types, or an import of the module.
+  lottie: /\b(?:MotionView|LottieContainer|MotionLoopMode)\b|\bimport\s+(?:SkipMotion|SwiftUIWebMotion)\b/.test(applicationText),
   // NSPredicate's format language (BrowserIO/predicate-engine.mjs).
   predicates: /\bNS(?:Compound|Comparison)?Predicate\b|\bNSExpression\b|\bpredicateFormat\b|\bfiltered\s*\(\s*using\b/.test(applicationText),
   // transition-host.js: insertion and removal transitions, `.animation`, matched geometry, content and symbol effects,
@@ -348,6 +350,7 @@ const optionalFrameworkRoots = {
   adaptiveMedia: ["Sources/SwiftUIWebAVFoundation", "Sources/SwiftUIWebAVKit"],
   maps: ["Sources/SwiftUIWebMapKit"],
   charts: ["Sources/SwiftUIWebCharts"],
+  lottie: ["Sources/SwiftUIWebMotion"],
   photos: ["Sources/SwiftUIWebPhotosUI"],
   notifications: ["Sources/SwiftUIWebUserNotifications"],
   location: ["Sources/SwiftUIWebCoreLocation"]
@@ -473,6 +476,7 @@ const runtime = {
 if (needsFeatureLoader) runtime.initial.push("feature-loader.js");
 if (rules.images) runtime.lazy.push("image-pipeline.js");
 if (rules.adaptiveMedia) runtime.lazy.push("avfoundation.js", "shaka-loader.js");
+if (rules.lottie) runtime.lazy.push("lottie-loader.js");
 if (literalSymbols.size > 0 || dynamic.symbols) runtime.initial.push("icon-adapter.js");
 if (rules.meshGradient) runtime.initial.push("mesh-gradient.js");
 

@@ -223,6 +223,7 @@ The libraries and tools SwiftUIWeb uses, with thanks to the people who make them
 | [Lucide](https://lucide.dev) (and [Feather](https://feathericons.com), which it grew from) | The icons behind SF Symbol names |
 | [Tailwind CSS](https://tailwindcss.com) | Its preflight is the starting point of the stylesheet's reset |
 | [Shaka Player](https://github.com/shaka-project/shaka-player) | Adaptive streaming (HLS, DASH) for `AVPlayer` and `VideoPlayer` |
+| [lottie-web](https://github.com/airbnb/lottie-web) | Draws the Lottie animations of `MotionView`, the API of [SkipMotion](https://source.skip.dev/skip-motion) |
 | [MapLibre GL JS](https://maplibre.org), [PMTiles](https://protomaps.com) and [OpenStreetMap](https://www.openstreetmap.org) | The map behind MapKit's `Map`, and the data it shows by default |
 | [Binaryen](https://github.com/WebAssembly/binaryen), [Brotli](https://github.com/google/brotli) and [Zstandard](https://github.com/facebook/zstd) | Optimize and compress the release bundles |
 | [Food Truck](https://developer.apple.com/documentation/swiftui/food_truck_building_a_swiftui_multiplatform_app), Apple's sample | The SwiftUI app the `FoodTruck` example runs in the browser |

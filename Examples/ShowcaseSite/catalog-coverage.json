@@ -37,6 +37,7 @@
     "Chart": "Lives in SwiftUIWebCharts; the site does not depend on the optional modules yet.",
     "Map": "Lives in SwiftUIWebMapKit; the site does not depend on the optional modules yet.",
     "VideoPlayer": "Lives in SwiftUIWebAVKit; the site does not depend on the optional modules yet.",
+    "MotionView": "Lives in SwiftUIWebMotion; the site does not depend on the optional modules yet.",
     "WebContentView": "Lives in SwiftUIWebWeb; the site does not depend on the optional modules yet.",
     "PhotosPicker": "Lives in SwiftUIWebPhotosUI; the site does not depend on the optional modules yet.",
     "EditButton": "Needs a List in edit mode beside it.",

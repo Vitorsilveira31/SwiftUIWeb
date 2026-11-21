@@ -26,7 +26,7 @@ export const PUBLIC_TARGETS = [
   "SwiftUIWeb", "SwiftUIWebCrypto", "SwiftUIWebTransferable", "WebFoundation", "WebOSLog", "SwiftUIWebUniformTypeIdentifiers",
   "SwiftUIWebPhotosUI", "SwiftUIWebCore", "SwiftUIWebFeatures", "SwiftUIWebInternationalization", "SwiftUIWebCoreLocation",
   "SwiftUIWebNetworking", "SwiftUIWebSecurity", "SwiftUIWebFiber", "SwiftUIWebHTML", "SwiftUIWebBrowser", "SwiftUIWebWeb",
-  "SwiftUIWebMapKit", "SwiftUIWebCharts", "SwiftUIWebAVFoundation", "SwiftUIWebAVKit", "SwiftUIWebUserNotifications",
+  "SwiftUIWebMapKit", "SwiftUIWebCharts", "SwiftUIWebAVFoundation", "SwiftUIWebAVKit", "SwiftUIWebMotion", "SwiftUIWebUserNotifications",
   "SwiftUIWebBrowserIO",
 ];
 

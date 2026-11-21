@@ -175,7 +175,7 @@ export function kindOf(element) {
   // proposal the page reported (`reportLayouts`), so it is a box of that size.
   if (c.contains('layout-box') && element.hasAttribute('data-layout-proposal')) return 'size';
   if (c.contains('layout-box') || c.contains('regular-grid') || c.contains('table-view') || ['button', 'input', 'textarea', 'select', 'details', 'table', 'ul', 'ol', 'label'].includes(element.localName)) return 'opaque';
-  if (c.contains('avkit-video-player') || c.contains('data-chart') || c.contains('shape-layer') || c.contains('mesh-gradient') || ['canvas', 'iframe', 'video'].includes(element.localName) || element.getAttribute('data-resizable') === 'true') return 'flexible';
+  if (c.contains('avkit-video-player') || c.contains('motion-view') || c.contains('data-chart') || c.contains('shape-layer') || c.contains('mesh-gradient') || ['canvas', 'iframe', 'video'].includes(element.localName) || element.getAttribute('data-resizable') === 'true') return 'flexible';
   if (c.contains('backdrop-layer')) return 'background';
   if (c.contains('overlay-layer')) return 'overlay';
   if (c.contains('vstack') || c.contains('searchable')) return 'vstack';
