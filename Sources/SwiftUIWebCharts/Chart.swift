@@ -185,10 +185,16 @@ struct _ChartLayout {
     self.bottom = bottom
     self.yAxisLeading = yAxisLeading
     let chartWidth = size.width > 0 && size.height > 0 ? Double(size.width) : 640
-    // Long labels never take more than 40 % of the chart: the plot keeps a positive width (the labels run over).
-    let column = min(labelColumn, max(24, chartWidth * 0.4))
-    left = yAxisLeading ? column : edgeMargin
-    right = yAxisLeading ? edgeMargin : column
+    // Long labels never take more than 40 % of the chart, and both margins together leave the plot at least a fifth
+    // of it, however narrow the chart: the plot keeps a positive width and the labels run over.
+    var column = min(labelColumn, max(24, chartWidth * 0.4)), margin = edgeMargin
+    let room = chartWidth * 0.8
+    if column + margin > room, column + margin > 0 {
+      let scale = room / (column + margin)
+      column *= scale; margin *= scale
+    }
+    left = yAxisLeading ? column : margin
+    right = yAxisLeading ? margin : column
     // Half a label above the top mark, as Swift Charts leaves; more when the legend is drawn there.
     top = legendAbove ? 32 : 8
     measured = size.width > 0 && size.height > 0
