@@ -11090,7 +11090,19 @@
     {
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/ImageAssets.swift",
+      "signature": "public static func install(sizes manifest: String)",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebCore",
+      "file": "Sources/SwiftUIWebCore/ImageAssets.swift",
       "signature": "public static func isLocalPath(_ name: String) -> Bool",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebCore",
+      "file": "Sources/SwiftUIWebCore/ImageAssets.swift",
+      "signature": "public static func pointSize(of name: String) -> (width: Double, height: Double)?",
       "availability": []
     },
     {
