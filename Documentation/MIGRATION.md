@@ -119,6 +119,9 @@ nested in a private type, or a state declared inside an `#if` in the view, is st
 
 ### Looks that changed
 
+- **A `DOMViewRepresentable` takes the frame it is offered**, as a `UIViewRepresentable` without an intrinsic size
+  does: a component in a 200 by 200 frame is 200 by 200 (it shrank to what its component drew, and sat centred in the
+  frame). A component that should keep its own size gets a `.frame` of that size.
 - **Charts look like Swift Charts on iPad** (measured on Food Truck's forecast). A mark with no style of its own takes
   the app's accent colour (`--tint-color`: the catalog's `AccentColor` or `.tint(_:)`), not blue; a gradient blends in
   OKLab, so its middle is lighter, as on iPad; axis labels are 10-point text in the secondary label colour; grid lines
