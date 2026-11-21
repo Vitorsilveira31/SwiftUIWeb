@@ -184,8 +184,11 @@ struct _ChartLayout {
        labelColumn: Double = 52, edgeMargin: Double = 16) {
     self.bottom = bottom
     self.yAxisLeading = yAxisLeading
-    left = yAxisLeading ? labelColumn : edgeMargin
-    right = yAxisLeading ? edgeMargin : labelColumn
+    let chartWidth = size.width > 0 && size.height > 0 ? Double(size.width) : 640
+    // Long labels never take more than 40 % of the chart: the plot keeps a positive width (the labels run over).
+    let column = min(labelColumn, max(24, chartWidth * 0.4))
+    left = yAxisLeading ? column : edgeMargin
+    right = yAxisLeading ? edgeMargin : column
     // Half a label above the top mark, as Swift Charts leaves; more when the legend is drawn there.
     top = legendAbove ? 32 : 8
     measured = size.width > 0 && size.height > 0
@@ -286,12 +289,18 @@ struct _SVGChartRenderer: _ChartRenderer {
     let widestLabel = yLabels.map { _chartLabelWidth($0) }.max() ?? 0
     let labelColumn = configuration.yAxis.visibility == .hidden ? 8 : yViewLabels ? 72 : 10 + widestLabel + 4
     let xLabelsStart = xDomain.isDate && !xDomain.categoryMode && xAxis?.hasViewLabels != true
-    let titleRoom = (configuration.xAxisLabel == nil ? 0 : 18.0)
+    // A legend under the chart has a row of its own below the x labels.
+    let legendBelow = configuration.legendPosition == .bottom && model.marks.contains { $0.foregroundStyleValue != nil }
+    let titleRoom = (configuration.xAxisLabel == nil ? 0 : 18.0) + (legendBelow ? 22 : 0)
+    // A y axis title is drawn on the leading side: its room goes there, in the label column when the axis is leading.
+    let yTitleRoom = configuration.yAxisLabel == nil ? 0.0 : 24.0
+    let yAxisLeading = configuration.yAxisCustom?.first?.position == .leading
     let layout = _ChartLayout(
       bottom: xAxis?.hasViewLabels == true ? 104 : configuration.xAxis.visibility == .hidden ? 4 + titleRoom : 17 + titleRoom,
       size: model.size, legendAbove: legendAbove,
-      yAxisLeading: configuration.yAxisCustom?.first?.position == .leading,
-      labelColumn: labelColumn, edgeMargin: configuration.yAxisLabel != nil ? 24 : xLabelsStart ? 0 : 12
+      yAxisLeading: yAxisLeading,
+      labelColumn: labelColumn + (yAxisLeading ? yTitleRoom : 0),
+      edgeMargin: !yAxisLeading && yTitleRoom > 0 ? yTitleRoom : xLabelsStart ? 0 : 12
     )
     let xScale = { (value: ChartValue) -> Double in
       layout.left + xDomain.fraction(value) * layout.plotWidth
