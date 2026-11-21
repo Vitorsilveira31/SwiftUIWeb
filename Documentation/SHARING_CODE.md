@@ -44,7 +44,7 @@ let alias: [SwiftSetting] = [.unsafeFlags(["-module-alias", "SwiftUI=SwiftUIWeb"
 let package = Package(
   name: "MyApp",
   dependencies: [
-    .package(url: "https://github.com/Vitorsilveira31/SwiftUIWeb.git", from: "0.1.37")
+    .package(url: "https://github.com/Vitorsilveira31/SwiftUIWeb.git", from: "0.1.38")
   ],
   targets: [
     .target(
