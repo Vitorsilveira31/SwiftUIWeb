@@ -9,7 +9,7 @@
     "test:integration": "bun Tools/test-integrated-browser.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "1.65.0",
+    "@playwright/test": "1.65.1",
     "shaka-player": "5.3.4"
   }
 }
