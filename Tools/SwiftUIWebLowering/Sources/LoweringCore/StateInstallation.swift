@@ -11,7 +11,8 @@ import SwiftSyntax
 /// `extension Player { func _installState() { _engine._install(); _model._install() } }`, the properties in the order
 /// they are declared, follows the declaration at file scope that holds the view, as `view-inputs` places its extension.
 /// A view nested in a private type, one in another `#if` branch than that declaration, a property inside an `#if` and a
-/// `static` one are left alone (the runtime then adopts them when they are first read).
+/// `static` one are left alone (the runtime then adopts them when they are first read). So is a view that declares
+/// `_installState()` itself, in its body or in an extension.
 ///
 /// Applies to every source, application or framework. Runs after `observable-state`, which turns the `@State` of a model
 /// into `@StateObject`.
@@ -29,8 +30,10 @@ public struct StateInstallationTransform: SourceTransform {
     let tree = Parser.parse(source: text)
     let bytes = SourceBytes(text)
     let index = ScopeIndex(tree)
-    // `stable-source-locations` may have put a directive inside the installation this pass wrote earlier.
-    let plain = StableSourceLocationsTransform.strippingDirectives(text)
+    // Lowering its own output changes nothing: a view whose installation is in the file already keeps it. It is read from
+    // the declarations and not from the text this pass writes, because the passes that run after it write into that text:
+    // `export-interface` marks the function and `stable-source-locations` puts a directive above it.
+    let installed = ViewDeclarations.typesExtended(withMethod: "_installState", in: index)
 
     var insertions: [(offset: Int, text: String)] = []
     for scope in index.scopes {
@@ -48,7 +51,8 @@ public struct StateInstallationTransform: SourceTransform {
         }
       }.first ?? ""
       let qualified = path.joined(separator: ".")
-      if plain.contains("extension \(qualified) {\n  \(access)func _installState()") { continue }
+      // In an extension, or in the view's own body: either way a second one would be a second declaration.
+      if installed.contains(qualified) || ViewDeclarations.declares("_installState", in: view.memberBlock) { continue }
       guard let outer = ViewDeclarations.outermostScope(of: scope, in: index), outer.path.count == 1 else { continue }
       if ViewDeclarations.conditionalBranches(of: scope.node) != ViewDeclarations.conditionalBranches(of: outer.node) { continue }
       let calls = names.map { "_\($0)._install()" }.joined(separator: "; ")
