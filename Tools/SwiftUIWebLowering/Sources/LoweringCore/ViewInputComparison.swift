@@ -164,4 +164,26 @@ enum ViewDeclarations {
     }
     return branches.reversed()
   }
+
+  /// The types, by their dotted name, that an extension in the file gives a method `name` without parameters (in any
+  /// branch of a conditional block of the extension; a `static` function is not one). Only an extension of the whole type
+  /// counts, as the passes write theirs: the type's name alone, with no generic arguments and no where clause. A pass finds
+  /// what it wrote in an earlier lowering this way: the declaration is the same whatever a later pass wrote before it, an
+  /// attribute (`export-interface`) or a directive (`stable-source-locations`), while its text is not.
+  static func typesExtended(withMethod name: String, in index: ScopeIndex) -> Set<String> {
+    var types = Set<String>()
+    for scope in index.scopes {
+      let qualified = scope.path.joined(separator: ".")
+      guard let declaration = scope.node.as(ExtensionDeclSyntax.self), declaration.genericWhereClause == nil,
+        declaration.extendedType.trimmedDescription == qualified
+      else { continue }
+      let declares = flattenedMembers(declaration.memberBlock.members).contains { member in
+        guard let function = member.as(FunctionDeclSyntax.self), function.name.text == name else { return false }
+        return function.signature.parameterClause.parameters.isEmpty
+          && !function.modifiers.contains(.static) && !function.modifiers.contains(.class)
+      }
+      if declares { types.insert(qualified) }
+    }
+    return types
+  }
 }

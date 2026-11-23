@@ -186,6 +186,16 @@ private func exportedText(_ source: String, generic: Set<String> = []) -> String
     return try String(contentsOf: workspace.appendingPathComponent("Sources/Lib.swift"), encoding: .utf8)
   }
 
+  /// The workspace lowers each file a second time and fails the run when that changes it (`SWUI-L002`). A view that keeps
+  /// state gets its installation from `state-installation`, which this pass then marks: the second lowering must find it.
+  @Test func aFrameworkViewThatKeepsStateLowersWithTheFlag() throws {
+    let root = try makeFramework(["Sources/Lib.swift": "public struct V: View {\n  @State var on = false\n}\n"])
+    defer { try? FileManager.default.removeItem(at: root) }
+    let lowered = try loweredLibrary(root, cache: nil, exportInterface: true)
+    #expect(lowered.contains("extension V {\n  @export(interface) public func _installState() { _on._install() }\n}\n"))
+    #expect(lowered.components(separatedBy: "func _installState()").count == 2)
+  }
+
   @Test func theApplicationAndGenericFlagsAreParsed() throws {
     let arguments = try LoweringArguments.parse([
       "--apply", "--export-interface", "--export-interface-application", "--generic-types-in", "a.txt", "--generic-types-in", "b.txt",
