@@ -165,36 +165,43 @@ enum ViewDeclarations {
     return branches.reversed()
   }
 
-  /// The methods `name` without parameters (a `static` function is not one) that the extensions in the file give each
-  /// type, by the type's dotted name: for each method, the `#if` branches that hold it (`conditionalBranches(of:)`), those
-  /// of a conditional block inside the extension included. Only an extension of the whole type counts, as the passes write
-  /// theirs: the type's name alone, with no generic arguments and no where clause. A pass finds what it wrote in an earlier
-  /// lowering this way: the declaration is the same whatever a later pass wrote before it, an attribute
-  /// (`export-interface`) or a directive (`stable-source-locations`), while its text is not.
-  static func extensionMethods(named name: String, in index: ScopeIndex) -> [String: [[SyntaxIdentifier]]] {
-    var methods: [String: [[SyntaxIdentifier]]] = [:]
+  /// The types, by their dotted name, that an extension in the file gives the method a pass writes: `func name()`, a
+  /// member of the extension itself. A pass finds what it wrote in an earlier lowering this way: the declaration is the
+  /// same whatever a later pass wrote before it, an attribute (`export-interface`) or a directive
+  /// (`stable-source-locations`), while its text is not.
+  ///
+  /// What counts is what the text of the method counted, before the passes after it wrote into that text:
+  /// - an extension of the whole type, as the passes write theirs: the type's name alone, with no generic arguments and no
+  ///   where clause. Where the extension stands does not matter, a conditional block included;
+  /// - a member of the extension, not one inside a conditional block of the extension: a configuration that leaves that
+  ///   block out has no such method, so the pass still writes its own;
+  /// - the method a pass writes and no other of that name (`isWritten(_:)`): another one stands beside it.
+  static func typesExtended(withMethod name: String, in index: ScopeIndex) -> Set<String> {
+    var types = Set<String>()
     for scope in index.scopes {
       let qualified = scope.path.joined(separator: ".")
       guard let declaration = scope.node.as(ExtensionDeclSyntax.self), declaration.genericWhereClause == nil,
         declaration.extendedType.trimmedDescription == qualified
       else { continue }
-      for member in flattenedMembers(declaration.memberBlock.members) {
-        guard let function = member.as(FunctionDeclSyntax.self), function.name.text == name,
-          function.signature.parameterClause.parameters.isEmpty,
-          !function.modifiers.contains(.static), !function.modifiers.contains(.class)
-        else { continue }
-        methods[qualified, default: []].append(conditionalBranches(of: Syntax(function)))
+      let declares = declaration.memberBlock.members.contains { member in
+        guard let function = member.decl.as(FunctionDeclSyntax.self), function.name.text == name else { return false }
+        return isWritten(function)
       }
+      if declares { types.insert(qualified) }
     }
-    return methods
+    return types
   }
 
-  /// Whether one of `methods` (the branches `extensionMethods` gives for a type) is compiled wherever `view` is: every
-  /// `#if` branch that holds the method holds the view too. A method in a conditional block of its own is missing from
-  /// the configurations that leave the block out, so it does not stand for the view's.
-  static func covers(_ methods: [[SyntaxIdentifier]]?, view: Syntax) -> Bool {
-    guard let methods else { return false }
-    let branches = conditionalBranches(of: view)
-    return methods.contains { held in held.allSatisfy { branches.contains($0) } }
+  /// Whether `function` is the declaration a pass writes as `func name()`: a method of an instance with no parameter,
+  /// generic parameter, constraint or result, and not `async`. One that differs in any of these (`static`, `async`,
+  /// `where T: Equatable`, a result) is another declaration, which the written one can stand beside. `throws` and
+  /// `mutating` make no other declaration: the compiler takes the written one for a second declaration of it.
+  private static func isWritten(_ function: FunctionDeclSyntax) -> Bool {
+    let signature = function.signature
+    let result = signature.returnClause?.type.trimmedDescription
+    return signature.parameterClause.parameters.isEmpty && signature.effectSpecifiers?.asyncSpecifier == nil
+      && (result == nil || result == "Void" || result == "()" || result == "Swift.Void")
+      && function.genericParameterClause == nil && function.genericWhereClause == nil
+      && !function.modifiers.contains(.static) && !function.modifiers.contains(.class)
   }
 }

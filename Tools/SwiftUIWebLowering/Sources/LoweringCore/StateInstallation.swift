@@ -32,7 +32,7 @@ public struct StateInstallationTransform: SourceTransform {
     // Lowering its own output changes nothing: a view whose installation is in the file already keeps it. It is read from
     // the declarations and not from the text this pass writes, because the passes that run after it write into that text:
     // `export-interface` marks the function and `stable-source-locations` puts a directive above it.
-    let installed = ViewDeclarations.extensionMethods(named: "_installState", in: index)
+    let installed = ViewDeclarations.typesExtended(withMethod: "_installState", in: index)
 
     var insertions: [(offset: Int, text: String)] = []
     for scope in index.scopes {
@@ -50,7 +50,7 @@ public struct StateInstallationTransform: SourceTransform {
         }
       }.first ?? ""
       let qualified = path.joined(separator: ".")
-      if ViewDeclarations.covers(installed[qualified], view: scope.node) { continue }
+      if installed.contains(qualified) { continue }
       guard let outer = ViewDeclarations.outermostScope(of: scope, in: index), outer.path.count == 1 else { continue }
       if ViewDeclarations.conditionalBranches(of: scope.node) != ViewDeclarations.conditionalBranches(of: outer.node) { continue }
       let calls = names.map { "_\($0)._install()" }.joined(separator: "; ")

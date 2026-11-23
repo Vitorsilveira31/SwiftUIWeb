@@ -104,18 +104,51 @@ import Testing
     #expect(result.text.contains("extension V {\n  func _installState() { _on._install() }\n}"))
   }
 
-  @Test func anInstallationInAConditionalBlockOfItsOwnDoesNotStandForTheViews() {
-    // A configuration without `DEBUG` compiles the view and neither of these methods, so the pass still writes its own.
-    let view = "struct V: View {\n  @State var on = false\n}\n\n"
-    let conditional = [
-      "extension V {\n  #if DEBUG\n  func _installState() {}\n  #endif\n}\n",
-      "#if DEBUG\nextension V {\n  func _installState() {}\n}\n#endif\n",
+  // What a method written by hand counts for is what its text counted for before the passes wrote into that text: the
+  // member of an extension is the view's installation wherever the extension stands, and a method inside a conditional
+  // block of the extension is not.
+  @Test func aMethodInAConditionalBlockOfTheExtensionIsNotTheInstallation() {
+    // A configuration without `DEBUG` compiles the view and no such method, so the pass still writes its own.
+    let source = "struct V: View {\n  @State var on = false\n}\n\nextension V {\n  #if DEBUG\n  func _installState() {}\n  #endif\n}\n"
+    let result = installations(source)
+    #expect(result.counts["state-installation"] == 1)
+    #expect(result.text.contains("extension V {\n  func _installState() { _on._install() }\n}"))
+    #expect(installations(result.text).text == result.text)
+  }
+
+  @Test func anInstallationInAnExtensionInsideAConditionalBlockIsKept() {
+    // A second installation would be declared twice wherever `DEBUG` is set.
+    let source = "struct V: View {\n  @State var on = false\n}\n\n#if DEBUG\nextension V {\n  func _installState() {}\n}\n#endif\n"
+    let result = installations(source)
+    #expect(result.counts["state-installation"] == nil)
+    #expect(result.text == source)
+  }
+
+  @Test func anotherDeclarationOfTheNameIsNotTheInstallation() {
+    // None of these is the method the pass writes, and the written one can be declared beside each of them.
+    let view = "struct Box<T>: View {\n  @State var on = false\n}\n\n"
+    let others = [
+      "extension Box {\n  @inline(__always) func _installState() where T: Equatable {}\n}\n",
+      "extension Box {\n  func _installState() async {}\n}\n",
+      "extension Box {\n  func _installState<U>() -> U? { nil }\n}\n",
+      "extension Box {\n  func _installState() -> Int { 0 }\n}\n",
     ]
-    for installation in conditional {
-      let result = installations(view + installation)
+    for other in others {
+      let result = installations(view + other)
       #expect(result.counts["state-installation"] == 1)
-      #expect(result.text.contains("extension V {\n  func _installState() { _on._install() }\n}"))
+      #expect(result.text.contains("extension Box {\n  func _installState() { _on._install() }\n}"))
       #expect(installations(result.text).text == result.text)
+    }
+  }
+
+  @Test func aThrowingOrMutatingMethodOfTheNameIsTheSameDeclaration() {
+    // The compiler takes `func _installState()` beside either of these for a second declaration, so the view is left alone.
+    let view = "struct V: View {\n  @State var on = false\n}\n\n"
+    for method in ["func _installState() throws {}", "mutating func _installState() {}", "func _installState() -> Void {}"] {
+      let source = view + "extension V {\n  \(method)\n}\n"
+      let result = installations(source)
+      #expect(result.counts["state-installation"] == nil)
+      #expect(result.text == source)
     }
   }
 
