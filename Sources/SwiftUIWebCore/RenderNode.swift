@@ -173,53 +173,107 @@ public final class _RenderNode {
       }
     }
   }
+  // The reads below are inlined into every renderer. The writes are not: a write resolves the node and, on a node a
+  // Fiber holds, compares what it had with what it gets (`sealedWrites`), and the framework sets a class, an attribute,
+  // a style or the children in about two thousand places. Each write is one call (`_set…`), and an in-place edit
+  // (`attributes[key] = value`, `children.append(_:)`) a call before it (`_open…`, which returns what a sealed node
+  // held) and, for a sealed node only, one after it (`_close…`).
   public var kind: Kind {
     @inline(__always) get { if _selfPending != nil { _resolveSelf() }; return _sKind }
     @inline(__always) _modify {
       if _selfPending != nil { _resolveSelf() }
       if _sealed { let before = _sKind; yield &_sKind; if _sKind != before { Self.sealedWrites &+= 1 } } else { yield &_sKind }
     }
-    @inline(__always) set { if _selfPending != nil { _resolveSelf() }; if _sealed && newValue != _sKind { Self.sealedWrites &+= 1 }; _sKind = newValue }
+    @inline(__always) set { _setKind(newValue) }
   }
   var _sKind: Kind
+  @inline(never) private func _setKind(_ newValue: __owned Kind) {
+    if _selfPending != nil { _resolveSelf() }
+    if _sealed && newValue != _sKind { Self.sealedWrites &+= 1 }
+    _sKind = newValue
+  }
   public var text: String? {
     @inline(__always) get { if _selfPending != nil { _resolveSelf() }; return _sText }
     @inline(__always) _modify {
       if _selfPending != nil { _resolveSelf() }
       if _sealed { let before = _sText; yield &_sText; if _sText != before { Self.sealedWrites &+= 1 } } else { yield &_sText }
     }
-    @inline(__always) set { if _selfPending != nil { _resolveSelf() }; if _sealed && newValue != _sText { Self.sealedWrites &+= 1 }; _sText = newValue }
+    @inline(__always) set { _setText(newValue) }
   }
   var _sText: String?
+  @inline(never) private func _setText(_ newValue: __owned String?) {
+    if _selfPending != nil { _resolveSelf() }
+    if _sealed && newValue != _sText { Self.sealedWrites &+= 1 }
+    _sText = newValue
+  }
   public var attributes: _NodeValues {
     @inline(__always) get { if _selfPending != nil || _awaitsChildren { _resolveAttributes() }; return _sAttributes }
     // An in-place edit (`attributes[key] = value`) does not need what the children decide; the mark they add is
     // merged into whatever the dictionary holds by then.
     @inline(__always) _modify {
-      if _selfPending != nil { _resolveSelf() }
-      if _sealed { let before = _sAttributes; yield &_sAttributes; if _sAttributes != before { Self.sealedWrites &+= 1 } } else { yield &_sAttributes }
+      let before = _openAttributes()
+      yield &_sAttributes
+      if let before { _closeAttributes(before) }
     }
-    @inline(__always) set { if _selfPending != nil || _awaitsChildren { _resolveAttributes() }; if _sealed && newValue != _sAttributes { Self.sealedWrites &+= 1 }; _sAttributes = newValue }
+    @inline(__always) set { _setAttributes(newValue) }
   }
   var _sAttributes: _NodeValues
+  @inline(never) private func _openAttributes() -> _NodeValues? {
+    if _selfPending != nil { _resolveSelf() }
+    return _sealed ? _sAttributes : nil
+  }
+  @inline(never) private func _closeAttributes(_ before: __owned _NodeValues) {
+    if _sAttributes != before { Self.sealedWrites &+= 1 }
+  }
+  @inline(never) private func _setAttributes(_ newValue: __owned _NodeValues) {
+    if _selfPending != nil || _awaitsChildren { _resolveAttributes() }
+    if _sealed && newValue != _sAttributes { Self.sealedWrites &+= 1 }
+    _sAttributes = newValue
+  }
   public var styles: _NodeValues {
     @inline(__always) get { if _selfPending != nil { _resolveSelf() }; return _sStyles }
     @inline(__always) _modify {
-      if _selfPending != nil { _resolveSelf() }
-      if _sealed { let before = _sStyles; yield &_sStyles; if _sStyles != before { Self.sealedWrites &+= 1 } } else { yield &_sStyles }
+      let before = _openStyles()
+      yield &_sStyles
+      if let before { _closeStyles(before) }
     }
-    @inline(__always) set { if _selfPending != nil { _resolveSelf() }; if _sealed && newValue != _sStyles { Self.sealedWrites &+= 1 }; _sStyles = newValue }
+    @inline(__always) set { _setStyles(newValue) }
   }
   var _sStyles: _NodeValues
+  @inline(never) private func _openStyles() -> _NodeValues? {
+    if _selfPending != nil { _resolveSelf() }
+    return _sealed ? _sStyles : nil
+  }
+  @inline(never) private func _closeStyles(_ before: __owned _NodeValues) {
+    if _sStyles != before { Self.sealedWrites &+= 1 }
+  }
+  @inline(never) private func _setStyles(_ newValue: __owned _NodeValues) {
+    if _selfPending != nil { _resolveSelf() }
+    if _sealed && newValue != _sStyles { Self.sealedWrites &+= 1 }
+    _sStyles = newValue
+  }
   public var classes: [String] {
     @inline(__always) get { if _selfPending != nil { _resolveSelf() }; return _sClasses }
     @inline(__always) _modify {
-      if _selfPending != nil { _resolveSelf() }
-      if _sealed { let before = _sClasses; yield &_sClasses; if _sClasses != before { Self.sealedWrites &+= 1 } } else { yield &_sClasses }
+      let before = _openClasses()
+      yield &_sClasses
+      if let before { _closeClasses(before) }
     }
-    @inline(__always) set { if _selfPending != nil { _resolveSelf() }; if _sealed && newValue != _sClasses { Self.sealedWrites &+= 1 }; _sClasses = newValue }
+    @inline(__always) set { _setClasses(newValue) }
   }
   var _sClasses: [String]
+  @inline(never) private func _openClasses() -> [String]? {
+    if _selfPending != nil { _resolveSelf() }
+    return _sealed ? _sClasses : nil
+  }
+  @inline(never) private func _closeClasses(_ before: __owned [String]) {
+    if _sClasses != before { Self.sealedWrites &+= 1 }
+  }
+  @inline(never) private func _setClasses(_ newValue: __owned [String]) {
+    if _selfPending != nil { _resolveSelf() }
+    if _sealed && newValue != _sClasses { Self.sealedWrites &+= 1 }
+    _sClasses = newValue
+  }
   /// The nodes below this one. Reading them runs a deferred render of them, if there is one (`_RenderStaging`), so a
   /// reader always sees the rendered tree.
   public var children: [_RenderNode] {
@@ -229,25 +283,28 @@ public final class _RenderNode {
       return _children
     }
     @inline(__always) _modify {
-      if _selfPending != nil { _resolveSelf() }
-      if _deferredChildren != nil { _materializeChildren() }
-      if _sealed {
-        let before = _children
-        yield &_children
-        if !_children.elementsEqual(before, by: ===) { Self.sealedWrites &+= 1 }
-      } else {
-        yield &_children
-      }
+      let before = _openChildren()
+      yield &_children
+      if let before { _closeChildren(before) }
     }
-    @inline(__always) set {
-      if _selfPending != nil { _resolveSelf() }
-      _deferredChildren = nil
-      if _attributeJob != nil { _forgetAttributeJob() }
-      if _sealed && !newValue.elementsEqual(_children, by: ===) { Self.sealedWrites &+= 1 }
-      _children = newValue
-    }
+    @inline(__always) set { _setChildren(newValue) }
   }
   var _children: [_RenderNode]
+  @inline(never) private func _openChildren() -> [_RenderNode]? {
+    if _selfPending != nil { _resolveSelf() }
+    if _deferredChildren != nil { _materializeChildren() }
+    return _sealed ? _children : nil
+  }
+  @inline(never) private func _closeChildren(_ before: __owned [_RenderNode]) {
+    if !_children.elementsEqual(before, by: ===) { Self.sealedWrites &+= 1 }
+  }
+  @inline(never) private func _setChildren(_ newValue: __owned [_RenderNode]) {
+    if _selfPending != nil { _resolveSelf() }
+    _deferredChildren = nil
+    if _attributeJob != nil { _forgetAttributeJob() }
+    if _sealed && !newValue.elementsEqual(_children, by: ===) { Self.sealedWrites &+= 1 }
+    _children = newValue
+  }
   /// Set once a Fiber holds this node (`_seal`). Writing a sealed node in place changes what a Fiber shows without a
   /// new node, so the reconcile must not take a node it gets again for unchanged (`_RenderNode.sealedWrites`).
   @_spi(Renderer) public private(set) var _sealed = false
@@ -278,9 +335,14 @@ public final class _RenderNode {
       if _selfPending != nil { _resolveSelf() }
       if _sealed { let before = _sKey; yield &_sKey; if _sKey != before { Self.sealedWrites &+= 1 } } else { yield &_sKey }
     }
-    @inline(__always) set { if _selfPending != nil { _resolveSelf() }; if _sealed && newValue != _sKey { Self.sealedWrites &+= 1 }; _sKey = newValue }
+    @inline(__always) set { _setKey(newValue) }
   }
   var _sKey: _FiberKey?
+  @inline(never) private func _setKey(_ newValue: __owned _FiberKey?) {
+    if _selfPending != nil { _resolveSelf() }
+    if _sealed && newValue != _sKey { Self.sealedWrites &+= 1 }
+    _sKey = newValue
+  }
   public var descriptor: String? {
     @inline(__always) get { if _selfPending != nil { _resolveSelf() }; return _sDescriptor }
     @inline(__always) _modify { if _selfPending != nil { _resolveSelf() }; yield &_sDescriptor }
@@ -289,10 +351,14 @@ public final class _RenderNode {
   var _sDescriptor: String?
   public var events: _NodeEvents {
     @inline(__always) get { if _selfPending != nil { _resolveSelf() }; return _sEvents }
-    @inline(__always) _modify { if _selfPending != nil { _resolveSelf() }; _noteWrite(); yield &_sEvents }
-    @inline(__always) set { if _selfPending != nil { _resolveSelf() }; _noteWrite(); _sEvents = newValue }
+    @inline(__always) _modify { _openEvents(); yield &_sEvents }
+    @inline(__always) set { _openEvents(); _sEvents = newValue }
   }
   var _sEvents: _NodeEvents
+  @inline(never) private func _openEvents() {
+    if _selfPending != nil { _resolveSelf() }
+    _noteWrite()
+  }
   public var taskRegistrations: [TaskRegistration] {
     @inline(__always) get { if _selfPending != nil { _resolveSelf() }; return _sTaskRegistrations }
     @inline(__always) _modify { if _selfPending != nil { _resolveSelf() }; yield &_sTaskRegistrations }

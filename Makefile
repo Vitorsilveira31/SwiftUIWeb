@@ -38,7 +38,7 @@ SELECTED_EXAMPLE := $(if $(REQUESTED_EXAMPLE),$(REQUESTED_EXAMPLE),$(EXAMPLE))
 .PHONY: swiftui-parity swiftui-parity-update swiftui-parity-rewrite-baseline browser-release geometry-test geometry-browser-test tools-test test-layout docs-test feature-matrix feature-matrix-write plugin-test server-test universal-app-test universal-app-ios-test universal-app-web-test universal-app-browser-test api-diff api-diff-update api-availability doctor bundle-sizes coverage
 .PHONY: media-worker-test markdown-probe-test trio-web trio-web-build trio-browser-test
 .PHONY: example-web example-web-build example-web-build-all example-browser-test
-.PHONY: setup help toolchain build test architecture-check architecture-audit full-test reachability-test browser-test-setup integration-release-test run snapshot styles wasm-size wasm-size-check clean list \
+.PHONY: setup help toolchain build test architecture-check architecture-audit full-test reachability-test browser-test-setup integration-release-test run snapshot styles wasm-size wasm-size-check wasm-attribution clean list \
         site lumio quill seekr neighborly stayly mailo web-mount webmount media media-example avkit avkit-example photos-picker photospicker map mapkit notifications user-notifications security webkit
 
 setup:
@@ -375,6 +375,8 @@ help:
 	@echo "  make styles                      Build the browser stylesheet from Tools/styles.css"
 	@echo "  make wasm-size                  Build/analyze the Embedded Showcase WASM"
 	@echo "  make wasm-size-check            Compare Embedded size metrics with the checked-in baseline"
+	@echo "  make wasm-attribution WASM=<named.wasm> [PROFILE=...] [SPLIT=...] [APP_MODULES=A,B]  Where the code bytes go"
+	@echo "  make large-app-size [VIEWS=200]  Generate a synthetic app of VIEWS views, build it in release, report where its bytes go"
 	@echo "  make embedded-core             Build/measure the Foundation-free Embedded Core probe"
 	@echo "  WASM_SDK=<sdk-id> make run       Pin the WebAssembly SDK (also supports shell export)"
 	@echo "  make build CONFIGURATION=release Build all products"
@@ -452,6 +454,29 @@ wasm-size:
 
 wasm-size-check:
 	bun Tools/wasm-size.mjs --check
+
+# Where the code bytes of a named module go (Documentation/Performance/WASM_SIZE.md). WASM is the named module; PROFILE is a
+# wasm-split profile of it, SPLIT the first module of its split, APP_MODULES the application's Swift modules.
+wasm-attribution:
+	@test -n "$(WASM)" || { echo "provide WASM=<named.wasm>, a module built with SWIFTUIWEB_KEEP_OPTIMIZED_WASM_NAMES" >&2; exit 2; }
+	bun Tools/wasm-size-attribution.mjs "$(WASM)" $(if $(PROFILE),--profile "$(PROFILE)") $(if $(SPLIT),--split-primary "$(SPLIT)") $(if $(APP_MODULES),--app-modules "$(APP_MODULES)")
+
+# A synthetic application of VIEWS views (Tools/generate-large-app.mjs), built in release through the launcher, then
+# attributed as it ships: the bundle's two modules, and where the code bytes of the optimized module go. The report stays
+# in .build/large-app/<VIEWS>/report.json, to compare with another checkout's or another view count's
+# (`wasm-size-attribution.mjs --diff`). Bytes per view: the difference in code bytes between two view counts, divided by
+# the difference in views (Documentation/Performance/WASM_SIZE.md).
+VIEWS ?= 200
+LARGE_APP = .build/large-app/$(VIEWS)
+.PHONY: large-app-size
+large-app-size:
+	bun Tools/generate-large-app.mjs --out $(LARGE_APP)/package --views $(VIEWS)
+	SWIFTUIWEB_MODULE_ALIASES=1 SWIFTUIWEB_BUILD_ROOT="$(CURDIR)/$(LARGE_APP)/build" SWIFTUIWEB_BUNDLE_ROOT="$(CURDIR)/$(LARGE_APP)/bundle" SWIFTUIWEB_KEEP_OPTIMIZED_WASM_NAMES="$(CURDIR)/$(LARGE_APP)/names.wasm" BUILD_ONLY=1 CONFIGURATION=release $(SWIFT) Tools/swiftuiweb-run.swift --product LargeApp --package-root $(LARGE_APP)/package --build-only
+	@for file in $(LARGE_APP)/bundle/LargeApp/app*.wasm; do \
+	  printf '%-26s %10s bytes raw %10s bytes br\n' "$$(basename $$file)" "$$(wc -c < $$file | tr -d ' ')" "$$(wc -c < $$file.br | tr -d ' ')"; \
+	done
+	bun Tools/wasm-size-attribution.mjs $(LARGE_APP)/names.wasm --top 15 --app-modules LargeApp --json $(LARGE_APP)/report.json \
+	  $$(profile=$(LARGE_APP)/build/browser-logs/LargeApp/first-screen.prof; [ ! -f "$$profile" ] || printf -- '--profile %s --split-primary %s' "$$profile" "$$(ls $(LARGE_APP)/bundle/LargeApp/app.*.wasm | head -1)")
 
 snapshot:
 	@case "$(SELECTED_EXAMPLE)" in \
@@ -752,7 +777,7 @@ embedded-codable-test:
 
 .PHONY: csp-bundles-test stack-depth-browser-test first-route-browser-test first-paint-browser-test wasm-split-browser-test first-paint-measure security-browser-test webkit-browser-test integrated-check browser-contract-test browser-test-setup identity-test identity-fuzz-test identity-browser-test publication-browser-test scrolling-test scrolling-browser-test presentation-test presentation-browser-test focus-browser-test controls-test controls-browser-test controls-accessibility-test accessibility-test accessibility-browser-test accessibility-audit perf-test memory-test perf-browser-test render-commit-benchmark perf-report perf-ci perf-frames perf-frames-check
 integrated-check:
-	bun Tools/run-scripts.mjs "Tools/test-runtime-contracts.mjs" "Tools/test-embedded-worker-client.mjs" "Tools/test-embedded-migration-replay.mjs" "Tools/test-feature-loader-origin.mjs" "Tools/test-adaptive-media.mjs" "Tools/test-adaptive-media-browser.mjs" "Tools/test-media-host.mjs" "Tools/test-event-value.mjs" "Tools/test-check-wasm-exports.mjs" "Tools/test-rewrite-release-index.js" "Tools/test-build-runtime-bundle.mjs" "Tools/test-layout-resize-settle.mjs" "Tools/test-layout-skip-pass.mjs" "Tools/test-css-layout-incremental.mjs" "Tools/test-css-layout-layers.mjs" "Tools/test-css-layout-relative.mjs" "Tools/test-css-layout-lazy-spacer.mjs" "Tools/test-css-layout-inset-under.mjs" "Tools/test-css-layout-roots.mjs" "Tools/test-css-layout-links.mjs" "Tools/test-avkit-hit-testing.mjs" "Tools/test-navigation-scroll-edge.mjs" "Tools/test-navigation-under-bar.mjs" "Tools/test-zstack-paint-order.mjs" "Tools/test-empty-layer.mjs" "Tools/test-resizable-image.mjs" "Tools/test-dom-view-frame.mjs" "Tools/test-link-hover.mjs" "Tools/test-plain-controls.mjs" "Tools/test-tab-scroll-clearance.mjs" "Tools/test-text-fit.mjs" "Tools/test-tap-target-css.mjs" "Tools/test-icon-host.mjs" "Tools/test-live-reload.mjs" "Tools/test-browser-support.mjs" "Tools/test-csp-bundles.mjs --self-test" "Tools/test-toolchain-report.mjs" "Tools/test-format-compat.mjs" "Tools/test-coverage.mjs" "Tools/test-performance-contracts.mjs" "Tools/test-frame-budgets.mjs" "Tools/test-size-tools.mjs" "Tools/test-nspredicate-probe.mjs" "Tools/test-predicate-engine.mjs" "Tools/test-layout-conformance.mjs" "Tools/test-wasi-host.mjs" "Tools/test-semantic-integration.mjs" "Tools/test-lint-styles.mjs" "Tools/test-style-invalidation.mjs" "Tools/test-selection-highlight.mjs" "Tools/test-css-layout-grid-cells.mjs" "Tools/test-color-scheme-subtree.mjs" "Tools/test-page-scheme.mjs" "Tools/test-textarea-line-limits.mjs"
+	bun Tools/run-scripts.mjs "Tools/test-runtime-contracts.mjs" "Tools/test-embedded-worker-client.mjs" "Tools/test-embedded-migration-replay.mjs" "Tools/test-feature-loader-origin.mjs" "Tools/test-adaptive-media.mjs" "Tools/test-adaptive-media-browser.mjs" "Tools/test-media-host.mjs" "Tools/test-event-value.mjs" "Tools/test-check-wasm-exports.mjs" "Tools/test-rewrite-release-index.js" "Tools/test-build-runtime-bundle.mjs" "Tools/test-layout-resize-settle.mjs" "Tools/test-layout-skip-pass.mjs" "Tools/test-css-layout-incremental.mjs" "Tools/test-css-layout-layers.mjs" "Tools/test-css-layout-relative.mjs" "Tools/test-css-layout-lazy-spacer.mjs" "Tools/test-css-layout-inset-under.mjs" "Tools/test-css-layout-roots.mjs" "Tools/test-css-layout-links.mjs" "Tools/test-avkit-hit-testing.mjs" "Tools/test-navigation-scroll-edge.mjs" "Tools/test-navigation-under-bar.mjs" "Tools/test-zstack-paint-order.mjs" "Tools/test-empty-layer.mjs" "Tools/test-resizable-image.mjs" "Tools/test-dom-view-frame.mjs" "Tools/test-link-hover.mjs" "Tools/test-plain-controls.mjs" "Tools/test-tab-scroll-clearance.mjs" "Tools/test-text-fit.mjs" "Tools/test-tap-target-css.mjs" "Tools/test-icon-host.mjs" "Tools/test-live-reload.mjs" "Tools/test-browser-support.mjs" "Tools/test-csp-bundles.mjs --self-test" "Tools/test-toolchain-report.mjs" "Tools/test-format-compat.mjs" "Tools/test-coverage.mjs" "Tools/test-performance-contracts.mjs" "Tools/test-frame-budgets.mjs" "Tools/test-size-tools.mjs" "Tools/test-wasm-size-attribution.mjs" "Tools/test-generate-large-app.mjs" "Tools/test-nspredicate-probe.mjs" "Tools/test-predicate-engine.mjs" "Tools/test-layout-conformance.mjs" "Tools/test-wasi-host.mjs" "Tools/test-semantic-integration.mjs" "Tools/test-lint-styles.mjs" "Tools/test-style-invalidation.mjs" "Tools/test-selection-highlight.mjs" "Tools/test-css-layout-grid-cells.mjs" "Tools/test-color-scheme-subtree.mjs" "Tools/test-page-scheme.mjs" "Tools/test-textarea-line-limits.mjs"
 
 browser-contract-test:
 	bun Tools/test-integrated-browser.mjs

@@ -38,6 +38,15 @@ function withDirectory(body) {
   try { return body(directory); } finally { rmSync(directory, { recursive: true, force: true }); }
 }
 
+// The environment of Tools/strip-wasm-release.sh in these tests: no size report, and every option the script reads at
+// the value it has when unset, so a variable the caller exports chooses neither the cache entry nor what a test expects.
+function releaseStripEnvironment(cache, extra = {}) {
+  return {
+    ...process.env, WASM_STRIP_CACHE_DIR: cache, WASM_SIZE_REPORT: "0", WASM_OPT: "1", WASM_OPT_LEVEL: "Oz", WASM_OPT_ROUNDS: "2",
+    WASM_OPT_ONE_CALLER_INLINE_MAX_SIZE: "", WASM_KEEP_NAMES: "0", ...extra,
+  };
+}
+
 test("only debug metadata is removed, byte for byte", () => withDirectory((directory) => {
   const executable = Buffer.from([0x01, 0x01, 0x00]); // empty type section
   const retained = Buffer.concat([custom("target_features"), custom("producers"), custom("user-section")]);
@@ -110,7 +119,7 @@ test("usage errors exit non-zero", () => {
 test("the release strip reuses its result for the same input and options", () => withDirectory((directory) => {
   const script = join(ROOT, "Tools/strip-wasm-release.sh");
   const cache = join(directory, "cache");
-  const env = { ...process.env, WASM_STRIP_CACHE_DIR: cache, WASM_OPT: "0", WASM_SIZE_REPORT: "0" };
+  const env = releaseStripEnvironment(cache, { WASM_OPT: "0" });
   const run = (input, output, extra = {}) => spawnSync(script, [input, output], { encoding: "utf8", env: { ...env, ...extra } });
   const raw = Buffer.concat([MAGIC, custom(".debug_info"), Buffer.from([0x01, 0x01, 0x00]), custom("name"), custom("producers")]);
   const input = join(directory, "in.wasm");
@@ -148,6 +157,44 @@ test("the release strip reuses its result for the same input and options", () =>
   assert.deepEqual(readFileSync(inPlace), expected);
 }));
 
+// WASM_KEEP_NAMES=1 is the module as it ships, with its names, for a size attribution: nothing is stripped, and it is
+// another cache entry than the stripped module of the same input. WASM_OPT_ROUNDS is checked before anything runs.
+test("the release strip keeps the names when asked, and checks the round count", () => withDirectory((directory) => {
+  const script = join(ROOT, "Tools/strip-wasm-release.sh");
+  const cache = join(directory, "cache");
+  const env = releaseStripEnvironment(cache, { WASM_OPT: "0" });
+  const run = (input, output, extra = {}) => spawnSync(script, [input, output], { encoding: "utf8", env: { ...env, ...extra } });
+  const raw = Buffer.concat([MAGIC, Buffer.from([0x01, 0x01, 0x00]), custom("name"), custom("producers")]);
+  const input = join(directory, "in.wasm");
+  writeFileSync(input, raw);
+
+  const stripped = run(input, join(directory, "stripped.wasm"));
+  assert.equal(stripped.status, 0, stripped.stderr);
+  assert.ok(readFileSync(join(directory, "stripped.wasm")).length < raw.length);
+
+  const named = run(input, join(directory, "named.wasm"), { WASM_KEEP_NAMES: "1" });
+  assert.equal(named.status, 0, named.stderr);
+  assert.doesNotMatch(named.stderr, /reused the earlier result/);
+  assert.deepEqual(readFileSync(join(directory, "named.wasm")), raw);
+  assert.deepEqual(readFileSync(input), raw);
+
+  // In place, the names stay too.
+  const inPlace = join(directory, "inplace.wasm");
+  writeFileSync(inPlace, raw);
+  assert.equal(run(inPlace, inPlace, { WASM_KEEP_NAMES: "1", WASM_STRIP_CACHE_DIR: "" }).status, 0);
+  assert.deepEqual(readFileSync(inPlace), raw);
+
+  // Another round count is another entry, and a count that is not 1 to 9 is refused.
+  const oneRound = run(input, join(directory, "one.wasm"), { WASM_OPT_ROUNDS: "1" });
+  assert.equal(oneRound.status, 0, oneRound.stderr);
+  assert.doesNotMatch(oneRound.stderr, /reused the earlier result/);
+  for (const rounds of ["0", "10", "two"]) {
+    const refused = run(input, join(directory, "refused.wasm"), { WASM_OPT_ROUNDS: rounds });
+    assert.equal(refused.status, 64, rounds);
+    assert.match(refused.stderr, /WASM_OPT_ROUNDS is 1 to 9/);
+  }
+}));
+
 // Without Binaryen the release strip still succeeds, but says so: an unoptimized app.wasm is a regression nobody should
 // ship silently. WASM_OPT=0 is a deliberate choice and stays quiet. The check runs with a PATH that has no wasm-opt, so
 // it is skipped on a machine where /usr/bin or /bin provides one.
@@ -157,7 +204,7 @@ test("the release strip warns when wasm-opt is missing and stays quiet when WASM
   const script = join(ROOT, "Tools/strip-wasm-release.sh");
   const input = join(directory, "in.wasm");
   writeFileSync(input, Buffer.concat([MAGIC, custom("name")]));
-  const base = { ...process.env, PATH: noBinaryenPath, WASM_SIZE_REPORT: "0", WASM_STRIP_CACHE_DIR: "" };
+  const base = releaseStripEnvironment("", { PATH: noBinaryenPath });
   const missing = spawnSync(script, [input, join(directory, "missing.wasm")], { encoding: "utf8", env: base });
   assert.equal(missing.status, 0, missing.stderr);
   assert.match(missing.stderr, /warning: wasm-opt \(Binaryen\) is not installed/);

@@ -8648,12 +8648,6 @@
     {
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/Core.swift",
-      "signature": "public typealias Body = Never private let renderer: _AnyViewRenderer private let observationBodyRendererFactory: (@MainActor (_RenderContext) -> @MainActor (_RenderContext) -> _RenderNode)?",
-      "availability": []
-    },
-    {
-      "target": "SwiftUIWebCore",
-      "file": "Sources/SwiftUIWebCore/Core.swift",
       "signature": "public var _compactPathID: String",
       "availability": []
     },

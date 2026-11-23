@@ -12,6 +12,9 @@ fi
 input="$1"
 output="${2:-$1}"
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# How many times Binaryen runs its level (see below).
+rounds="${WASM_OPT_ROUNDS:-2}"
+[[ "$rounds" =~ ^[1-9]$ ]] || { echo "WASM_OPT_ROUNDS is 1 to 9, not $rounds" >&2; exit 64; }
 
 # WASM_STRIP_CACHE_DIR names a folder that lives between builds. The result for a given input is the same every time
 # (the Swift build is deterministic), so an unchanged module skips the strip and Binaryen (2 to 4 s on the Showcase) and
@@ -30,7 +33,7 @@ if [[ -n "${WASM_STRIP_CACHE_DIR:-}" ]]; then
     "${hasher[@]}" < "$input"
     "${hasher[@]}" < "${BASH_SOURCE[0]}"
     "${hasher[@]}" < "$root_dir/Tools/swiftuiweb-tools.mjs"
-    printf '%s\n' "${WASM_OPT:-1}" "${WASM_OPT_LEVEL:-Oz}" "${WASM_OPT_ONE_CALLER_INLINE_MAX_SIZE:-}"
+    printf '%s\n' "${WASM_OPT:-1}" "${WASM_OPT_LEVEL:-Oz}" "$rounds" "${WASM_OPT_ONE_CALLER_INLINE_MAX_SIZE:-}" "${WASM_KEEP_NAMES:-0}"
     if command -v wasm-opt >/dev/null 2>&1; then wasm-opt --version; fi
   } | "${hasher[@]}" | cut -d' ' -f1)"
   cache_file="$WASM_STRIP_CACHE_DIR/$key.wasm"
@@ -47,7 +50,15 @@ fi
 
 # This parser removes ONLY name/DWARF custom sections, on every host. The old
 # path silently kept all debug info whenever llvm-objcopy was unavailable.
-"$root_dir/Tools/swiftuiweb-tools.sh" strip-wasm "$input" "$output"
+#
+# WASM_KEEP_NAMES=1 keeps the `name` section through the same optimization instead: the module as it ships, with the
+# names a size attribution reads (Tools/wasm-size-attribution.mjs). Never for a module that is served.
+keep_names="${WASM_KEEP_NAMES:-0}"
+if [[ "$keep_names" == 1 ]]; then
+  [[ "$input" -ef "$output" ]] || cp "$input" "$output"
+else
+  "$root_dir/Tools/swiftuiweb-tools.sh" strip-wasm "$input" "$output"
+fi
 
 # Binaryen runs when `wasm-opt` is installed (WASM_OPT=0 turns it off). `-Oz`
 # takes a large production app's release bundle from 6.7 MB to 4.5 MB raw, which is what the
@@ -60,11 +71,18 @@ fi
 # Swift app sets it: a renderer reached once from `AnyView._render` was being
 # inlined into it, and every nested view level then held that frame on a stack
 # WebKit keeps small for a Worker's WebAssembly.
+#
+# The level runs WASM_OPT_ROUNDS times in one call (2 by default): what the first round inlines and removes leaves
+# duplicates and constants that the second folds (Documentation/Performance/WASM_SIZE.md). WASM_OPT_ROUNDS=1 runs it once.
 if [[ "${WASM_OPT:-1}" == "1" ]] && command -v wasm-opt >/dev/null 2>&1; then
   optimized="$output.opt.$$"
+  level_flags=()
+  for ((round = 0; round < rounds; round++)); do level_flags+=("-${WASM_OPT_LEVEL:-Oz}"); done
   inline_flags=()
   [[ -z "${WASM_OPT_ONE_CALLER_INLINE_MAX_SIZE:-}" ]] || inline_flags=(--one-caller-inline-max-function-size "$WASM_OPT_ONE_CALLER_INLINE_MAX_SIZE")
-  wasm-opt "-${WASM_OPT_LEVEL:-Oz}" ${inline_flags[@]+"${inline_flags[@]}"} "$output" -o "$optimized"
+  # `-g` keeps the names (see WASM_KEEP_NAMES above).
+  [[ "$keep_names" != 1 ]] || inline_flags+=(-g)
+  wasm-opt "${level_flags[@]}" ${inline_flags[@]+"${inline_flags[@]}"} "$output" -o "$optimized"
   mv "$optimized" "$output"
 else
   warn_without_binaryen

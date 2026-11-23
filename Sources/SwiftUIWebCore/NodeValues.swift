@@ -34,12 +34,16 @@ public struct _NodeValues: Hashable, Sendable, Sequence, ExpressibleByDictionary
 
   @inlinable public subscript(key: String) -> String? {
     get { index(of: key).map { entries[$0].value } }
-    set {
-      if let index = index(of: key) {
-        if let newValue { entries[index].value = newValue } else { entries.remove(at: index) }
-      } else if let newValue {
-        entries.append((key, newValue))
-      }
+    set { _set(key, newValue) }
+  }
+
+  /// The subscript's setter, out of line: the render code sets several hundred attributes and styles by name, and
+  /// inlined, the search, the append and the array's growth are compiled into every one of those places.
+  @usableFromInline @inline(never) mutating func _set(_ key: String, _ newValue: String?) {
+    if let index = index(of: key) {
+      if let newValue { entries[index].value = newValue } else { entries.remove(at: index) }
+    } else if let newValue {
+      entries.append((key, newValue))
     }
   }
 

@@ -727,7 +727,11 @@ public nonisolated struct Button<Label: View>: View {
   @_disfavoredOverload @preconcurrency public nonisolated init<S: StringProtocol>(_ title: S, role: ButtonRole?, action: @escaping @MainActor () -> Void) where Label == Text { self.init(role: role, action: action) { Text(title) } }
   @preconcurrency public nonisolated init(_ titleKey: LocalizedStringKey, role: ButtonRole?, action: @escaping @MainActor () -> Void) where Label == Text { self.init(titleKey.resolved, role: role, action: action) }
   @MainActor public func _render(in context: _RenderContext) -> _RenderNode {
-    if _isPrimitiveConfiguration { return _renderPrimitiveConfigurationButton(label: label, action: action, context: context) }
+    // Only `Button(_: PrimitiveButtonStyleConfiguration)` sets the flag. Naming its label type lets the compiler drop this
+    // branch, and the renderer it calls, from the button of every other label type.
+    if _isPrimitiveConfiguration, Label.self == PrimitiveButtonStyleConfiguration.Label.self {
+      return _renderPrimitiveConfigurationButton(label: label, action: action, context: context)
+    }
     let node = _buttonNode(role: role, action: action, context: context)
     let child = _renderButtonLabel(label, role: role, action: action, node: node, context: context)
     _finishButtonNode(node, label: child)
@@ -1797,7 +1801,33 @@ public nonisolated struct ScrollView<Content: View>: View {
   public nonisolated init(_ axes: Axis.Set = .vertical, @ViewBuilder content: () -> Content) { self.axes = axes; self.content = content() }
   /// The scroll bars are the browser's; the flag is accepted for source compatibility.
   public nonisolated init(_ axes: Axis.Set = .vertical, showsIndicators: Bool, @ViewBuilder content: () -> Content) { self.axes = axes; self.content = content() }
-  @MainActor public func _render(in context: _RenderContext) -> _RenderNode { if context._endsLazyScope() { return _renderEndingLazyScope(self, in: context) }; let node = _RenderNode.element("div"); let directionClass = axes.contains(.horizontal) && axes.contains(.vertical) ? "scroll-both" : axes.contains(.horizontal) ? "scroll-horizontal" : "scroll-vertical"; node.classes = ["scroll-view", directionClass]; if context.environment.layoutDirection == .rightToLeft { node.attributes["dir"] = "rtl" }; _ScrollNode(id: _ScrollNode.id(for: context, kind: "scroll"), axes: axes).apply(to: node); let childContext = context.child(_FiberKey("content")); if _RenderStaging.wantsDeferral { _deferStackChild(content, context: childContext, to: node); return node }; let child = content._render(in: childContext); node.children = child.isEmpty ? [] : [child]; return node }
+  @MainActor public func _render(in context: _RenderContext) -> _RenderNode {
+    if context._endsLazyScope() { return _renderEndingLazyScope(self, in: context) }
+    // The node is built before and closed after the nested render in functions of their own, compiled once: this
+    // function is compiled for every type of content.
+    let node = _scrollViewNode(axes: axes, context: context)
+    let childContext = context.child(_FiberKey("content"))
+    if _RenderStaging.wantsDeferral { _deferStackChild(content, context: childContext, to: node); return node }
+    _attachScrollViewContent(content._render(in: childContext), to: node)
+    return node
+  }
+}
+
+/// The element of a `ScrollView` before its content.
+@inline(never)
+@MainActor private func _scrollViewNode(axes: Axis.Set, context: _RenderContext) -> _RenderNode {
+  let node = _RenderNode.element("div")
+  let directionClass = axes.contains(.horizontal) && axes.contains(.vertical) ? "scroll-both" : axes.contains(.horizontal) ? "scroll-horizontal" : "scroll-vertical"
+  node.classes = ["scroll-view", directionClass]
+  if context.environment.layoutDirection == .rightToLeft { node.attributes["dir"] = "rtl" }
+  _ScrollNode(id: _ScrollNode.id(for: context, kind: "scroll"), axes: axes).apply(to: node)
+  return node
+}
+
+/// Gives a `ScrollView`'s element its rendered content.
+@inline(never)
+@MainActor private func _attachScrollViewContent(_ child: _RenderNode, to node: _RenderNode) {
+  node.children = child.isEmpty ? [] : [child]
 }
 
 public nonisolated struct Picker<SelectionValue: Hashable, Content: View>: View {

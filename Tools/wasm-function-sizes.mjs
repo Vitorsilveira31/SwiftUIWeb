@@ -18,7 +18,7 @@ const right = (text, width) => String(text).padStart(width);
 const signedComma = (value) => `${value < 0 ? "-" : "+"}${comma(Math.abs(value))}`;
 const cut = (name, length) => Array.from(name).slice(0, length).join("");
 
-function leb(data, start) {
+export function leb(data, start) {
   let value = 0;
   let scale = 1;
   let i = start;
@@ -32,7 +32,8 @@ function leb(data, start) {
   }
 }
 
-function* sections(data) {
+/** The (kind, payload) of every section of a module, in file order. */
+export function* sections(data) {
   let i = 8;
   while (i < data.length) {
     const kind = data[i];
@@ -44,6 +45,45 @@ function* sections(data) {
   }
 }
 
+/**
+ * The index after the value type at `at`: one byte, or the long form of a reference type, 0x63 or 0x64 (`ref null`,
+ * `ref`) and a heap type.
+ */
+export function skipValueType(bytes, at) {
+  return bytes[at] === 0x63 || bytes[at] === 0x64 ? leb(bytes, at + 1)[1] : at + 1;
+}
+
+/** The number of function imports in an import section payload: the defined functions are numbered after them. */
+export function countFunctionImports(payload) {
+  let functions = 0;
+  let [count, i] = leb(payload, 0);
+  for (let item = 0; item < count; item += 1) {
+    let n;
+    [n, i] = leb(payload, i);
+    i += n;
+    [n, i] = leb(payload, i);
+    i += n;
+    const desc = payload[i];
+    i += 1;
+    if (desc === 0) {
+      [, i] = leb(payload, i);
+      functions += 1;
+    } else if (desc === 1) {
+      i = skipValueType(payload, i);
+      const flags = payload[i];
+      i += 1;
+      [, i] = leb(payload, i);
+      if (flags & 1) [, i] = leb(payload, i);
+    } else if (desc === 2) {
+      const flags = payload[i];
+      i += 1;
+      [, i] = leb(payload, i);
+      if (flags & 1) [, i] = leb(payload, i);
+    } else if (desc === 3) i = skipValueType(payload, i) + 1;
+  }
+  return functions;
+}
+
 export function parse(path) {
   const data = readFileSync(path);
   let imports = 0;
@@ -52,34 +92,7 @@ export function parse(path) {
   const decoder = new TextDecoder("utf-8");
   for (const [kind, payload] of sections(data)) {
     if (kind === 2) {
-      // import section: count function imports (index space)
-      let count;
-      let i;
-      [count, i] = leb(payload, 0);
-      for (let item = 0; item < count; item += 1) {
-        let n;
-        [n, i] = leb(payload, i);
-        i += n;
-        [n, i] = leb(payload, i);
-        i += n;
-        const desc = payload[i];
-        i += 1;
-        if (desc === 0) {
-          [, i] = leb(payload, i);
-          imports += 1;
-        } else if (desc === 1) {
-          i += 1;
-          const flags = payload[i];
-          i += 1;
-          [, i] = leb(payload, i);
-          if (flags & 1) [, i] = leb(payload, i);
-        } else if (desc === 2) {
-          const flags = payload[i];
-          i += 1;
-          [, i] = leb(payload, i);
-          if (flags & 1) [, i] = leb(payload, i);
-        } else if (desc === 3) i += 2;
-      }
+      imports += countFunctionImports(payload);
     } else if (kind === 10) {
       // code
       let count;
