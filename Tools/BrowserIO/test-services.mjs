@@ -213,6 +213,76 @@ let tests = 0;
   tests++;
 }
 
+{ // An SDK error's own `code` (an HTTP status, say) never becomes a BrowserIO status: the call fails with -6.
+  const page = {};
+  const host = hostFor(page);
+  page.SwiftUIWebServices.define('http', () => ({ limited() { throw Object.assign(new Error('Too Many Requests'), { code: 429 }); } }));
+  assert.equal((await call(host, 'http', 'limited')).status, -6, 'on the main thread');
+  let runtime = null;
+  const responder = createServiceResponder(page, message => setTimeout(() => runtime.receive(structuredClone(message)), 0));
+  runtime = createServiceForwarder(message => setTimeout(() => responder.receive(structuredClone(message)), 0));
+  const worker = hostFor({}, { remoteDOM: true, services: runtime.services });
+  assert.equal((await call(worker, 'http', 'limited')).status, -6, 'through a worker');
+  tests++;
+}
+
+{ // A reply still in transit when the app moves threads (handed back by the worker) never resolves the new runtime's call.
+  const page = {};
+  page.SwiftUIWebServices = { queue: [], define(name, factory) { this.queue.push([name, factory]); } };
+  page.SwiftUIWebServices.define('echo', () => ({ say: payload => payload }));
+  const inTransit = [];
+  const responder = createServiceResponder(page, message => inTransit.push(message));
+  const old = createServiceForwarder(message => setTimeout(() => responder.receive(structuredClone(message)), 0));
+  old.services.call('echo', 'say', 'for the old runtime');
+  await settle();
+  assert.equal(inTransit.length, 1, 'the old runtime\'s reply left the page before the move');
+  const moved = createServiceForwarder(() => {});
+  const pending = moved.services.call('echo', 'say', 'for the new runtime');   // request 1 again
+  let settled = false;
+  pending.then(() => { settled = true; }, () => { settled = true; });
+  assert.equal(moved.receive(inTransit[0]), true);   // forwarded to the new core by the move
+  await settle();
+  assert.equal(settled, false, 'the old reply did not answer the new request');
+  tests++;
+}
+
+{ // A service call the worker already made is refused, not made again, when the main thread replays it after a move.
+  const page = {};
+  let calls = 0;
+  page.SwiftUIWebServices = { queue: [], define(name, factory) { this.queue.push([name, factory]); } };
+  page.SwiftUIWebServices.define('ledger', () => ({ record() { calls += 1; return 'ok'; } }));
+  const worker = hostFor(page);
+  const id = next;
+  assert.equal((await call(worker, 'ledger', 'record', '{"entry":1}')).status, 0);
+  const sent = worker.sentSinceSnapshot();
+  assert.deepEqual(sent.map(entry => entry.operation), [BrowserIOOperation.service]);
+  const mainThread = hostFor(page);
+  mainThread.refuseReplayed(sent);
+  next = id;                                          // the replay asks again with the same request id
+  const replayed = await call(mainThread, 'ledger', 'record', '{"entry":1}');
+  assert.equal(replayed.status, -6);
+  assert.match(replayed.text, /already sent/);
+  assert.equal(calls, 1, 'the page made the call once');
+  tests++;
+}
+
+{ // Diagnostics lose whole credentials: every cookie of a header, any Authorization scheme, quoted and assigned secrets.
+  const cases = [
+    ['Error: failed\nCookie: theme=light; session=SECRET\n    at f (x.js:1:1)', /SECRET/, /at f \(x\.js:1:1\)/],
+    ['Authorization: Basic dXNlcjpwYXNz', /dXNlcjpwYXNz/, /Authorization/],
+    ['Authorization: Bearer live-credential', /live-credential/, /Authorization/],
+    ['Request failed: {"password":"hunter2","user":"ana"}', /hunter2/, /"user":"ana"/],
+    ['refused: token=abc123', /abc123/, /refused/],
+  ];
+  for (const [text, secret, kept] of cases) {
+    const safe = safeErrorStack(text);
+    assert.doesNotMatch(safe, secret, text);
+    assert.match(safe, kept, text);
+  }
+  assert.equal(safeErrorStack('at Object.token (file.js:10:5)'), 'at Object.token (file.js:10:5)', 'frames stay readable');
+  tests++;
+}
+
 { // The runtime-error event's stack: redacted like a message, capped, empty without one.
   const stack = 'RuntimeError: unreachable\n    at app.wasm.$s7Example4bodyyF (https://cdn.example/app.wasm?sig=abc123:wasm-function[61]:0x40ea9)\n' + 'x'.repeat(5000);
   const safe = safeErrorStack(stack);

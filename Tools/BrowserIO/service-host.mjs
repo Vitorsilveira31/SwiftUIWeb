@@ -23,6 +23,9 @@ const isThenable = value => value !== null && (typeof value === 'object' || type
 const describe = error => String(error?.message || error);
 // What reaches the page console: the BrowserIO redaction (an SDK error can carry an authenticated URL).
 const logError = (environment, error) => environment.console?.error?.(`[SwiftUIWeb] ${safeErrorMessage(error)}`);
+// Only the framework's own failure codes (negative) cross the bridge: an SDK error's `code` (an HTTP 429, say) would read
+// as a BrowserIO event status (100 and up) and leave the call pending, so every other failure is -6.
+const failureCode = code => Number.isInteger(code) && code < 0 ? code : -6;
 const asText = value => value === undefined || value === null ? '' : typeof value === 'string' ? value : JSON.stringify(value);
 
 /**
@@ -154,6 +157,9 @@ export function createServiceHost(environment, { undefinedWaitMs = UNDEFINED_WAI
  */
 export function createServiceForwarder(post) {
   let next = 1;
+  // Replies name the runtime that asked, so one still in transit when the app moves threads can never resolve the new
+  // runtime's request of the same number (each runtime numbers its requests from 1).
+  const runtime = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
   const replies = new Map();
   const receivers = new Map();
   const services = {
@@ -161,23 +167,24 @@ export function createServiceForwarder(post) {
       const request = next++;
       return new Promise((resolve, reject) => {
         replies.set(request, { resolve, reject });
-        post({ t: 'service', request, name, method, payload });
+        post({ t: 'service', runtime, request, name, method, payload });
       });
     },
     observe(name, event, receive) {
       const subscription = next++;
       receivers.set(subscription, receive);
-      post({ t: 'service-observe', subscription, name, event });
-      return () => { if (receivers.delete(subscription)) post({ t: 'service-unobserve', subscription }); };
+      post({ t: 'service-observe', runtime, subscription, name, event });
+      return () => { if (receivers.delete(subscription)) post({ t: 'service-unobserve', runtime, subscription }); };
     },
   };
   function receive(data) {
+    if ((data.t === 'service-reply' || data.t === 'service-event') && data.runtime !== runtime) return true;
     if (data.t === 'service-reply') {
       const pending = replies.get(data.request);
       if (!pending) return true;
       replies.delete(data.request);
       if (data.ok) pending.resolve(String(data.text ?? ''));
-      else pending.reject(new ServiceError(Number.isInteger(data.code) ? data.code : -6, String(data.message ?? 'Page service failed')));
+      else pending.reject(new ServiceError(failureCode(data.code), String(data.message ?? 'Page service failed')));
       return true;
     }
     if (data.t === 'service-event') { receivers.get(data.subscription)?.(String(data.text ?? '')); return true; }
@@ -200,19 +207,19 @@ export function createServiceResponder(environment, send, options) {
   let generation = 0;
   function receive(data) {
     if (data.t === 'service') {
-      const { request } = data;
-      if (!host) { send({ t: 'service-reply', request, ok: false, code: -7, message: 'Page services are unavailable' }); return true; }
+      const { request, runtime } = data;
+      if (!host) { send({ t: 'service-reply', runtime, request, ok: false, code: -7, message: 'Page services are unavailable' }); return true; }
       const asked = generation;
       host.call(data.name, data.method, data.payload).then(
-        text => { if (asked === generation) send({ t: 'service-reply', request, ok: true, text }); },
-        error => { if (asked === generation) send({ t: 'service-reply', request, ok: false, code: Number.isInteger(error?.code) ? error.code : -6, message: describe(error) }); });
+        text => { if (asked === generation) send({ t: 'service-reply', runtime, request, ok: true, text }); },
+        error => { if (asked === generation) send({ t: 'service-reply', runtime, request, ok: false, code: error instanceof ServiceError ? failureCode(error.code) : -6, message: describe(error) }); });
       return true;
     }
     if (data.t === 'service-observe') {
       if (!host || ended) return true;
-      const { subscription } = data;
+      const { subscription, runtime } = data;
       subscriptions.get(subscription)?.();
-      subscriptions.set(subscription, host.observe(data.name, data.event, text => send({ t: 'service-event', subscription, text })));
+      subscriptions.set(subscription, host.observe(data.name, data.event, text => send({ t: 'service-event', runtime, subscription, text })));
       return true;
     }
     if (data.t === 'service-unobserve') {

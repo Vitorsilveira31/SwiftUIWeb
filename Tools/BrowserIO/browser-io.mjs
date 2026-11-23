@@ -270,10 +270,12 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
     if (streaming) emit(id, 0);
     else { progress?.finish(size); const bytes = new Uint8Array(size); let at = 0; for (const chunk of chunks) { bytes.set(chunk, at); at += chunk.length; } emit(id, 0, responseHeader(response).data(bytes).bytes()); }
   }
-  // A call to a page service: name, method and payload text in; the method's result text out.
+  // A call to a page service: name, method and payload text in; the method's result text out. A call has side effects:
+  // it is recorded like a write so that a replay after the app moves threads does not make it again (`refuseReplayed`).
   async function serviceCall(id, packet) {
     const input = new Reader(packet); const name = input.text(); const method = input.text(); const payload = input.text(); input.finish();
     if (!serviceHost) throw new IOError(-7, 'Page services are unavailable in this runtime');
+    sent.push({ id, operation: BrowserIOOperation.service, packet });
     const result = await serviceHost.call(name, method, payload);
     if (operations.has(id)) emit(id, 0, new Writer().text(result).bytes());
   }
@@ -918,7 +920,7 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
       // The packet stays with observers and timers (it is small and a restart needs it); a fetch keeps it too and
       // `fetchRequest` drops it again unless the request is safe to repeat. See `inflight()`.
       const keepsPacket = RESTARTABLE.has(operation) || operation === BrowserIOOperation.fetch;
-      const refused = operation === BrowserIOOperation.fetch && takeRefusal(id, operation, packet);
+      const refused = (operation === BrowserIOOperation.fetch || operation === BrowserIOOperation.service) && takeRefusal(id, operation, packet);
       operations.set(id, { controller: new AbortController(), timer: null, transaction: null, reader: null, cleanup: null, operation, packet: keepsPacket ? packet : null, restart: RESTARTABLE.has(operation), due: 0, sideEffects: mayRepeatEffect(operation, packet), started: false, refused });
       queueMicrotask(() => run(id, operation, packet)); return 0;
     },
@@ -1009,7 +1011,8 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
         else queueMicrotask(() => { try { fail(id, new IOError(-4, 'Operation cancelled')); } catch (error) { onError(error); } });
       }
     },
-    /** Worker mode, before the app moves to another thread: the side-effecting fetches started since the last snapshot. */
+    /** Worker mode, before the app moves to another thread: the side-effecting fetches and the service calls started since
+     * the last snapshot. */
     sentSinceSnapshot() { return sent.slice(); },
     /** Called when the app takes a snapshot: earlier sends are no longer replayed, so they are forgotten. */
     snapshotTaken() { sent = []; },
