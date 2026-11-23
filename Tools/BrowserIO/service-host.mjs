@@ -8,6 +8,8 @@
 // This host always runs on the page, next to the document the SDKs need: a worker runtime forwards its calls and
 // subscriptions here (embedded-host-core.js and embedded-worker-client.js).
 
+import { safeErrorMessage } from './redact.mjs';
+
 export class ServiceError extends Error {
   constructor(code, message) { super(message); this.code = code; }
 }
@@ -19,6 +21,8 @@ const UNDEFINED_WAIT_MS = 10_000;
 
 const isThenable = value => value !== null && (typeof value === 'object' || typeof value === 'function') && typeof value.then === 'function';
 const describe = error => String(error?.message || error);
+// What reaches the page console: the BrowserIO redaction (an SDK error can carry an authenticated URL).
+const logError = (environment, error) => environment.console?.error?.(`[SwiftUIWeb] ${safeErrorMessage(error)}`);
 const asText = value => value === undefined || value === null ? '' : typeof value === 'string' ? value : JSON.stringify(value);
 
 /**
@@ -44,7 +48,7 @@ export function installServiceRegistry(environment) {
       if (!receivers) return;
       const text = asText(payload);
       for (const receive of [...receivers]) {
-        try { receive(text); } catch (error) { environment.console?.error?.(`[SwiftUIWeb] ${describe(error)}`); }
+        try { receive(text); } catch (error) { logError(environment, error); }
       }
     },
   });
@@ -117,7 +121,7 @@ export function installServiceRegistry(environment) {
   environment[REGISTRY_NAME] = registry;
   // A bad queued entry (a duplicate name, a non-function) is reported and skipped, not allowed to stop the framework.
   for (const [name, factory] of queued) {
-    try { define(name, factory); } catch (error) { environment.console?.error?.(`[SwiftUIWeb] ${describe(error)}`); }
+    try { define(name, factory); } catch (error) { logError(environment, error); }
   }
   return registry;
 }
@@ -136,7 +140,7 @@ export function createServiceHost(environment, { undefinedWaitMs = UNDEFINED_WAI
      * starts the service, so an SDK that only produces events (a push listener) begins listening. */
     observe(name, event, receive) {
       const unsubscribe = subscribe(name, event, receive);
-      resolve(name, undefinedWaitMs).catch(error => environment.console?.error?.(`[SwiftUIWeb] ${describe(error)}`));
+      resolve(name, undefinedWaitMs).catch(error => logError(environment, error));
       return unsubscribe;
     },
   };
@@ -191,13 +195,17 @@ export function createServiceResponder(environment, send, options) {
   const host = environment ? createServiceHost(environment, options) : null;
   const subscriptions = new Map();
   let ended = false;
+  // Each runtime numbers its requests from 1, so a reply is sent only to the runtime that asked: `end` starts a new
+  // generation and the answers of calls still running for the old one are dropped.
+  let generation = 0;
   function receive(data) {
     if (data.t === 'service') {
       const { request } = data;
       if (!host) { send({ t: 'service-reply', request, ok: false, code: -7, message: 'Page services are unavailable' }); return true; }
+      const asked = generation;
       host.call(data.name, data.method, data.payload).then(
-        text => send({ t: 'service-reply', request, ok: true, text }),
-        error => send({ t: 'service-reply', request, ok: false, code: Number.isInteger(error?.code) ? error.code : -6, message: describe(error) }));
+        text => { if (asked === generation) send({ t: 'service-reply', request, ok: true, text }); },
+        error => { if (asked === generation) send({ t: 'service-reply', request, ok: false, code: Number.isInteger(error?.code) ? error.code : -6, message: describe(error) }); });
       return true;
     }
     if (data.t === 'service-observe') {
@@ -215,6 +223,7 @@ export function createServiceResponder(environment, send, options) {
     return false;
   }
   function end({ final = false } = {}) {
+    generation += 1;
     for (const unsubscribe of subscriptions.values()) unsubscribe();
     subscriptions.clear();
     if (final) ended = true;

@@ -1,6 +1,7 @@
 import { BrowserIOOperation, BrowserIOEvent } from './protocol.generated.mjs';
 import { DOMViewError, createDOMViewHost } from './dom-view-host.mjs';
 import { ServiceError, createServiceHost } from './service-host.mjs';
+import { safeErrorMessage } from './redact.mjs';
 import { foldText, formatNumber } from './text-format.mjs';
 import { createPredicates } from './predicate-engine.mjs';
 import { createUnicodeImports } from './unicode-data.mjs';
@@ -62,28 +63,7 @@ function classify(error) {
   const code = error?.name === 'QuotaExceededError' ? -3 : error?.name === 'SecurityError' || error?.name === 'NotAllowedError' ? -2 : error?.name === 'AbortError' ? -4 : -6;
   return new IOError(code, safeErrorMessage(error));
 }
-// Host diagnostics must never echo credentials, cookies, request bodies or
-// query strings into the RenderNode/DOM error channel or console. Keep the
-// stable error class/name because callers use the code, not an opaque message.
-export function safeErrorMessage(error) {
-  return redactDiagnostics(String(error?.message || error || 'Browser host error')).slice(0, 512);
-}
-/** An error's stack, redacted like its message and capped, for the `runtime-error` event's `detail.stack` (an error
- * monitor on the page reports it); empty when there is none. A WASM trap's stack names the Swift frames it ran through. */
-export function safeErrorStack(stack) {
-  return typeof stack === 'string' ? redactDiagnostics(stack).slice(0, 4096) : '';
-}
-function redactDiagnostics(raw) {
-  return raw
-    .replace(/([?&](?:token|access_token|refresh_token|code|key|secret|password|authorization))=[^&#\s]*/gi, '$1=[redacted]')
-    .replace(/(authorization\s*:\s*)(?:bearer\s+)?[^,;\s]+/gi, '$1[redacted]')
-    .replace(/(cookie\s*:\s*)([^,;\s]+)/gi, '$1[redacted]')
-    .replace(/(bearer\s+)[^\s]+/gi, '$1[redacted]')
-    .replace(/https?:\/\/[^\s]+/gi, value => {
-      try { const url = new URL(value); url.username = ''; url.password = ''; url.search = ''; url.hash = ''; return url.href; }
-      catch { return '[redacted-url]'; }
-    });
-}
+export { safeErrorMessage, safeErrorStack } from './redact.mjs';
 /** Per-instance host. Never replace blocked persistence with a fake success. */
 // `remoteDOM` is the worker side of the DOM bridge: the worker has no document, so
 // DOM reads answer from a mirror of the mounted elements that the main thread reported

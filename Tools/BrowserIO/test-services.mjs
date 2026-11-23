@@ -171,6 +171,48 @@ let tests = 0;
   tests++;
 }
 
+{ // After a move, a reply for the old runtime never reaches the new one, whose request numbers start again at 1.
+  const page = {};
+  const later = [];
+  page.SwiftUIWebServices = { queue: [], define(name, factory) { this.queue.push([name, factory]); } };
+  page.SwiftUIWebServices.define('slow', () => ({ wait: () => new Promise(resolve => later.push(resolve)) }));
+  let runtime = null;
+  const responder = createServiceResponder(page, message => setTimeout(() => runtime.receive(structuredClone(message)), 0));
+  const toPage = message => setTimeout(() => responder.receive(structuredClone(message)), 0);
+  const old = createServiceForwarder(toPage);
+  runtime = old;
+  const oldAnswer = old.services.call('slow', 'wait', '');
+  await settle();
+  responder.end();                     // the worker moved: the page now answers the core on the main thread
+  const moved = createServiceForwarder(toPage);
+  runtime = moved;
+  const newAnswer = moved.services.call('slow', 'wait', '');
+  await settle();
+  assert.equal(later.length, 2);
+  later[0]('for the old runtime');
+  await settle();
+  later[1]('for the new runtime');
+  assert.equal(await newAnswer, 'for the new runtime');
+  let oldSettled = false;
+  oldAnswer.then(() => { oldSettled = true; }, () => { oldSettled = true; });
+  await settle();
+  assert.equal(oldSettled, false, 'the old runtime is gone: nothing answers it');
+  tests++;
+}
+
+{ // What a service logs to the page console goes through the host's redaction.
+  const logged = [];
+  const environment = { console: { error: (...parts) => logged.push(parts.join(' ')) } };
+  const host = createServiceHost(environment);
+  environment.SwiftUIWebServices.define('leaky', () => { throw new Error('failed https://api.example/?token=PRIVATE_SECRET'); });
+  const unsubscribe = host.observe('leaky', 'anything', () => {});
+  await settle();
+  unsubscribe();
+  assert.equal(logged.length, 1);
+  assert.doesNotMatch(logged[0], /PRIVATE_SECRET/);
+  tests++;
+}
+
 { // The runtime-error event's stack: redacted like a message, capped, empty without one.
   const stack = 'RuntimeError: unreachable\n    at app.wasm.$s7Example4bodyyF (https://cdn.example/app.wasm?sig=abc123:wasm-function[61]:0x40ea9)\n' + 'x'.repeat(5000);
   const safe = safeErrorStack(stack);
