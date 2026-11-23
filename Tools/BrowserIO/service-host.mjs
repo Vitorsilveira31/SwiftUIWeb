@@ -137,7 +137,12 @@ export function createServiceHost(environment, { undefinedWaitMs = UNDEFINED_WAI
       const service = await resolve(name, undefinedWaitMs);
       const handler = service[method];
       if (typeof handler !== 'function') throw new ServiceError(-8, `Service "${name}" has no method "${method}"`);
-      return asText(await handler.call(service, payload));
+      try {
+        return asText(await handler.call(service, payload));
+      } catch (error) {
+        // An SDK's AbortError or NotAllowedError is still the method failing: -6 here as through a worker.
+        throw error instanceof ServiceError ? error : new ServiceError(-6, describe(error));
+      }
     },
     /** Delivers the service's `event` payloads to `receive` until the returned function is called. Subscribing also
      * starts the service, so an SDK that only produces events (a push listener) begins listening. */

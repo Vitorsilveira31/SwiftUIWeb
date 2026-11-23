@@ -416,6 +416,22 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
     scheduleTaskDrain();
   }
 
+  /** A page service's answer or event, delivered into Swift. Like a cookie change, what it changed is published and kept
+   * in a snapshot, so a move to the main thread cannot lose it: an event reaches Swift at once; a reply resumes Swift a
+   * few microtasks later (BrowserIO's own `await`), so its checkpoint waits for the next task. */
+  function serviceDelivered(data) {
+    serviceForwarder.receive(data);
+    const checkpoint = () => {
+      if (halted || poisoned) return;
+      flushDOM();
+      publishIfChanged();
+      takeSnapshot();
+      scheduleTaskDrain();
+    };
+    if (data.t === 'service-event') checkpoint();
+    else setTimeout(checkpoint, 0);
+  }
+
   function storageEvent(message) {
     const mirror = message.scope === 1 ? sessionMirror : localMirror;
     if (!mirror) return;
@@ -458,7 +474,7 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
       else if (data.t === 'storage') storageEvent(data);
       else if (data.t === 'cookies') cookiesChanged(data.cookies);
       else if (data.t === 'mounts') browserIO?.domTable(data.seq, data.table);
-      else if (data.t === 'service-reply' || data.t === 'service-event') serviceForwarder.receive(data);
+      else if (data.t === 'service-reply' || data.t === 'service-event') serviceDelivered(data);
       else if (data.t === 'force-overflow') forcedOverflow = diagnostics;
       else if (data.t === 'stack-reset') { stackMeter?.reset(); stackSamples = 0; }
       else if (data.t === 'dispose') { clearInterval(drainTimer); browserIO?.dispose?.(); halted = true; replies?.close(); return 'dispose'; }

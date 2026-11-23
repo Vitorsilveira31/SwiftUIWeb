@@ -216,8 +216,12 @@ let tests = 0;
 { // An SDK error's own `code` (an HTTP status, say) never becomes a BrowserIO status: the call fails with -6.
   const page = {};
   const host = hostFor(page);
-  page.SwiftUIWebServices.define('http', () => ({ limited() { throw Object.assign(new Error('Too Many Requests'), { code: 429 }); } }));
+  page.SwiftUIWebServices.define('http', () => ({
+    limited() { throw Object.assign(new Error('Too Many Requests'), { code: 429 }); },
+    aborted() { throw new DOMException('The user aborted a request.', 'AbortError'); },
+  }));
   assert.equal((await call(host, 'http', 'limited')).status, -6, 'on the main thread');
+  assert.equal((await call(host, 'http', 'aborted')).status, -6, 'an SDK AbortError is the method failing, not a BrowserIO cancel');
   let runtime = null;
   const responder = createServiceResponder(page, message => setTimeout(() => runtime.receive(structuredClone(message)), 0));
   runtime = createServiceForwarder(message => setTimeout(() => responder.receive(structuredClone(message)), 0));
@@ -273,6 +277,9 @@ let tests = 0;
     ['Authorization: Bearer live-credential', /live-credential/, /Authorization/],
     ['Request failed: {"password":"hunter2","user":"ana"}', /hunter2/, /"user":"ana"/],
     ['refused: token=abc123', /abc123/, /refused/],
+    ['token: PRIVATE_SECRET', /PRIVATE_SECRET/, /token/],
+    ['password: PRIVATE_SECRET', /PRIVATE_SECRET/, /password/],
+    ['key=PRIVATE_SECRET', /PRIVATE_SECRET/, /key/],
   ];
   for (const [text, secret, kept] of cases) {
     const safe = safeErrorStack(text);

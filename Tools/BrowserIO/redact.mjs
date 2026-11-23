@@ -11,9 +11,9 @@ export function safeErrorStack(stack) {
   return typeof stack === 'string' ? redactDiagnostics(stack).slice(0, 4096) : '';
 }
 // Credential field names, as JSON keys ("password": "…") and as assignments (token=…).
-const SECRET_NAMES = 'password|passwd|token|access_?token|refresh_?token|auth_?token|id_?token|secret|client_?secret|api_?key|session_?id|session|authorization|cookie';
+const SECRET_NAMES = 'password|passwd|token|access_?token|refresh_?token|auth_?token|id_?token|secret|client_?secret|api_?key|key|session_?id|session|authorization|cookie';
 const QUOTED_SECRET = new RegExp(`("(?:${SECRET_NAMES})"\\s*:\\s*)"(?:[^"\\\\]|\\\\.)*"`, 'gi');
-const ASSIGNED_SECRET = new RegExp(`\\b(${SECRET_NAMES})\\s*=\\s*[^\\s&,;"']+`, 'gi');
+const ASSIGNED_SECRET = new RegExp(`\\b(${SECRET_NAMES})\\s*[:=]\\s*[^\\s&,;"']+`, 'gi');
 export function redactDiagnostics(raw) {
   return raw
     .replace(/([?&](?:token|access_token|refresh_token|code|key|secret|password|authorization))=[^&#\s]*/gi, '$1=[redacted]')

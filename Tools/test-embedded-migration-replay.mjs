@@ -8,23 +8,26 @@
 import assert from "node:assert/strict";
 import { createHostCore } from "./embedded-host-core.js";
 import { Writer } from "./BrowserIO/browser-io.mjs";
-import { BrowserIOOperation } from "./BrowserIO/protocol.generated.mjs";
+import { BrowserIOOperation, BrowserIOEvent } from "./BrowserIO/protocol.generated.mjs";
 
 const MODULE = { standIn: true };
 const URL_BASE = "https://app.test/";
 const PACKET_AT = 4096;
 const SCRATCH_AT = 8192;
-const SCHEMA = { phase: 0, idCounter: 4 };
+const SCHEMA = { phase: 0, idCounter: 4, eventSeen: 8 };
 
 const realModuleImports = WebAssembly.Module.imports;
 const realInstantiate = WebAssembly.instantiate;
 let scenario = null;
 let instances = 0;
+const standIns = [];
 WebAssembly.Module.imports = module => (module === MODULE ? [] : realModuleImports(module));
 WebAssembly.instantiate = async (module, imports) => {
   if (module !== MODULE) return realInstantiate(module, imports);
   // The first instance is the Worker's, every later one a main-thread replay.
-  return { exports: standIn(imports, instances++ === 0) };
+  const exports = standIn(imports, instances++ === 0);
+  standIns.push(exports);
+  return { exports };
 };
 
 function fetchPacket(method, url, body) {
@@ -56,13 +59,26 @@ function standIn(imports, onWorker) {
     const status = io.request(id, BrowserIOOperation.fetch, PACKET_AT, packet.length);
     assert.equal(status, 0, "the request import accepts the request");
   };
+  // Observes a page service's events the way BrowserService does.
+  const observe = (name, event) => {
+    const packet = new Writer().text(name).text(event).bytes();
+    const view = new DataView(memory.buffer);
+    const id = view.getUint32(SCHEMA.idCounter, true) + 1;
+    view.setUint32(SCHEMA.idCounter, id, true);
+    bytes().set(packet, PACKET_AT);
+    assert.equal(io.request(id, BrowserIOOperation.serviceEvents, PACKET_AT, packet.length), 0);
+  };
   return {
     memory,
     browser_io_alloc: () => SCRATCH_AT,
-    browser_io_receive: (id, code) => { completions.push({ onWorker, id, code }); },
+    browser_io_receive: (id, code) => {
+      completions.push({ onWorker, id, code });
+      // A service event changes Swift state without starting a task, then the next drain overflows.
+      if (code === BrowserIOEvent.serviceEvent) { bytes()[SCHEMA.eventSeen] = 1; armed = true; }
+    },
     browser_io_free: () => {},
     embedded_browser_start() {},
-    embedded_browser_viewport() { scenario.viewport?.({ issue, crash, arm: () => { armed = true; } }); },
+    embedded_browser_viewport() { scenario.viewport?.({ issue, observe, crash, arm: () => { armed = true; } }); },
     embedded_browser_drain_tasks() {
       if (phase() === 0) { setPhase(1); return 1; }
       if (phase() === 1 && scenario.drainPost) { issue(scenario.method); crash(); setPhase(2); return 1; }
@@ -134,6 +150,38 @@ for (const [name, options, expected] of cases) {
     continue;
   }
   console.log(`ok   ${name}`);
+}
+
+// A page service's event reaches Swift in the Worker and changes its state without starting a task; the next drain
+// overflows. The change must be in the snapshot the main thread continues from (serviceDelivered in embedded-host-core.js).
+{
+  const name = "service event: state it changed survives the move";
+  scenario = { method: "GET", trigger: true, overflows: true, drainArmed: true, viewport: ({ observe }) => observe("push", "message") };
+  requests = []; completions.length = 0; instances = 0; standIns.length = 0;
+  const workerOut = [], mainOut = [];
+  const worker = createHostCore({ post: message => workerOut.push(message), scope, canMigrate: true });
+  await worker.handle(init);
+  await settle();
+  await worker.handle({ t: "call", n: "viewport", a: [] });
+  await settle();
+  const observeMessage = workerOut.find(message => message.t === "service-observe");
+  try {
+    assert.ok(observeMessage, `${name}: the worker asks the page to observe`);
+    await worker.handle({ t: "service-event", runtime: observeMessage.runtime, subscription: observeMessage.subscription, text: "chapter" });
+    await settle();
+    const migrate = workerOut.find(message => message.t === "migrate");
+    assert.ok(migrate, `${name}: the next drain moved the app`);
+    const main = createHostCore({ post: message => mainOut.push(message), scope, canMigrate: false });
+    await main.adopt(MODULE, migrate.state);
+    await settle();
+    assert.equal(new Uint8Array(standIns.at(-1).memory.buffer)[SCHEMA.eventSeen], 1, `${name}: the main thread starts with the change`);
+    await main.handle({ t: "dispose" });
+    console.log(`ok   ${name}`);
+  } catch (error) {
+    failures++;
+    console.log(`FAIL ${error.message}`);
+    await worker.handle({ t: "dispose" });
+  }
 }
 
 if (failures) { console.log(`${failures} migration replay check(s) failed`); process.exit(1); }
