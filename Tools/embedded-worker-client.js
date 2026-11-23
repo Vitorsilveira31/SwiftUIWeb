@@ -6,6 +6,8 @@
 // answered from the newest snapshot the worker published.
 import { readDocumentEnvironment, stackDiagnosticsRequested, publicationFlags } from './wasi-host.js';
 import { createRemoteDOMHost } from './remote-dom-host.js';
+import { createServiceResponder } from './BrowserIO/service-host.mjs';
+import { safeErrorStack } from './BrowserIO/browser-io.mjs';
 import { watchCookies } from './cookie-watch.js';
 import { createHostCore, measurementKey } from './embedded-host-core.js';
 import { BINARY_ATOMS } from './binary-atoms.generated.js';
@@ -74,6 +76,10 @@ export async function createWorkerInstance(module, { baseURL, secondary = null, 
   // The worker has no document: WebMount elements are reported to it and its
   // writes come back as `dom` messages (see remote-dom-host.js).
   const remote = hostWindow?.document?.querySelectorAll ? createRemoteDOMHost({ document: hostWindow.document, window: hostWindow }) : null;
+  // The page's headless services (BrowserIO/service-host.mjs): the core forwards Swift's calls and subscriptions here.
+  // Subscriptions belong to the core that made them, so a move to the main thread or a dispose ends them all; the new
+  // core subscribes again.
+  const pageServices = createServiceResponder(hostWindow, message => send(message));
   let workerHasMounts = false;
   const firstPublished = new Promise((resolve, reject) => { firstPublish = { resolve, reject }; });
 
@@ -190,6 +196,8 @@ export async function createWorkerInstance(module, { baseURL, secondary = null, 
       } catch { /* quota or blocked storage: the worker's mirror keeps working */ }
     } else if (data.t === 'dom') {
       remote?.apply(data.seq, data.ops);
+    } else if (data.t === 'service' || data.t === 'service-observe' || data.t === 'service-unobserve') {
+      if (!disposed) pageServices.receive(data);
     } else if (data.t === 'open-window') {
       try { severOpener(hostWindow?.open(String(data.url), 'popup-window', 'popup,width=520,height=720')); } catch { /* blocked */ }
     } else if (data.t === 'stack-stats') {
@@ -207,6 +215,7 @@ export async function createWorkerInstance(module, { baseURL, secondary = null, 
   let migration = null;
   function beginMigration(state) {
     migration = state;
+    pageServices.end();
     target = 'migrating';
     worker.postMessage({ t: 'drain-marker' });
   }
@@ -239,13 +248,13 @@ export async function createWorkerInstance(module, { baseURL, secondary = null, 
     if (stackOverflow) failure.stackOverflow = true;
     firstPublish.reject(failure);
     console.error(`[SwiftUIWeb] ${failure.message}`, typeof stack === 'string' ? stack : '');
-    window_dispatchError(failure.message);
+    window_dispatchError(failure.message, stack);
     // The app ran out of call stack in the worker. Whoever started the worker decides what happens next (the
     // runtime restarts the app on the main thread, whose stack is far deeper).
     if (stackOverflow && !disposed) for (const handler of overflowHandlers) handler(failure);
   }
-  function window_dispatchError(message) {
-    try { hostWindow?.dispatchEvent(new hostWindow.CustomEvent('runtime-error', { detail: { message } })); } catch { /* no window */ }
+  function window_dispatchError(message, stack) {
+    try { hostWindow?.dispatchEvent(new hostWindow.CustomEvent('runtime-error', { detail: { message, stack: safeErrorStack(stack) } })); } catch { /* no window */ }
   }
   const onStorage = event => {
     const scope = event.storageArea === storages[1] ? 1 : event.storageArea === storages[0] ? 0 : -1;
@@ -353,6 +362,7 @@ export async function createWorkerInstance(module, { baseURL, secondary = null, 
     dispose() {
       if (disposed) return;
       disposed = true;
+      pageServices.end({ final: true });
       wipeSecure(latest.secure);
       hostWindow?.removeEventListener?.('storage', onStorage);
       cookieWatch.dispose();

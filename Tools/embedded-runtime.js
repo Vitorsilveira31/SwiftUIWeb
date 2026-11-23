@@ -1,4 +1,4 @@
-import { createBrowserIO, safeErrorMessage } from './BrowserIO/browser-io.mjs';
+import { createBrowserIO, safeErrorMessage, safeErrorStack } from './BrowserIO/browser-io.mjs';
 import { mountEmbeddedBrowser } from './embedded-dom.js';
 import { createHeadroomMeter, STACK_PROBE_MODULE } from './stack-probe.js';
 import { createWasiHost, readDocumentEnvironment, stackDiagnosticsRequested, publicationFlags } from './wasi-host.js';
@@ -177,7 +177,7 @@ function restartOnMainThread(module, options, when) {
   disposeCurrentSession();
   return startOnMainThread(module, options).catch(error => {
     console.error('[SwiftUIWeb] restarting on the main thread failed', safeErrorMessage(error));
-    try { globalThis.dispatchEvent(new CustomEvent('runtime-error', { detail: { message: safeErrorMessage(error) } })); } catch { /* no window */ }
+    try { globalThis.dispatchEvent(new CustomEvent('runtime-error', { detail: { message: safeErrorMessage(error), stack: safeErrorStack(error?.stack) } })); } catch { /* no window */ }
   });
 }
 

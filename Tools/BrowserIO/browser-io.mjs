@@ -1,5 +1,6 @@
 import { BrowserIOOperation, BrowserIOEvent } from './protocol.generated.mjs';
 import { DOMViewError, createDOMViewHost } from './dom-view-host.mjs';
+import { ServiceError, createServiceHost } from './service-host.mjs';
 import { foldText, formatNumber } from './text-format.mjs';
 import { createPredicates } from './predicate-engine.mjs';
 import { createUnicodeImports } from './unicode-data.mjs';
@@ -9,7 +10,7 @@ const decoder = new TextDecoder('utf-8', { fatal: true });
 const MAX_PACKET = 64 * 1024 * 1024;
 // Operations a host can start again from their packet when the app moves to another thread (observers and timers; a
 // read-only fetch joins them once its request is parsed). Writes and transactions are reported as cancelled instead.
-const RESTARTABLE = new Set([BrowserIOOperation.timer, BrowserIOOperation.storageChanges, BrowserIOOperation.connectivityChanges, BrowserIOOperation.media]);
+const RESTARTABLE = new Set([BrowserIOOperation.timer, BrowserIOOperation.storageChanges, BrowserIOOperation.connectivityChanges, BrowserIOOperation.media, BrowserIOOperation.serviceEvents]);
 // Whether starting the operation again could repeat a side effect: every operation except the observers and a fetch
 // whose method only reads (GET, HEAD). Used when the app moves threads (see `fenceUnstarted` and `refuseReplayed`).
 function mayRepeatEffect(operation, packet) {
@@ -57,6 +58,7 @@ export class Reader {
 function classify(error) {
   if (error instanceof IOError) return error;
   if (error instanceof DOMViewError) return new IOError(error.code, error.message);
+  if (error instanceof ServiceError) return new IOError(error.code, safeErrorMessage(error));
   const code = error?.name === 'QuotaExceededError' ? -3 : error?.name === 'SecurityError' || error?.name === 'NotAllowedError' ? -2 : error?.name === 'AbortError' ? -4 : -6;
   return new IOError(code, safeErrorMessage(error));
 }
@@ -64,7 +66,14 @@ function classify(error) {
 // query strings into the RenderNode/DOM error channel or console. Keep the
 // stable error class/name because callers use the code, not an opaque message.
 export function safeErrorMessage(error) {
-  const raw = String(error?.message || error || 'Browser host error');
+  return redactDiagnostics(String(error?.message || error || 'Browser host error')).slice(0, 512);
+}
+/** An error's stack, redacted like its message and capped, for the `runtime-error` event's `detail.stack` (an error
+ * monitor on the page reports it); empty when there is none. A WASM trap's stack names the Swift frames it ran through. */
+export function safeErrorStack(stack) {
+  return typeof stack === 'string' ? redactDiagnostics(stack).slice(0, 4096) : '';
+}
+function redactDiagnostics(raw) {
   return raw
     .replace(/([?&](?:token|access_token|refresh_token|code|key|secret|password|authorization))=[^&#\s]*/gi, '$1=[redacted]')
     .replace(/(authorization\s*:\s*)(?:bearer\s+)?[^,;\s]+/gi, '$1[redacted]')
@@ -73,15 +82,14 @@ export function safeErrorMessage(error) {
     .replace(/https?:\/\/[^\s]+/gi, value => {
       try { const url = new URL(value); url.username = ''; url.password = ''; url.search = ''; url.hash = ''; return url.href; }
       catch { return '[redacted-url]'; }
-    })
-    .slice(0, 512);
+    });
 }
 /** Per-instance host. Never replace blocked persistence with a fake success. */
 // `remoteDOM` is the worker side of the DOM bridge: the worker has no document, so
 // DOM reads answer from a mirror of the mounted elements that the main thread reported
 // before the last reconciliation, and DOM writes are queued for the main thread
 // (remote-dom-host.js) to apply in order. See Documentation/EmbeddedWorker.md.
-export function createBrowserIO({ getInstance, environment = globalThis, baseURL, onError = (e) => console.error(safeErrorMessage(e)), wake = () => {}, remoteDOM = false, stackMeter = null, onCookieWrite = () => {}, binaryAtoms = '' }) {
+export function createBrowserIO({ getInstance, environment = globalThis, baseURL, onError = (e) => console.error(safeErrorMessage(e)), wake = () => {}, remoteDOM = false, stackMeter = null, onCookieWrite = () => {}, binaryAtoms = '', services } = {}) {
   let binaryAtomBytes = null;
   const operations = new Map(); const replies = new Map(); const databases = new Map(); let nextReply = 1; let disposed = false;
   // Side-effecting fetches started since the last snapshot (their id, operation and packet), and on a thread that took
@@ -98,6 +106,8 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
   // reconcile that notices the removal can still unmount through them (a DOM component's dispose).
   let detachedDOMHandles = [];
   const domViews = remoteDOM ? null : createDOMViewHost(environment, { report: (element, error) => reportDOMError(element, error) });
+  // Headless services (service-host.mjs) live on the page: a worker runtime passes the host that forwards to it.
+  const serviceHost = services ?? (remoteDOM ? null : createServiceHost(environment));
   const mirror = { seq: 0, nodes: new Map(), ops: [], reported: new Set() };
   const domID = (element) => { if (!element) return 0; let id=domIDs.get(element); if (!id) { while (!nextDOMID || domElements.has(nextDOMID)) nextDOMID=(nextDOMID+1)>>>0; id=nextDOMID; nextDOMID=(nextDOMID+1)>>>0; domIDs.set(element,id); domElements.set(id,element); } return id; };
   const memory = () => {
@@ -279,6 +289,23 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
     if (!operations.has(id)) return;
     if (streaming) emit(id, 0);
     else { progress?.finish(size); const bytes = new Uint8Array(size); let at = 0; for (const chunk of chunks) { bytes.set(chunk, at); at += chunk.length; } emit(id, 0, responseHeader(response).data(bytes).bytes()); }
+  }
+  // A call to a page service: name, method and payload text in; the method's result text out.
+  async function serviceCall(id, packet) {
+    const input = new Reader(packet); const name = input.text(); const method = input.text(); const payload = input.text(); input.finish();
+    if (!serviceHost) throw new IOError(-7, 'Page services are unavailable in this runtime');
+    const result = await serviceHost.call(name, method, payload);
+    if (operations.has(id)) emit(id, 0, new Writer().text(result).bytes());
+  }
+  // A page service's `event` payloads, one BrowserIOEvent.serviceEvent each, until Swift cancels the observation.
+  function observeService(id, packet) {
+    const input = new Reader(packet); const name = input.text(); const event = input.text(); input.finish();
+    if (!serviceHost) throw new IOError(-7, 'Page services are unavailable in this runtime');
+    const unsubscribe = serviceHost.observe(name, event, text => {
+      if (operations.has(id)) emit(id, BrowserIOEvent.serviceEvent, new Writer().text(text).bytes());
+    });
+    const op = operations.get(id);
+    if (op) op.cleanup = unsubscribe; else unsubscribe();
   }
   async function timerRequest(id, packet) {
     const input = new Reader(packet); const seconds = input.f64(); input.finish();
@@ -893,6 +920,8 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
       else if (operation === BrowserIOOperation.storageChanges) observeStorage(id, packet);
       else if (operation === BrowserIOOperation.connectivityChanges) observeConnectivity(id);
       else if (operation === BrowserIOOperation.media) observeMedia(id, packet);
+      else if (operation === BrowserIOOperation.service) await serviceCall(id, packet);
+      else if (operation === BrowserIOOperation.serviceEvents) observeService(id, packet);
       else throw new IOError(-1, 'Unknown asynchronous BrowserIO operation');
     } catch (error) { try { fail(id, error); } catch (deliveryError) { onError(deliveryError); } }
   }

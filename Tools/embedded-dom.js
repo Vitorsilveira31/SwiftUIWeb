@@ -700,13 +700,14 @@ export function mountEmbeddedBrowser(instance, options = {}) {
 
   function report(error) {
     failed = true;
-    const raw = String(error?.message || error || 'SwiftUIWeb runtime error');
-    const safe = raw.replace(/(authorization|cookie|token|password|secret|key)\s*[:=]\s*[^,;\s]+/gi, '$1=[redacted]')
-      .replace(/https?:\/\/[^\s]+/gi, value => { try { const url = new URL(value); url.username=''; url.password=''; url.search=''; url.hash=''; return url.href; } catch { return '[redacted-url]'; } })
-      .slice(0, 512);
+    const redact = text => text.replace(/(authorization|cookie|token|password|secret|key)\s*[:=]\s*[^,;\s]+/gi, '$1=[redacted]')
+      .replace(/https?:\/\/[^\s]+/gi, value => { try { const url = new URL(value); url.username=''; url.password=''; url.search=''; url.hash=''; return url.href; } catch { return '[redacted-url]'; } });
+    const safe = redact(String(error?.message || error || 'SwiftUIWeb runtime error')).slice(0, 512);
+    // The stack goes with the event, redacted the same way, so an error monitor on the page can report the frames.
+    const stack = typeof error?.stack === 'string' ? redact(error.stack).slice(0, 4096) : '';
     metrics.errors.push(safe);
     root.dataset.runtimeError = 'SwiftUIWeb runtime error';
-    window.dispatchEvent(new window.CustomEvent('runtime-error', {detail: {message: safe}}));
+    window.dispatchEvent(new window.CustomEvent('runtime-error', {detail: {message: safe, stack}}));
     // Never hide a WASM trap or mark a failed commit ready. A trap carries no message (`unreachable`); its stack names
     // the Swift frames that ran into it, which is all there is to go on (a debug build keeps their names).
     console.error(`[SwiftUIWeb] ${safe}`, typeof error?.stack === 'string' ? error.stack : '');

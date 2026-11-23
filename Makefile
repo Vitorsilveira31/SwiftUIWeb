@@ -128,6 +128,7 @@ BROWSER_GROUPS = \
 	"controls: controls-browser-test" "controls-a11y: controls-accessibility-test" "presentation: presentation-browser-test" \
 	"focus: focus-browser-test" "identity: identity-browser-test" "scrolling: scrolling-browser-test" \
 	"accessibility: accessibility-browser-test" "publication: publication-browser-test" "webkit: webkit-browser-test" \
+	"services: services-browser-test" \
 	"lowering: lowering-unit-test lowering-test" $(CONFORMANCE_GROUP) "integrated: integrated-check" \
 	"security: security-browser-test" "runtime: single-browser-runtime-audit server-test plugin-test-quick" \
 	"direct-build: direct-build-test" "live-literals: live-literals-browser-test" "state-reload: state-reload-browser-test" \
@@ -714,16 +715,24 @@ embedded-capabilities:
 single-browser-runtime-audit:
 	@bun Tools/check-single-browser-runtime.mjs
 
-.PHONY: embedded-network-storage-test embedded-network-storage-browser
+.PHONY: embedded-network-storage-test embedded-network-storage-browser services-browser-test
 embedded-network-storage-test:
 	bun Tools/BrowserIO/audit-browser-integration.mjs
 	$(SWIFT) build --target SwiftUIWebBrowserIO -c release
 	bun Tools/BrowserIO/test-host.mjs
+	bun Tools/BrowserIO/test-services.mjs
 	bun build --no-bundle --target=bun Tools/BrowserIO/browser-io.mjs > /dev/null
 	bun Tools/test-browserio-download-progress.mjs
 	bun Tools/test-browserio-persistence.mjs
 
 # Manual: open http://127.0.0.1:8091/browser-smoke.html, reload once (test-browserio-persistence.mjs automates it).
+# Page services end to end (BrowserService, Documentation/BROWSER_APP_SHELL.md): Examples/ServicesInterop built for
+# Embedded WebAssembly calls a page service with Swift in a worker and on the main thread.
+services-browser-test:
+	cd Examples/ServicesInterop && SWIFTUIWEB_PACKAGE_ROOT="$$PWD" SWIFTUIWEB_PRODUCT=ServicesInteropApp \
+	  SWIFTUIWEB_BUNDLE_ROOT="$$PWD/.build/browser" BUILD_ONLY=1 ../../Tools/run-browser-embedded.sh ServicesInteropApp
+	bun Tools/test-services-browser.mjs
+
 embedded-network-storage-browser:
 	bun Tools/serve-static.mjs Tools/BrowserIO 8091
 

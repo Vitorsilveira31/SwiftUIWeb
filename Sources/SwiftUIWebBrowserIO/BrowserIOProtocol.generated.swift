@@ -24,10 +24,13 @@
   @usableFromInline static let timeZoneOffset: UInt32 = 21
   @usableFromInline static let timeZoneIdentifier: UInt32 = 22
   @usableFromInline static let weekInfo: UInt32 = 23
+  @usableFromInline static let service: UInt32 = 24
+  @usableFromInline static let serviceEvents: UInt32 = 25
 }
 @usableFromInline enum _BrowserIOEvent {
   @usableFromInline static let fetchHeaders: Int32 = 100
   @usableFromInline static let fetchChunk: Int32 = 101
   @usableFromInline static let fetchUploadProgress: Int32 = 102
   @usableFromInline static let fetchDownloadProgress: Int32 = 103
+  @usableFromInline static let serviceEvent: Int32 = 104
 }

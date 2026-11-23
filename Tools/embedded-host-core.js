@@ -15,6 +15,7 @@
 // continues on the main thread, where the stack is far deeper: it instantiates the same module, copies the snapshot
 // into its memory, runs those calls again and carries on.
 import { createBrowserIO, safeErrorMessage } from './BrowserIO/browser-io.mjs';
+import { createServiceForwarder } from './BrowserIO/service-host.mjs';
 import { createWasiHost } from './wasi-host.js';
 import { createHeadroomMeter } from './stack-probe.js';
 import { writeEventValue, readSecureBytes, readSecureIDs } from './event-value.js';
@@ -119,6 +120,10 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
     if (replies && !OWN_PORT.has(message.t)) replies.postMessage(message); else send(message, transfer || []);
   };
   const clock = { monotonicOffsetMs: 0 };
+  // Page services (BrowserIO/service-host.mjs) live with the document, so this core forwards calls and subscriptions to
+  // the page (embedded-worker-client.js answers them). After a move to the main thread the new core subscribes again.
+  const serviceForwarder = createServiceForwarder(message => post(message));
+  const services = serviceForwarder.services;
   let localMirror = null, sessionMirror = null, cookieMirror = null;
   // Calls processed, in arrival order. Each publication carries the count, so the host knows which of the events
   // it sent a publication already reflects (a text field must not take back a value older than what was typed).
@@ -295,7 +300,7 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
     }
     // `?stack-depth=1`: the render recursion reports its depth and the stack left (stack-probe.js).
     if (config.environment.includes('SWIFTUIWEB_STACK_DIAGNOSTICS=1')) stackMeter = createHeadroomMeter();
-    browserIO = createBrowserIO({ getInstance: () => (halted || poisoned ? null : instance), environment: environmentFor(), baseURL: config.baseURL, wake: scheduleTaskDrain, onError: fail, remoteDOM: true, stackMeter, binaryAtoms: config.atoms });
+    browserIO = createBrowserIO({ getInstance: () => (halted || poisoned ? null : instance), environment: environmentFor(), baseURL: config.baseURL, wake: scheduleTaskDrain, onError: fail, remoteDOM: true, stackMeter, binaryAtoms: config.atoms, services });
     imports.browser_io = browserIO.imports;
     // A Worker may wait for the second half synchronously when a call needs it before it arrived; the main thread loads
     // it before the instance runs (`adopt`). The launcher leaves the loader out of a bundle that is not split (Tools/wasm-split-loader.js).
@@ -453,6 +458,7 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
       else if (data.t === 'storage') storageEvent(data);
       else if (data.t === 'cookies') cookiesChanged(data.cookies);
       else if (data.t === 'mounts') browserIO?.domTable(data.seq, data.table);
+      else if (data.t === 'service-reply' || data.t === 'service-event') serviceForwarder.receive(data);
       else if (data.t === 'force-overflow') forcedOverflow = diagnostics;
       else if (data.t === 'stack-reset') { stackMeter?.reset(); stackSamples = 0; }
       else if (data.t === 'dispose') { clearInterval(drainTimer); browserIO?.dispose?.(); halted = true; replies?.close(); return 'dispose'; }

@@ -84,6 +84,54 @@ SwiftUIWebDOMComponents.define("stage", () => ({
   attribute on the host element. A name still undefined ten seconds after the view mounted is reported once (it still
   mounts when defined later).
 
+### Page services
+
+A page service is JavaScript without a view of its own, usually an SDK: analytics, error monitoring, purchases,
+messaging. Swift calls its methods and observes its events through `BrowserService` (SwiftUIWebBrowserIO); payloads and
+results are `String`s, JSON by convention:
+
+```swift
+let analytics = BrowserService("analytics")
+analytics.send("capture", #"{"event":"app_opened"}"#)            // fire and forget
+let flags = try await analytics.call("flags")                      // the method's result
+let observation = analytics.observe("flagsChanged") { json in … }  // until observation.cancel()
+```
+
+```js
+SwiftUIWebServices.define("analytics", async ({ emit }) => {
+  const { default: sdk } = await import("./analytics-sdk.js");      // fetched on first use
+  sdk.onFlags(flags => emit("flagsChanged", flags));                 // a value that is not text is sent as JSON
+  return {
+    capture(payload) { const { event } = JSON.parse(payload); sdk.capture(event); },
+    async flags() { return sdk.allFlags(); },                         // text, JSON, nothing, or a promise of one
+  };
+});
+```
+
+- **Where it runs.** Always on the page's main thread, next to the document the SDK needs, also when the app runs in a
+  worker: the worker forwards each call and subscription to the page and back (`embedded-host-core.js` and
+  `embedded-worker-client.js`). Prefer a service to a hidden DOM component for anything without UI.
+- **When to define and lazy code** work as for DOM components: `SwiftUIWebServices` adopts a queue pre-created by an earlier
+  script, and the factory runs on the first call or observation of the name, so `import()` there keeps the SDK out of the
+  first load. A factory that fails is retried by the next call. A call to a name nobody defines within ten seconds fails.
+- **Failures.** A call fails with a `BrowserIOError` when the service is not defined (`-8`), has no such method (`-8`), or
+  its factory or method throws (`-6`, with the message redacted like every host error). Without a page (a native test
+  host) every call fails with `-7`.
+- **Events** reach only the observations of that name and event, in order; cancelling an observation removes its
+  listener. Observing starts the service, so an SDK that only produces events (a push listener) begins listening.
+- **Threads.** A call still waiting when the app moves from the worker to the main thread is reported cancelled (it may
+  have run: the page decides), and observations start again from the main thread.
+
+### Runtime errors
+
+A WASM trap, a failed commit or a failed start fires `runtime-error` on `window` with `detail.message` and
+`detail.stack`, both redacted (credentials, cookies, query strings). A trap carries no message (`unreachable`); its stack
+names the Swift frames it ran through, which is what an error monitor on the page should report:
+
+```js
+addEventListener("runtime-error", ({ detail }) => monitor.captureException(Object.assign(new Error(detail.message), { stack: detail.stack })));
+```
+
 ### What an application may customize
 
 The component rules of `styles.css` are the framework's own and are not an extension point: views add to them through
