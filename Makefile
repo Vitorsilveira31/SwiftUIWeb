@@ -471,7 +471,7 @@ LARGE_APP = .build/large-app/$(VIEWS)
 .PHONY: large-app-size
 large-app-size:
 	bun Tools/generate-large-app.mjs --out $(LARGE_APP)/package --views $(VIEWS)
-	SWIFTUIWEB_MODULE_ALIASES=1 SWIFTUIWEB_BUILD_ROOT=$(CURDIR)/$(LARGE_APP)/build SWIFTUIWEB_BUNDLE_ROOT=$(CURDIR)/$(LARGE_APP)/bundle SWIFTUIWEB_KEEP_OPTIMIZED_WASM_NAMES=$(CURDIR)/$(LARGE_APP)/names.wasm BUILD_ONLY=1 CONFIGURATION=release $(SWIFT) Tools/swiftuiweb-run.swift --product LargeApp --package-root $(LARGE_APP)/package --build-only
+	SWIFTUIWEB_MODULE_ALIASES=1 SWIFTUIWEB_BUILD_ROOT="$(CURDIR)/$(LARGE_APP)/build" SWIFTUIWEB_BUNDLE_ROOT="$(CURDIR)/$(LARGE_APP)/bundle" SWIFTUIWEB_KEEP_OPTIMIZED_WASM_NAMES="$(CURDIR)/$(LARGE_APP)/names.wasm" BUILD_ONLY=1 CONFIGURATION=release $(SWIFT) Tools/swiftuiweb-run.swift --product LargeApp --package-root $(LARGE_APP)/package --build-only
 	@for file in $(LARGE_APP)/bundle/LargeApp/app*.wasm; do \
 	  printf '%-26s %10s bytes raw %10s bytes br\n' "$$(basename $$file)" "$$(wc -c < $$file | tr -d ' ')" "$$(wc -c < $$file.br | tr -d ' ')"; \
 	done

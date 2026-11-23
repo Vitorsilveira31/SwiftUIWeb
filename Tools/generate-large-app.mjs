@@ -632,7 +632,11 @@ export function generateProject({ views = 200, seed = 1, out = join(ROOT, ".buil
   return { files, views, features };
 }
 
-/** Writes the files into `directory`, which is emptied first when the generator wrote it, refused otherwise. */
+/**
+ * Writes the files into `directory`, which is emptied first when the generator wrote it, refused otherwise. The marker
+ * stays while the directory is emptied and is written before any other file, so a run that stops halfway (a full disk, a
+ * path that cannot be written) leaves a directory the next run may still empty.
+ */
 export function writeProject(directory, files) {
   const dir = resolve(directory);
   if (existsSync(dir)) {
@@ -641,10 +645,16 @@ export function writeProject(directory, files) {
     if (entries.length && !existsSync(join(dir, MARKER))) {
       throw new Error(`refusing to empty ${directory}: it has ${entries.length} entries and no ${MARKER} marker, so the generator did not write it`);
     }
-    for (const entry of entries) rmSync(join(dir, entry), { recursive: true, force: true });
+    for (const entry of entries) {
+      const path = join(dir, entry);
+      if (entry === MARKER && statSync(path).isFile()) continue;
+      rmSync(path, { recursive: true, force: true });
+    }
   }
   mkdirSync(dir, { recursive: true });
+  if (files.has(MARKER)) writeFileSync(join(dir, MARKER), files.get(MARKER));
   for (const [path, text] of files) {
+    if (path === MARKER) continue;
     const target = join(dir, path);
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, text);

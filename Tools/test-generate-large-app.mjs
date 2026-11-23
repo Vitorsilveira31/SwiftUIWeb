@@ -115,6 +115,18 @@ await test("writeProject empties and rewrites a folder that carries the marker",
     assert.equal(readFileSync(join(directory, "Package.swift"), "utf8"), files.get("Package.swift"));
   }));
 
+await test("a write that stops halfway leaves a folder the generator can write again", () =>
+  withTemporary((directory) => {
+    const { files } = generateProject({ views: 10, seed: 1, out: directory });
+    // `blocked` is a file, so the file below it cannot be written and the run stops there.
+    const stopping = new Map([["blocked", "a file"], ["blocked/child.swift", "never written"], ...files]);
+    assert.throws(() => writeProject(directory, stopping));
+    assert.equal(readFileSync(join(directory, MARKER), "utf8"), files.get(MARKER));
+    writeProject(directory, files);
+    assert.equal(existsSync(join(directory, "blocked")), false);
+    assert.equal(readFileSync(join(directory, "Package.swift"), "utf8"), files.get("Package.swift"));
+  }));
+
 await test("writeProject accepts an empty folder", () =>
   withTemporary((directory) => {
     const { files } = generateProject({ views: 10, seed: 1, out: directory });

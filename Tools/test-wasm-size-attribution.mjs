@@ -103,10 +103,25 @@ await test("addressTaken lists the defined functions in the element section, not
   assert.deepEqual([...addressTaken(wasmWith({ payloads: [filled(2)] }))], []);
 });
 
+await test("addressTaken counts the function imports around a table and a global of a long reference type", () => {
+  const imports = Buffer.concat([
+    Buffer.from([4]),
+    text("env"), text("f"), Buffer.from([0, 0]),
+    // a table of `ref null func`, with a minimum only
+    text("env"), text("t"), Buffer.from([1, 0x63, 0x70, 0, 1]),
+    // an immutable global of `ref` to type 128 (two LEB bytes)
+    text("env"), text("g"), Buffer.from([3, 0x64, 0x80, 0x01, 0]),
+    text("env"), text("h"), Buffer.from([0, 0]),
+  ]);
+  // one segment at offset 0: functions 1 (imported) and 2 (the first defined function)
+  const extra = [section(2, imports), section(9, Buffer.from([1, 0, 0x41, 0, 0x0b, 2, 1, 2]))];
+  assert.deepEqual([...addressTaken(wasmWith({ payloads: [filled(2), filled(2)], extra }))], [0]);
+});
+
 await test("addressTaken reads every element segment form", () => {
-  // Four defined functions, no imports. The second module of a split has the form with an explicit table (flags 2).
+  // Six defined functions, no imports. The second module of a split has the form with an explicit table (flags 2).
   const segments = Buffer.concat([
-    Buffer.from([5]),
+    Buffer.from([7]),
     // flags 2: table 0, offset i32.const 0, element kind, function 0
     Buffer.from([2, 0, 0x41, 0, 0x0b, 0x00, 1, 0]),
     // flags 1 (passive): element kind, function 1
@@ -117,9 +132,13 @@ await test("addressTaken reads every element segment form", () => {
     Buffer.from([7, 0x70, 1, 0xd2, 3, 0x0b]),
     // flags 6: table 1, offset i32.const 128 (two LEB bytes), reference type, no elements
     Buffer.from([6, 1, 0x41, 0x80, 0x01, 0x0b, 0x70, 0]),
+    // flags 5 (passive): the long form of the reference type, `ref null func`, expression `ref.func 4`
+    Buffer.from([5, 0x63, 0x70, 1, 0xd2, 4, 0x0b]),
+    // flags 7: `ref` and a type index of two LEB bytes (type 128), expression `ref.func 5`
+    Buffer.from([7, 0x64, 0x80, 0x01, 1, 0xd2, 5, 0x0b]),
   ]);
-  const bytes = wasmWith({ payloads: [filled(2), filled(2), filled(2), filled(2)], extra: [section(9, segments)] });
-  assert.deepEqual([...addressTaken(bytes)].sort(), [0, 1, 2, 3]);
+  const bytes = wasmWith({ payloads: [filled(2), filled(2), filled(2), filled(2), filled(2), filled(2)], extra: [section(9, segments)] });
+  assert.deepEqual([...addressTaken(bytes)].sort(), [0, 1, 2, 3, 4, 5]);
   const unknown = wasmWith({ payloads: [filled(2)], extra: [section(9, Buffer.from([1, 8, 0]))] });
   assert.throws(() => addressTaken(unknown), /element segment 0 has flags 8/);
 });

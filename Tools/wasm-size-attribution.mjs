@@ -13,7 +13,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { brotliCompressSync, constants } from "node:zlib";
 import { dumps, parseArguments } from "./format-compat.mjs";
-import { countFunctionImports, leb, moduleOf, parse, sections } from "./wasm-function-sizes.mjs";
+import { countFunctionImports, leb, moduleOf, parse, sections, skipValueType } from "./wasm-function-sizes.mjs";
 
 const comma = (value) => Math.trunc(value).toLocaleString("en-US");
 const right = (text, width) => String(text).padStart(width);
@@ -179,8 +179,9 @@ export function addressTaken(wasmBytes) {
       if (flags & 2) [, at] = leb(element, at);
       at = skipConstantExpression(element, at, `element segment ${segment}`);
     }
-    // Every form but the two plain ones (0 and 4) names its element kind or reference type.
-    if (!active || (flags & 2)) at += 1;
+    // Every form but the two plain ones (0 and 4) says what its elements are: an element kind, one byte, when they are
+    // function indices; a reference type when they are expressions, which is one byte (`funcref`) or the long form.
+    if (!active || (flags & 2)) at = expressions ? skipValueType(element, at) : at + 1;
     let entries;
     [entries, at] = leb(element, at);
     for (let entry = 0; entry < entries; entry += 1) {

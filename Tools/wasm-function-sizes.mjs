@@ -45,6 +45,14 @@ export function* sections(data) {
   }
 }
 
+/**
+ * The index after the value type at `at`: one byte, or the long form of a reference type, 0x63 or 0x64 (`ref null`,
+ * `ref`) and a heap type.
+ */
+export function skipValueType(bytes, at) {
+  return bytes[at] === 0x63 || bytes[at] === 0x64 ? leb(bytes, at + 1)[1] : at + 1;
+}
+
 /** The number of function imports in an import section payload: the defined functions are numbered after them. */
 export function countFunctionImports(payload) {
   let functions = 0;
@@ -61,7 +69,7 @@ export function countFunctionImports(payload) {
       [, i] = leb(payload, i);
       functions += 1;
     } else if (desc === 1) {
-      i += 1;
+      i = skipValueType(payload, i);
       const flags = payload[i];
       i += 1;
       [, i] = leb(payload, i);
@@ -71,7 +79,7 @@ export function countFunctionImports(payload) {
       i += 1;
       [, i] = leb(payload, i);
       if (flags & 1) [, i] = leb(payload, i);
-    } else if (desc === 3) i += 2;
+    } else if (desc === 3) i = skipValueType(payload, i) + 1;
   }
   return functions;
 }
