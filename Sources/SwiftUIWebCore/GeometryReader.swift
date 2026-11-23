@@ -93,25 +93,52 @@ public nonisolated struct GeometryReader<Content: View>: View, _OwnerBoundaryCon
   @MainActor package func _renderOwnerBoundary(in context: _RenderContext) -> _RenderNode { _renderReader(in: context) }
 
   @MainActor private func _renderReader(in context: _RenderContext) -> _RenderNode {
-    let previousScope = StateRuntime.scope
+    // This function is compiled for every type of content, so it only forms and renders the content: the rest of the
+    // render is in `_GeometryReaderPass`, compiled once.
+    let pass = _GeometryReaderPass(state: _store, context: context)
+    let child = content(pass.proxy)._render(in: pass.contentContext)
+    return pass.finish(child)
+  }
+}
+
+/// One render of a `GeometryReader`, but for its content: the node, the measurement the content is drawn for and the
+/// context it renders in, then the node's attributes and its measurement handler.
+@MainActor private final class _GeometryReaderPass {
+  private let previousScope: StateScope?
+  private let node: _RenderNode
+  private let store: _GeometryReaderStore
+  private let access = _GeometryProxyAccess()
+  private let measurement: _GeometryMeasurement
+  private let ownerToken: UInt64?
+  private let invalidationStore: StateStore
+  private let readerPath: _FiberPath
+  /// The context the content renders in.
+  let contentContext: _RenderContext
+  /// The proxy the content is formed with.
+  var proxy: GeometryProxy { GeometryProxy(measurement: measurement, access: access) }
+
+  /// `state` is the reader's own `@State`: it is read here, once the reader's state scope is the current one.
+  @inline(never)
+  init(state: State<_GeometryReaderStore>, context: _RenderContext) {
+    previousScope = StateRuntime.scope
     StateRuntime.scope = StateScope(context: context, viewTag: "GeometryReader")
-    defer { StateRuntime.scope = previousScope }
     let node = _RenderNode.element("div")
     node.classes = ["geometry-reader"]
     // The browser does not assign 100%-of-an-unspecified-height. The layout
     // accepts the proposal and reports the resolved box after placement.
     node.attributes["data-layout-kind"] = "geometry"
     node.attributes["data-geometry-reader"] = "true"
+    self.node = node
     // A new host measurement invalidates this reader's own render owner
     // directly (the mechanism Observation uses), so the update never depends
     // on a State source that could be shared with, or attributed to, another
     // owner and force a root pass.
-    let ownerToken = context._renderOwnerToken
+    ownerToken = context._renderOwnerToken
     if let ownerToken { context._renderOwnerRegistry?._markAliasable(ownerToken) }
-    let invalidationStore = context.stateStore
-    let readerPath = context._fiberPath
-    let store = self.store
-    let access = _GeometryProxyAccess()
+    invalidationStore = context.stateStore
+    readerPath = context._fiberPath
+    let store = state.wrappedValue
+    self.store = store
     var measurement = store.latest
     // Until the page has measured it, the reader draws for the tightest size its renders were given: a view never exceeds
     // what encloses it, so a smaller guess is a nearer one. A custom layout rendering its subviews with their proposal
@@ -121,9 +148,17 @@ public nonisolated struct GeometryReader<Content: View>: View, _OwnerBoundaryCon
       measurement = _GeometryMeasurement(box: _GeometryBox(x: 0, y: 0, width: Double(hint.width), height: Double(hint.height)))
       store.latest = measurement
     }
+    self.measurement = measurement
     var contentContext = context.child(_FiberKey("content"))
     if measurement.size.width > 0 || measurement.size.height > 0 { contentContext.environment._geometryHint = measurement.size }
-    let child = content(GeometryProxy(measurement: measurement, access: access))._render(in: contentContext)
+    self.contentContext = contentContext
+  }
+
+  /// Completes the reader's node with its rendered content and leaves the reader's state scope.
+  @inline(never)
+  func finish(_ child: _RenderNode) -> _RenderNode {
+    let store = self.store, access = self.access, ownerToken = self.ownerToken
+    let invalidationStore = self.invalidationStore, readerPath = self.readerPath
     store.rendered = measurement
     // The size this node's content is drawn for: a measurement reaching it while the reader has since been drawn for another
     // size reached a node that is no longer the reader's drawing, though the page still shows it.
@@ -162,6 +197,7 @@ public nonisolated struct GeometryReader<Content: View>: View, _OwnerBoundaryCon
       if let ownerToken { invalidationStore._ownerObservationDidChange(ownerToken) }
     })
     node.children = child.isEmpty ? [] : [child]
+    StateRuntime.scope = previousScope
     return node
   }
 }

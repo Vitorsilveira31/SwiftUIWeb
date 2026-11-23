@@ -2686,33 +2686,47 @@ package nonisolated struct BackgroundModifier<Background: View>: ViewModifier {
     self.content = content; self.alignment = alignment; self.isListRowBackground = isListRowBackground
   }
   @MainActor package func _apply(to node: _RenderNode, context: inout _RenderContext) {
-    if isListRowBackground, let card = Self.sectionCard(in: node) { decorate(card, key: "background", context: context); return }
-    // On a Group/ForEach the background decorates each element, as in SwiftUI.
-    if node.kind == .fragment {
-      for (index, child) in node.children.enumerated() where !child.isEmpty { _modifyElement(child) { decorate($0, key: "background-\(index)", context: context) } }
-      return
-    }
-    decorate(node, key: "background", context: context)
+    // The modifier is compiled for every type of background, so it only forms and erases the background.
+    _applyBackground(to: node, context: context, alignment: alignment, isListRowBackground: isListRowBackground) { AnyView(content()) }
   }
+}
 
-  @MainActor private static func sectionCard(in node: _RenderNode) -> _RenderNode? {
-    for child in node.children {
-      if child.classes.contains("section-card") { return child }
-      if child.classes.contains("section-block"), let card = child.children.first(where: { $0.classes.contains("section-card") }) { return card }
+/// `BackgroundModifier._apply`, given how to form the background: compiled once.
+@inline(never)
+@MainActor private func _applyBackground(
+  to node: _RenderNode, context: _RenderContext, alignment: Alignment, isListRowBackground: Bool, layer: () -> AnyView
+) {
+  if isListRowBackground, let card = _sectionCard(in: node) {
+    _decorateWithBackground(card, key: "background", context: context, alignment: alignment, layer: layer)
+    return
+  }
+  // On a Group/ForEach the background decorates each element, as in SwiftUI.
+  if node.kind == .fragment {
+    for (index, child) in node.children.enumerated() where !child.isEmpty {
+      _modifyElement(child) { _decorateWithBackground($0, key: "background-\(index)", context: context, alignment: alignment, layer: layer) }
     }
-    return nil
+    return
   }
+  _decorateWithBackground(node, key: "background", context: context, alignment: alignment, layer: layer)
+}
 
-  @MainActor private func decorate(_ node: _RenderNode, key: String, context: _RenderContext) {
-    let layer = AnyView(content())._render(in: _decoratedLayerContext(node, context, key: key))
-    // Preserve the base slot even when conditional decoration is empty.
-    // Removing this wrapper shifts Fiber identity and cancels base tasks.
-    let original = _semanticWrap(node, kind: "background")
-    node.styles["display"] = "grid"
-    node.styles["place-items"] = alignment.cssValue
-    for (key, value) in _semanticAlignment(alignment) { node.attributes[key] = value }
-    node.children = [layer, original]
+@MainActor private func _sectionCard(in node: _RenderNode) -> _RenderNode? {
+  for child in node.children {
+    if child.classes.contains("section-card") { return child }
+    if child.classes.contains("section-block"), let card = child.children.first(where: { $0.classes.contains("section-card") }) { return card }
   }
+  return nil
+}
+
+@MainActor private func _decorateWithBackground(_ node: _RenderNode, key: String, context: _RenderContext, alignment: Alignment, layer: () -> AnyView) {
+  let layer = layer()._render(in: _decoratedLayerContext(node, context, key: key))
+  // Preserve the base slot even when conditional decoration is empty.
+  // Removing this wrapper shifts Fiber identity and cancels base tasks.
+  let original = _semanticWrap(node, kind: "background")
+  node.styles["display"] = "grid"
+  node.styles["place-items"] = alignment.cssValue
+  for (key, value) in _semanticAlignment(alignment) { node.attributes[key] = value }
+  node.children = [layer, original]
 }
 
 /// A solid stroke of a rectangle, rounded rectangle or capsule that fills the shape's bounds, as an overlay paints it.
@@ -2810,35 +2824,44 @@ package nonisolated struct OverlayModifier<Overlay: View>: ViewModifier {
   package let alignment: Alignment
   package init(content: @escaping () -> Overlay, alignment: Alignment = .center) { self.content = content; self.alignment = alignment }
   @MainActor package func _apply(to node: _RenderNode, context: inout _RenderContext) {
-    // On a Group/ForEach the overlay decorates each element, as in SwiftUI.
-    if node.kind == .fragment {
-      for (index, child) in node.children.enumerated() where !child.isEmpty { _modifyElement(child) { decorate($0, key: "overlay-\(index)", context: context) } }
-      return
-    }
-    decorate(node, key: "overlay", context: context)
+    // The modifier is compiled for every type of overlay, so it only forms and erases the overlay.
+    _applyOverlay(to: node, context: context, alignment: alignment) { AnyView(content()) }
   }
+}
 
-  @MainActor private func decorate(_ node: _RenderNode, key: String, context: _RenderContext) {
-    let probe = _StrokeOverlayProbe()
-    var layerContext = _decoratedLayerContext(node, context, key: key)
-    layerContext._strokeOverlayProbe = probe
-    // The owners this layer's render registers are its own: if the layer is discarded below, they go with it.
-    let registry = context._renderOwnerRegistry
-    registry?._beginRecordingRegistrations()
-    let layer = AnyView(content())._render(in: layerContext)
-    let registered = registry?._endRecordingRegistrations() ?? []
-    // A centered overlay that is exactly one solid stroke of its base's shape is painted on the base (no wrapper, no SVG).
-    if alignment == .center, let record = _soleStrokeRecord(layer, probe: probe), _paintStrokeOnBase(record, on: node) {
-      registry?._retireRegistrations(registered)
-      return
+/// `OverlayModifier._apply`, given how to form the overlay: compiled once.
+@inline(never)
+@MainActor private func _applyOverlay(to node: _RenderNode, context: _RenderContext, alignment: Alignment, layer: () -> AnyView) {
+  // On a Group/ForEach the overlay decorates each element, as in SwiftUI.
+  if node.kind == .fragment {
+    for (index, child) in node.children.enumerated() where !child.isEmpty {
+      _modifyElement(child) { _decorateWithOverlay($0, key: "overlay-\(index)", context: context, alignment: alignment, layer: layer) }
     }
-    // The overlay may appear/disappear without remounting the base subtree.
-    let original = _semanticWrap(node, kind: "overlay")
-    node.styles["display"] = "grid"
-    node.styles["place-items"] = alignment.cssValue
-    for (key, value) in _semanticAlignment(alignment) { node.attributes[key] = value }
-    node.children = [original, layer]
+    return
   }
+  _decorateWithOverlay(node, key: "overlay", context: context, alignment: alignment, layer: layer)
+}
+
+@MainActor private func _decorateWithOverlay(_ node: _RenderNode, key: String, context: _RenderContext, alignment: Alignment, layer: () -> AnyView) {
+  let probe = _StrokeOverlayProbe()
+  var layerContext = _decoratedLayerContext(node, context, key: key)
+  layerContext._strokeOverlayProbe = probe
+  // The owners this layer's render registers are its own: if the layer is discarded below, they go with it.
+  let registry = context._renderOwnerRegistry
+  registry?._beginRecordingRegistrations()
+  let layer = layer()._render(in: layerContext)
+  let registered = registry?._endRecordingRegistrations() ?? []
+  // A centered overlay that is exactly one solid stroke of its base's shape is painted on the base (no wrapper, no SVG).
+  if alignment == .center, let record = _soleStrokeRecord(layer, probe: probe), _paintStrokeOnBase(record, on: node) {
+    registry?._retireRegistrations(registered)
+    return
+  }
+  // The overlay may appear/disappear without remounting the base subtree.
+  let original = _semanticWrap(node, kind: "overlay")
+  node.styles["display"] = "grid"
+  node.styles["place-items"] = alignment.cssValue
+  for (key, value) in _semanticAlignment(alignment) { node.attributes[key] = value }
+  node.children = [original, layer]
 }
 
 package nonisolated struct SheetModifier<Sheet: View>: ViewModifier {

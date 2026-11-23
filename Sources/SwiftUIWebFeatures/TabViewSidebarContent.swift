@@ -31,69 +31,76 @@ nonisolated struct _TabViewSidebarContentModifier<Content: View>: ViewModifier {
   let content: Content
 
   @MainActor func _apply(to node: _RenderNode, context: inout _RenderContext) {
-    guard let tabView = findTabView(node) else { return }
-    let wrapper = _RenderNode.element("div")
-    wrapper.key = _FiberKey("__tab_sidebar_\(placement)")
-    wrapper.classes = ["tab-sidebar-\(placement)-content"]
-    wrapper.attributes["data-tab-sidebar-content"] = placement
-    // Enter the renderer boundary so each placement gets its own StateScope and retained observation owner.
-    let rendered = AnyView(content)._render(in: context.child(_FiberKey("__tab_sidebar_\(placement)")))
-    if !rendered.isEmpty { wrapper.children = [rendered] }
-    let sidebar = tabView.children.first { $0.attributes["data-tab-sidebar"] == "true" }
-    switch placement {
-    case "header":
-      guard let header = sidebar?.children.first(where: { $0.attributes["data-tab-sidebar-header"] == "true" })
-      else { return }
-      header.children.insert(wrapper, at: 0)
-      if let toggle = header.children.first(where: { $0.attributes["data-tab-sidebar-toggle"] == "true" }),
-         let logo = _sidebarLogo(in: rendered) {
-        toggle.children.insert(logo, at: 0)
-        toggle.attributes["data-tab-has-logo"] = "true"
-      }
-    case "footer":
-      if let sidebar {
-        let bottomBar = sidebar.children.firstIndex { $0.attributes["data-tab-sidebar-content"] == "bottom-bar" }
-        sidebar.children.insert(wrapper, at: bottomBar ?? sidebar.children.count)
-        tabView.attributes["data-tab-has-footer"] = "true"
-      } else {
-        // The automatic style docks its tab list in a `.tab-bar` row.
-        let dock = tabView.children.first { $0.classes.contains("tab-bar") }
-        (dock?.children ?? tabView.children).first(where: { $0.classes.contains("tab-list") })?
-          .children.append(wrapper)
-      }
-    default:
-      if let sidebar { sidebar.children.append(wrapper) } else { tabView.children.append(wrapper) }
-      tabView.attributes["data-tab-has-bottom-bar"] = "true"
-    }
+    // The modifier is compiled for every type of content, so it only erases the content.
+    _applyTabViewSidebarContent(placement: placement, to: node, context: context) { AnyView(content) }
   }
+}
 
-  @MainActor private func findTabView(_ node: _RenderNode) -> _RenderNode? {
-    if node.classes.contains("tab-view") { return node }
-    for child in node.children {
-      if let result = findTabView(child) { return result }
+/// `_TabViewSidebarContentModifier._apply`, given how to erase the content: compiled once.
+@inline(never)
+@MainActor private func _applyTabViewSidebarContent(placement: String, to node: _RenderNode, context: _RenderContext, content: () -> AnyView) {
+  guard let tabView = _findTabView(node) else { return }
+  let wrapper = _RenderNode.element("div")
+  wrapper.key = _FiberKey("__tab_sidebar_\(placement)")
+  wrapper.classes = ["tab-sidebar-\(placement)-content"]
+  wrapper.attributes["data-tab-sidebar-content"] = placement
+  // Enter the renderer boundary so each placement gets its own StateScope and retained observation owner.
+  let rendered = content()._render(in: context.child(_FiberKey("__tab_sidebar_\(placement)")))
+  if !rendered.isEmpty { wrapper.children = [rendered] }
+  let sidebar = tabView.children.first { $0.attributes["data-tab-sidebar"] == "true" }
+  switch placement {
+  case "header":
+    guard let header = sidebar?.children.first(where: { $0.attributes["data-tab-sidebar-header"] == "true" })
+    else { return }
+    header.children.insert(wrapper, at: 0)
+    if let toggle = header.children.first(where: { $0.attributes["data-tab-sidebar-toggle"] == "true" }),
+       let logo = _sidebarLogo(in: rendered) {
+      toggle.children.insert(logo, at: 0)
+      toggle.attributes["data-tab-has-logo"] = "true"
     }
-    return nil
-  }
-
-  /// The collapsed rail's toggle shows the app logo: a presentation-only copy
-  /// of the first image in the header content.
-  @MainActor private func _sidebarLogo(in node: _RenderNode) -> _RenderNode? {
-    guard let image = _firstImage(in: node) else { return nil }
-    let logo = _RenderNode.element("img")
-    logo.key = _FiberKey("__tab_sidebar_toggle_logo")
-    logo.classes = ["tab-sidebar-toggle-logo"]
-    logo.attributes["src"] = image.attributes["src"]
-    logo.attributes["alt"] = ""
-    logo.attributes["aria-hidden"] = "true"
-    logo.attributes["decoding"] = "async"
-    return logo
-  }
-
-  @MainActor private func _firstImage(in node: _RenderNode) -> _RenderNode? {
-    if node.kind == .element("img"), node.attributes["src"] != nil { return node }
-    for child in node.children {
-      if let image = _firstImage(in: child) { return image }
+  case "footer":
+    if let sidebar {
+      let bottomBar = sidebar.children.firstIndex { $0.attributes["data-tab-sidebar-content"] == "bottom-bar" }
+      sidebar.children.insert(wrapper, at: bottomBar ?? sidebar.children.count)
+      tabView.attributes["data-tab-has-footer"] = "true"
+    } else {
+      // The automatic style docks its tab list in a `.tab-bar` row.
+      let dock = tabView.children.first { $0.classes.contains("tab-bar") }
+      (dock?.children ?? tabView.children).first(where: { $0.classes.contains("tab-list") })?
+        .children.append(wrapper)
     }
-    return nil
+  default:
+    if let sidebar { sidebar.children.append(wrapper) } else { tabView.children.append(wrapper) }
+    tabView.attributes["data-tab-has-bottom-bar"] = "true"
   }
+}
+
+@MainActor private func _findTabView(_ node: _RenderNode) -> _RenderNode? {
+  if node.classes.contains("tab-view") { return node }
+  for child in node.children {
+    if let result = _findTabView(child) { return result }
+  }
+  return nil
+}
+
+/// The collapsed rail's toggle shows the app logo: a presentation-only copy
+/// of the first image in the header content.
+@MainActor private func _sidebarLogo(in node: _RenderNode) -> _RenderNode? {
+  guard let image = _firstImage(in: node) else { return nil }
+  let logo = _RenderNode.element("img")
+  logo.key = _FiberKey("__tab_sidebar_toggle_logo")
+  logo.classes = ["tab-sidebar-toggle-logo"]
+  logo.attributes["src"] = image.attributes["src"]
+  logo.attributes["alt"] = ""
+  logo.attributes["aria-hidden"] = "true"
+  logo.attributes["decoding"] = "async"
+  return logo
+}
+
+@MainActor private func _firstImage(in node: _RenderNode) -> _RenderNode? {
+  if node.kind == .element("img"), node.attributes["src"] != nil { return node }
+  for child in node.children {
+    if let image = _firstImage(in: child) { return image }
+  }
+  return nil
 }

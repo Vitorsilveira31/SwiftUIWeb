@@ -115,6 +115,9 @@ struct _RenderScopeSaved {
   if staging.depth <= 0, staging.hasPending || !staging.finalizers.isEmpty || !staging.orderedEffects.isEmpty || !staging.stages.isEmpty { _RenderStaging.drive() }
 }
 
+// The two functions below serve `AnyView`'s observation body renderer, which only a build with Swift Observation reads
+// (see `AnyView.observationBodyRendererFactory`).
+#if !hasFeature(Embedded)
 /// Forms a non-primitive view's body separately from rendering the body tree.
 /// Swift Observation tracking scopes are compositional: if an erased parent
 /// tracks all the way through nested `AnyView` children, the parent also
@@ -149,6 +152,7 @@ func _describedRenderer(_ render: @escaping @MainActor (_RenderContext) -> _Rend
     return node
   }
 }
+#endif
 
 /// Renderer-owned records for an erased view boundary.  The normal SwiftUI
 /// API never exposes these handles; they let the retained browser renderer
@@ -655,11 +659,15 @@ private final class _ViewRenderer<V: View>: _AnyViewRenderer {
 
   @MainActor override var comparesInputs: Bool { V._comparesInputs }
 
+  // `AnyView._render` asks for a remembered render only of a view that compares its inputs. Saying so here, where the
+  // answer is a constant of `V`, leaves the two functions below empty for every other view type.
   @MainActor override func reusedRender(at path: _FiberPath, context: _RenderContext, registry: _RenderOwnerRegistry) -> _RenderNode? {
-    registry._reusedView(at: path, context: context) { remembered in _ViewRenderer<V>.hasSameInputs(remembered, as: view) }
+    guard V._comparesInputs else { return nil }
+    return registry._reusedView(at: path, context: context) { remembered in _ViewRenderer<V>.hasSameInputs(remembered, as: view) }
   }
 
   @MainActor override func rememberRender(_ node: _RenderNode, reads: [(key: ObjectIdentifier, stamp: _EnvironmentStamp)], at path: _FiberPath, since: UInt64, registry: _RenderOwnerRegistry) {
+    guard V._comparesInputs else { return }
     // The view is immutable, so the renderer itself holds the value the memo was made for.
     registry._rememberView(at: path, holder: self, reads: reads, node: node, since: since)
   }
@@ -683,7 +691,8 @@ private final class _ContentRenderer<Content: View>: _AnyViewRenderer {
   @MainActor override func render(_ context: _RenderContext) -> _RenderNode {
     let saved = _enterRenderScope(context, viewTag: "content")
     let view = content()
-    built = view
+    // Only a view that compares its inputs is remembered (see `_ViewRenderer.reusedRender`).
+    if Content._comparesInputs { built = view }
     let node = view._render(in: context)
     _exitRenderScope(saved)
     node._postDescriptor(_swiftUIWebTypeName(Content.self))
@@ -697,6 +706,7 @@ private final class _ContentRenderer<Content: View>: _AnyViewRenderer {
   @MainActor override var comparesInputs: Bool { Content._comparesInputs }
 
   @MainActor override func reusedRender(at path: _FiberPath, context: _RenderContext, registry: _RenderOwnerRegistry) -> _RenderNode? {
+    guard Content._comparesInputs else { return nil }
     let saved = _enterRenderScope(context, viewTag: "content")
     let view = content()
     _exitRenderScope(saved)
@@ -704,6 +714,7 @@ private final class _ContentRenderer<Content: View>: _AnyViewRenderer {
   }
 
   @MainActor override func rememberRender(_ node: _RenderNode, reads: [(key: ObjectIdentifier, stamp: _EnvironmentStamp)], at path: _FiberPath, since: UInt64, registry: _RenderOwnerRegistry) {
+    guard Content._comparesInputs else { return }
     let value: Content
     if let built {
       value = built
@@ -802,8 +813,14 @@ final class _BuilderKey {
 /// by the main-actor runtime, so the view they capture is never touched from another actor.
 public nonisolated struct AnyView: View {
   public typealias Body = Never
+
   private let renderer: _AnyViewRenderer
+  #if !hasFeature(Embedded)
+  /// Forms the view's body inside the owner's Swift Observation scope (`_renderOwned`). The browser build registers the
+  /// renderer itself as the owner (`_registerEmbeddedOwner`) and never reads this, so it is not stored there: it would
+  /// be a closure allocated for every erased view, with its code compiled once per view type.
   private let observationBodyRendererFactory: (@MainActor (_RenderContext) -> @MainActor (_RenderContext) -> _RenderNode)?
+  #endif
   /// An unowned boundary renders inline: its state and observation reads
   /// belong to the enclosing owner, which is the one that re-renders it.
   private var registersOwner = true
@@ -827,13 +844,17 @@ public nonisolated struct AnyView: View {
   /// it does after rendering children.
   @_spi(Renderer) public init(_ownerBoundary render: @escaping @MainActor (_RenderContext) -> _RenderNode) {
     renderer = _ClosureRenderer(render)
+    #if !hasFeature(Embedded)
     observationBodyRendererFactory = nil
+    #endif
   }
 
   /// The owner boundary of `owner`; see `_OwnerBoundaryContent`.
   package init<Owner: _OwnerBoundaryContent>(_ownerBoundaryOf owner: Owner) {
     renderer = _OwnerBoundaryRenderer(owner)
+    #if !hasFeature(Embedded)
     observationBodyRendererFactory = nil
+    #endif
   }
 
   public nonisolated init<V: View>(_ view: V) {
@@ -843,6 +864,7 @@ public nonisolated struct AnyView: View {
     // SAFETY: the main-actor renderer and closures below are the only users of `view`, and they run on the main actor.
     nonisolated(unsafe) let view = view
     renderer = _ViewRenderer(view, tag: tag)
+    #if !hasFeature(Embedded)
     if V.Body.self == Never.self {
       observationBodyRendererFactory = nil
     } else {
@@ -853,6 +875,7 @@ public nonisolated struct AnyView: View {
         return _describedRenderer(renderer, tag: tag)
       }
     }
+    #endif
   }
 
   @_alwaysEmitIntoClient
@@ -862,6 +885,7 @@ public nonisolated struct AnyView: View {
     // SAFETY: only the main-actor renderer and closure below call `content`.
     nonisolated(unsafe) let content = content
     renderer = _ContentRenderer(content)
+    #if !hasFeature(Embedded)
     observationBodyRendererFactory = { context in
       let saved = _enterRenderScope(context, viewTag: "content")
       let view = content()
@@ -869,8 +893,14 @@ public nonisolated struct AnyView: View {
       _exitRenderScope(saved)
       return renderer
     }
+    #endif
   }
 
+  #if hasFeature(Embedded)
+  private init(renderer: _AnyViewRenderer) {
+    self.renderer = renderer
+  }
+  #else
   private init(
     renderer: _AnyViewRenderer,
     observationBodyRendererFactory: (@MainActor (_RenderContext) -> @MainActor (_RenderContext) -> _RenderNode)?
@@ -878,10 +908,17 @@ public nonisolated struct AnyView: View {
     self.renderer = renderer
     self.observationBodyRendererFactory = observationBodyRendererFactory
   }
+  #endif
 
   /// Builder identity belongs to every evaluation of this boundary, including
   /// retained owner renders that do not rerun the enclosing if/ForEach.
   @MainActor func _withKey(_ key: _FiberKey, overriding: Bool = false) -> AnyView {
+    #if hasFeature(Embedded)
+    guard builderKey == nil else {
+      return AnyView(renderer: _KeyedRenderer(renderer, key: key, overriding: overriding))
+    }
+    var keyed = AnyView(renderer: renderer)
+    #else
     let applyKey: @MainActor (_RenderNode) -> _RenderNode = { node in
       node._postKey(key, overriding: overriding)
       return node
@@ -902,6 +939,7 @@ public nonisolated struct AnyView: View {
       )
     }
     var keyed = AnyView(renderer: renderer, observationBodyRendererFactory: factory)
+    #endif
     keyed.builderKey = _BuilderKey(key, overriding: overriding)
     return keyed
   }
@@ -2116,6 +2154,9 @@ package enum EnvironmentRuntime {
     self._splitViewStateStore = _splitViewStateStore ?? _SplitViewStateStore()
   }
 
+  // Out of line: nearly every renderer makes a child context, and inlined, the copy of this struct with the path's new
+  // link is compiled into each of them.
+  @inline(never)
   public func child(_ key: _FiberKey? = nil) -> _RenderContext {
     var next = self
     if let key { next._fiberPath.append(key); next._modifierDepth = 0 }
