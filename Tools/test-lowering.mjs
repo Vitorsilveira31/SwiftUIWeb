@@ -286,6 +286,35 @@ ForEach(rows, id: \.id) { _ in Text("ok") }
     expect(twice.counts).toEqual({});
   });
 
+  // The debug development loop of the Embedded profile lowers with options no other build passes (the ones
+  // Tools/run-browser-embedded.sh gives the framework and a consumer application), and with them the passes write into
+  // each other's output: `export-interface` marks the `_installState()` that `state-installation` wrote. A run fails when
+  // lowering its own output would change it (SWUI-L002), so the framework and an example package must lower with them.
+  test("the real sources lower with the development loop's options", () => {
+    withTempDir((temp) => {
+      const framework = join(temp, "framework");
+      cpSync(join(ROOT, "Sources"), join(framework, "Sources"), { recursive: true });
+      cpSync(join(ROOT, "Tests", "Apps"), join(framework, "Tests", "Apps"), { recursive: true });
+      cpSync(join(ROOT, "Package.swift"), join(framework, "Package.swift"));
+      const genericTypes = join(temp, "framework-generic-types.txt");
+      const loop = ["--apply", "--development-exports", "--export-interface", "--stable-source-locations"];
+      runChecked([
+        ...loop, "--root", framework, "--product", "MotionApp", "--workspace", join(temp, "framework-workspace"),
+        "--report", join(temp, "framework-report.json"), "--generic-types-out", genericTypes,
+      ]);
+      runChecked([
+        ...loop, "--export-interface-application", "--generic-types-in", genericTypes, "--lower-codable",
+        "--root", join(ROOT, "Examples/UniversalApp"), "--product", "UniversalWebApp",
+        "--workspace", join(temp, "application-workspace"), "--report", join(temp, "application-report.json"),
+      ]);
+      // Both runs met the case: a view that keeps state and is not generic, whose installation is marked.
+      const installation = /@export\(interface\) (public )?func _installState\(\)/g;
+      const marked = (path) => readFileSync(join(temp, path), "utf8").match(installation)?.length ?? 0;
+      expect(marked("framework-workspace/Sources/SwiftUIWebWeb/WebContent.swift")).toBeGreaterThan(0);
+      expect(marked("application-workspace/Sources/Shared/SharedViews.swift")).toBeGreaterThan(0);
+    });
+  }, 120_000);
+
   test("real showcase restores byte for byte and generates valid syntax", () => {
     withTempDir((temp) => {
       for (const name of ["Sources", "Examples"]) cpSync(join(ROOT, name), join(temp, name), { recursive: true });
