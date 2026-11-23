@@ -104,6 +104,29 @@ import Testing
     #expect(result.text.contains("extension V {\n  func _installState() { _on._install() }\n}"))
   }
 
+  @Test func anInstallationInAConditionalBlockOfItsOwnDoesNotStandForTheViews() {
+    // A configuration without `DEBUG` compiles the view and neither of these methods, so the pass still writes its own.
+    let view = "struct V: View {\n  @State var on = false\n}\n\n"
+    let conditional = [
+      "extension V {\n  #if DEBUG\n  func _installState() {}\n  #endif\n}\n",
+      "#if DEBUG\nextension V {\n  func _installState() {}\n}\n#endif\n",
+    ]
+    for installation in conditional {
+      let result = installations(view + installation)
+      #expect(result.counts["state-installation"] == 1)
+      #expect(result.text.contains("extension V {\n  func _installState() { _on._install() }\n}"))
+      #expect(installations(result.text).text == result.text)
+    }
+  }
+
+  @Test func theInstallationOfAViewInAConditionalBlockIsFoundInThatBlock() {
+    let once = installations("#if WEB\nstruct V: View {\n  @State var on = false\n}\n#endif\n")
+    #expect(once.text == "#if WEB\nstruct V: View {\n  @State var on = false\n}\n\nextension V {\n  func _installState() { _on._install() }\n}\n#endif\n")
+    let again = installations(once.text)
+    #expect(again.counts["state-installation"] == nil)
+    #expect(again.text == once.text)
+  }
+
   @Test func anExtensionOfSomeOfAGenericViewIsNotItsInstallation() {
     // Neither extends every `Box`, so the view still needs the installation this pass writes for all of them.
     let source = "struct Box<T>: View {\n  @State var on = false\n}\n\nextension Box where T: Equatable {\n  func _installState() {}\n}\n\nextension Box<Int> {\n  func _installState() {}\n}\n"

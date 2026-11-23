@@ -165,25 +165,36 @@ enum ViewDeclarations {
     return branches.reversed()
   }
 
-  /// The types, by their dotted name, that an extension in the file gives a method `name` without parameters (in any
-  /// branch of a conditional block of the extension; a `static` function is not one). Only an extension of the whole type
-  /// counts, as the passes write theirs: the type's name alone, with no generic arguments and no where clause. A pass finds
-  /// what it wrote in an earlier lowering this way: the declaration is the same whatever a later pass wrote before it, an
-  /// attribute (`export-interface`) or a directive (`stable-source-locations`), while its text is not.
-  static func typesExtended(withMethod name: String, in index: ScopeIndex) -> Set<String> {
-    var types = Set<String>()
+  /// The methods `name` without parameters (a `static` function is not one) that the extensions in the file give each
+  /// type, by the type's dotted name: for each method, the `#if` branches that hold it (`conditionalBranches(of:)`), those
+  /// of a conditional block inside the extension included. Only an extension of the whole type counts, as the passes write
+  /// theirs: the type's name alone, with no generic arguments and no where clause. A pass finds what it wrote in an earlier
+  /// lowering this way: the declaration is the same whatever a later pass wrote before it, an attribute
+  /// (`export-interface`) or a directive (`stable-source-locations`), while its text is not.
+  static func extensionMethods(named name: String, in index: ScopeIndex) -> [String: [[SyntaxIdentifier]]] {
+    var methods: [String: [[SyntaxIdentifier]]] = [:]
     for scope in index.scopes {
       let qualified = scope.path.joined(separator: ".")
       guard let declaration = scope.node.as(ExtensionDeclSyntax.self), declaration.genericWhereClause == nil,
         declaration.extendedType.trimmedDescription == qualified
       else { continue }
-      let declares = flattenedMembers(declaration.memberBlock.members).contains { member in
-        guard let function = member.as(FunctionDeclSyntax.self), function.name.text == name else { return false }
-        return function.signature.parameterClause.parameters.isEmpty
-          && !function.modifiers.contains(.static) && !function.modifiers.contains(.class)
+      for member in flattenedMembers(declaration.memberBlock.members) {
+        guard let function = member.as(FunctionDeclSyntax.self), function.name.text == name,
+          function.signature.parameterClause.parameters.isEmpty,
+          !function.modifiers.contains(.static), !function.modifiers.contains(.class)
+        else { continue }
+        methods[qualified, default: []].append(conditionalBranches(of: Syntax(function)))
       }
-      if declares { types.insert(qualified) }
     }
-    return types
+    return methods
+  }
+
+  /// Whether one of `methods` (the branches `extensionMethods` gives for a type) is compiled wherever `view` is: every
+  /// `#if` branch that holds the method holds the view too. A method in a conditional block of its own is missing from
+  /// the configurations that leave the block out, so it does not stand for the view's.
+  static func covers(_ methods: [[SyntaxIdentifier]]?, view: Syntax) -> Bool {
+    guard let methods else { return false }
+    let branches = conditionalBranches(of: view)
+    return methods.contains { held in held.allSatisfy { branches.contains($0) } }
   }
 }
