@@ -14,7 +14,7 @@ const MODULE = { standIn: true };
 const URL_BASE = "https://app.test/";
 const PACKET_AT = 4096;
 const SCRATCH_AT = 8192;
-const SCHEMA = { phase: 0, idCounter: 4, eventSeen: 8 };
+const SCHEMA = { phase: 0, idCounter: 4, eventSeen: 8, replySeen: 9 };
 
 const realModuleImports = WebAssembly.Module.imports;
 const realInstantiate = WebAssembly.instantiate;
@@ -59,6 +59,17 @@ function standIn(imports, onWorker) {
     const status = io.request(id, BrowserIOOperation.fetch, PACKET_AT, packet.length);
     assert.equal(status, 0, "the request import accepts the request");
   };
+  // Calls a page service the way BrowserService does; its reply is watched in browser_io_receive.
+  let serviceCall = 0;
+  const callService = (name, method) => {
+    const packet = new Writer().text(name).text(method).text("").bytes();
+    const view = new DataView(memory.buffer);
+    const id = view.getUint32(SCHEMA.idCounter, true) + 1;
+    view.setUint32(SCHEMA.idCounter, id, true);
+    serviceCall = id;
+    bytes().set(packet, PACKET_AT);
+    assert.equal(io.request(id, BrowserIOOperation.service, PACKET_AT, packet.length), 0);
+  };
   // Observes a page service's events the way BrowserService does.
   const observe = (name, event) => {
     const packet = new Writer().text(name).text(event).bytes();
@@ -75,10 +86,12 @@ function standIn(imports, onWorker) {
       completions.push({ onWorker, id, code });
       // A service event changes Swift state without starting a task, then the next drain overflows.
       if (code === BrowserIOEvent.serviceEvent) { bytes()[SCHEMA.eventSeen] = 1; armed = true; }
+      // A service's reply resumes Swift the same way, and the drain it wakes overflows.
+      if (id === serviceCall && code === 0) { bytes()[SCHEMA.replySeen] = 1; armed = true; }
     },
     browser_io_free: () => {},
     embedded_browser_start() {},
-    embedded_browser_viewport() { scenario.viewport?.({ issue, observe, crash, arm: () => { armed = true; } }); },
+    embedded_browser_viewport() { scenario.viewport?.({ issue, observe, callService, crash, arm: () => { armed = true; } }); },
     embedded_browser_drain_tasks() {
       if (phase() === 0) { setPhase(1); return 1; }
       if (phase() === 1 && scenario.drainPost) { issue(scenario.method); crash(); setPhase(2); return 1; }
@@ -175,6 +188,38 @@ for (const [name, options, expected] of cases) {
     await main.adopt(MODULE, migrate.state);
     await settle();
     assert.equal(new Uint8Array(standIns.at(-1).memory.buffer)[SCHEMA.eventSeen], 1, `${name}: the main thread starts with the change`);
+    await main.handle({ t: "dispose" });
+    console.log(`ok   ${name}`);
+  } catch (error) {
+    failures++;
+    console.log(`FAIL ${error.message}`);
+    await worker.handle({ t: "dispose" });
+  }
+}
+
+// A page service's reply reaches Swift and wakes a drain that overflows at once. The reply's change must already be in
+// the snapshot the main thread continues from (BrowserIO's onServiceDelivered hook, before it wakes the drain).
+{
+  const name = "service reply: state it changed survives the drain it wakes";
+  scenario = { method: "GET", trigger: true, overflows: true, drainArmed: true, viewport: ({ callService }) => callService("ledger", "record") };
+  requests = []; completions.length = 0; instances = 0; standIns.length = 0;
+  const workerOut = [], mainOut = [];
+  const worker = createHostCore({ post: message => workerOut.push(message), scope, canMigrate: true });
+  await worker.handle(init);
+  await settle();
+  await worker.handle({ t: "call", n: "viewport", a: [] });
+  await settle();
+  const request = workerOut.find(message => message.t === "service");
+  try {
+    assert.ok(request, `${name}: the worker forwards the call to the page`);
+    await worker.handle({ t: "service-reply", runtime: request.runtime, request: request.request, ok: true, text: "ok" });
+    await settle();
+    const migrate = workerOut.find(message => message.t === "migrate");
+    assert.ok(migrate, `${name}: the drain the reply woke moved the app`);
+    const main = createHostCore({ post: message => mainOut.push(message), scope, canMigrate: false });
+    await main.adopt(MODULE, migrate.state);
+    await settle();
+    assert.equal(new Uint8Array(standIns.at(-1).memory.buffer)[SCHEMA.replySeen], 1, `${name}: the main thread starts with the reply's change`);
     await main.handle({ t: "dispose" });
     console.log(`ok   ${name}`);
   } catch (error) {

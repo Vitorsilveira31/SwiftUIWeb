@@ -69,7 +69,7 @@ export { safeErrorMessage, safeErrorStack } from './redact.mjs';
 // DOM reads answer from a mirror of the mounted elements that the main thread reported
 // before the last reconciliation, and DOM writes are queued for the main thread
 // (remote-dom-host.js) to apply in order. See Documentation/EmbeddedWorker.md.
-export function createBrowserIO({ getInstance, environment = globalThis, baseURL, onError = (e) => console.error(safeErrorMessage(e)), wake = () => {}, remoteDOM = false, stackMeter = null, onCookieWrite = () => {}, binaryAtoms = '', services } = {}) {
+export function createBrowserIO({ getInstance, environment = globalThis, baseURL, onError = (e) => console.error(safeErrorMessage(e)), wake = () => {}, remoteDOM = false, stackMeter = null, onCookieWrite = () => {}, binaryAtoms = '', services, onServiceDelivered = () => {} } = {}) {
   let binaryAtomBytes = null;
   const operations = new Map(); const replies = new Map(); const databases = new Map(); let nextReply = 1; let disposed = false;
   // Side-effecting fetches started since the last snapshot (their id, operation and packet), and on a thread that took
@@ -136,6 +136,9 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
     }
     // Resuming a Swift continuation enqueues its waiting task on the
     // Embedded browser executor. Give the host a chance to drain it.
+    // A page service's answer or event changed Swift state outside any call: the host keeps it (a snapshot) before the
+    // drain this wakes can run, so a move to another thread cannot lose it.
+    if (current.operation === BrowserIOOperation.service || current.operation === BrowserIOOperation.serviceEvents) onServiceDelivered();
     wake();
   };
   const fail = (id, error) => { const value = classify(error); emit(id, value.code, encoder.encode(value.message)); };

@@ -290,6 +290,7 @@ let tests = 0;
     ['token: PRIVATE_SECRET', /PRIVATE_SECRET/, /token/],
     ['password: PRIVATE_SECRET', /PRIVATE_SECRET/, /password/],
     ['key=PRIVATE_SECRET', /PRIVATE_SECRET/, /key/],
+    ['key: https://example.test/path?first=public&email=ana%40example.test', /ana%40example\.test|first=public/, /key/],
   ];
   for (const [text, secret, kept] of cases) {
     const safe = safeErrorStack(text);

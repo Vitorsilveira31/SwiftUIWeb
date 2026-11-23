@@ -300,7 +300,7 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
     }
     // `?stack-depth=1`: the render recursion reports its depth and the stack left (stack-probe.js).
     if (config.environment.includes('SWIFTUIWEB_STACK_DIAGNOSTICS=1')) stackMeter = createHeadroomMeter();
-    browserIO = createBrowserIO({ getInstance: () => (halted || poisoned ? null : instance), environment: environmentFor(), baseURL: config.baseURL, wake: scheduleTaskDrain, onError: fail, remoteDOM: true, stackMeter, binaryAtoms: config.atoms, services });
+    browserIO = createBrowserIO({ getInstance: () => (halted || poisoned ? null : instance), environment: environmentFor(), baseURL: config.baseURL, wake: scheduleTaskDrain, onError: fail, remoteDOM: true, stackMeter, binaryAtoms: config.atoms, services, onServiceDelivered: serviceCheckpoint });
     imports.browser_io = browserIO.imports;
     // A Worker may wait for the second half synchronously when a call needs it before it arrived; the main thread loads
     // it before the instance runs (`adopt`). The launcher leaves the loader out of a bundle that is not split (Tools/wasm-split-loader.js).
@@ -416,20 +416,18 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
     scheduleTaskDrain();
   }
 
-  /** A page service's answer or event, delivered into Swift. Like a cookie change, what it changed is published and kept
-   * in a snapshot, so a move to the main thread cannot lose it: an event reaches Swift at once; a reply resumes Swift a
-   * few microtasks later (BrowserIO's own `await`), so its checkpoint waits for the next task. */
+  /** A page service's answer or event: the forwarder hands it to BrowserIO, which delivers it into Swift. */
   function serviceDelivered(data) {
     serviceForwarder.receive(data);
-    const checkpoint = () => {
-      if (halted || poisoned) return;
-      flushDOM();
-      publishIfChanged();
-      takeSnapshot();
-      scheduleTaskDrain();
-    };
-    if (data.t === 'service-event') checkpoint();
-    else setTimeout(checkpoint, 0);
+  }
+
+  /** BrowserIO's hook, right after a service reply or event reached Swift and before the task drain it wakes: like a
+   * cookie change, what it changed is published and kept in a snapshot, so a move to the main thread cannot lose it. */
+  function serviceCheckpoint() {
+    if (halted || poisoned) return;
+    flushDOM();
+    publishIfChanged();
+    takeSnapshot();
   }
 
   function storageEvent(message) {

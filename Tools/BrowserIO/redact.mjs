@@ -16,15 +16,16 @@ const QUOTED_SECRET = new RegExp(`("(?:${SECRET_NAMES})"\\s*:\\s*)"(?:[^"\\\\]|\
 const ASSIGNED_SECRET = new RegExp(`\\b(${SECRET_NAMES})\\s*[:=]\\s*[^\\s&,;"']+`, 'gi');
 export function redactDiagnostics(raw) {
   return raw
+    // Whole URLs first (no user info, query or fragment), so a rule below cannot cut one and leave its query behind.
+    .replace(/https?:\/\/[^\s]+/gi, value => {
+      try { const url = new URL(value); url.username = ''; url.password = ''; url.search = ''; url.hash = ''; return url.href; }
+      catch { return '[redacted-url]'; }
+    })
     .replace(/([?&](?:token|access_token|refresh_token|code|key|secret|password|authorization))=[^&#\s]*/gi, '$1=[redacted]')
     // A header's whole value, to the end of its line: every cookie of a Cookie header, any Authorization scheme.
     .replace(/((?:proxy-)?authorization\s*:\s*)[^\r\n]*/gi, '$1[redacted]')
     .replace(/((?:set-)?cookie\s*:\s*)[^\r\n]*/gi, '$1[redacted]')
     .replace(/(bearer\s+)[^\s]+/gi, '$1[redacted]')
     .replace(QUOTED_SECRET, '$1"[redacted]"')
-    .replace(ASSIGNED_SECRET, '$1=[redacted]')
-    .replace(/https?:\/\/[^\s]+/gi, value => {
-      try { const url = new URL(value); url.username = ''; url.password = ''; url.search = ''; url.hash = ''; return url.href; }
-      catch { return '[redacted-url]'; }
-    });
+    .replace(ASSIGNED_SECRET, '$1=[redacted]');
 }
