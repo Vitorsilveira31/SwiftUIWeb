@@ -292,7 +292,7 @@ mergefunc_threshold="${SWIFTUIWEB_WASM_MERGEFUNC_THRESHOLD:-$mergefunc_default}"
 # SwiftPM appends its own `-g` after user `-Xswiftc` flags, so `-Xswiftc -gnone`
 # never wins; `-debug-info-format none` stops SwiftPM from passing `-g`.
 # `--strip-debug` drops any remaining .debug_* at link time and keeps `name`,
-# which SWIFTUIWEB_KEEP_WASM_NAMES and the size analysis read.
+# which SWIFTUIWEB_KEEP_WASM_NAMES, SWIFTUIWEB_KEEP_OPTIMIZED_WASM_NAMES and the size analysis read.
 # Debug builds drop DWARF too: it is most of a 60 MB app.wasm that the browser
 # compiles on every reload, while the `name` section (kept) is what gives readable
 # stack traces. SWIFTUIWEB_WASM_DEBUG_INFO=1 keeps DWARF for debugging Swift in
@@ -521,7 +521,18 @@ bun Tools/build-styles.mjs "$tmp/styles.css"
 [[ "$configuration" != release ]] || bun Tools/prune-release-css.js --css "$tmp/styles.css" --manifest "$manifest" >/dev/null
 # An unchanged module skips the strip and Binaryen: the earlier result is reused (SWIFTUIWEB_WASM_STRIP_CACHE=0 turns it off).
 if [[ "${SWIFTUIWEB_WASM_STRIP_CACHE:-1}" == 1 ]]; then export WASM_STRIP_CACHE_DIR="${SWIFTUIWEB_DEV_CACHE:-$BUILD_ROOT}/wasm-strip-cache"; else unset WASM_STRIP_CACHE_DIR; fi
-[[ "$configuration" != release ]] || { [[ -n "${SWIFTUIWEB_KEEP_WASM_NAMES:-}" ]] && cp "$tmp/app.wasm" "${SWIFTUIWEB_KEEP_WASM_NAMES}"; WASM_SIZE_REPORT=0 WASM_OPT_ONE_CALLER_INLINE_MAX_SIZE="${WASM_OPT_ONE_CALLER_INLINE_MAX_SIZE:-256}" Tools/strip-wasm-release.sh "$tmp/app.wasm" "$tmp/app.wasm"; }
+# A release strips the names and optimizes the module (Tools/strip-wasm-release.sh). A size analysis reads a copy that kept
+# its names (Documentation/Performance/WASM_SIZE.md): SWIFTUIWEB_KEEP_OPTIMIZED_WASM_NAMES=<file> is the module as it
+# ships, optimized the same way; SWIFTUIWEB_KEEP_WASM_NAMES=<file> is the module as it was linked, before that.
+if [[ "$configuration" == release ]]; then
+  release_inline_max="${WASM_OPT_ONE_CALLER_INLINE_MAX_SIZE:-256}"
+  if [[ -n "${SWIFTUIWEB_KEEP_WASM_NAMES:-}" ]]; then mkdir -p "$(dirname "$SWIFTUIWEB_KEEP_WASM_NAMES")"; cp "$tmp/app.wasm" "$SWIFTUIWEB_KEEP_WASM_NAMES"; fi
+  if [[ -n "${SWIFTUIWEB_KEEP_OPTIMIZED_WASM_NAMES:-}" ]]; then
+    mkdir -p "$(dirname "$SWIFTUIWEB_KEEP_OPTIMIZED_WASM_NAMES")"
+    WASM_KEEP_NAMES=1 WASM_SIZE_REPORT=0 WASM_OPT_ONE_CALLER_INLINE_MAX_SIZE="$release_inline_max" Tools/strip-wasm-release.sh "$tmp/app.wasm" "$SWIFTUIWEB_KEEP_OPTIMIZED_WASM_NAMES"
+  fi
+  WASM_SIZE_REPORT=0 WASM_OPT_ONE_CALLER_INLINE_MAX_SIZE="$release_inline_max" Tools/strip-wasm-release.sh "$tmp/app.wasm" "$tmp/app.wasm"
+fi
 [[ -n "$sync_workspace" ]] || rm -rf "$workspace"; [[ -n "${SWIFTUIWEB_DEV_CACHE:-}" ]] || rm -rf "$scratch"
 [[ -z "$framework_workspace" ]] || rm -rf "$framework_workspace"
 restore_external_sources
