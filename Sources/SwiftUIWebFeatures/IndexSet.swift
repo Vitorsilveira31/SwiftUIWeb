@@ -212,7 +212,8 @@ public protocol DynamicViewContent<Data>: View {
 
 extension ForEach: DynamicViewContent where Content: View {}
 
-/// A modifier on dynamic content keeps the content's collection, so `.id(_:)` and the like do not hide `onDelete`.
+/// A modifier applied with `modifier(_:)` keeps the collection of the dynamic content it modifies, so it does not hide
+/// `onDelete`. The framework's own modifiers declare `some View`, as SwiftUI's do, and `onDelete` comes before them.
 extension ModifiedContent where Content: DynamicViewContent {
   // Declared outside the conformance below, which would otherwise make the property main-actor isolated.
   public var data: Content.Data {

@@ -269,7 +269,7 @@ public extension Binding {
 public extension View {
   /// `.mask(shape)` takes the mask view directly.
   nonisolated func mask<Mask: View>(_ mask: Mask) -> some View {
-    modifier(MaskCompatibilityModifier(mask: { mask }))
+    _modified(MaskCompatibilityModifier(mask: { mask }))
   }
 }
 

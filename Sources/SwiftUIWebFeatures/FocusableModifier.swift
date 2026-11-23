@@ -32,9 +32,9 @@ package nonisolated struct FocusableModifier: ViewModifier {
 
 public extension View {
   nonisolated func focusable(_ isFocusable: Bool = true) -> some View {
-    modifier(FocusableModifier(isFocusable: isFocusable))
+    _modified(FocusableModifier(isFocusable: isFocusable))
   }
   nonisolated func focusable(_ isFocusable: Bool = true, interactions: FocusInteractions) -> some View {
-    modifier(FocusableModifier(isFocusable: isFocusable))
+    _modified(FocusableModifier(isFocusable: isFocusable))
   }
 }

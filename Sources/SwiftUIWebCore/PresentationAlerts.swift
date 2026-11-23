@@ -16,42 +16,42 @@ public extension View {
   // MARK: Alert
 
   nonisolated func alert<Actions: View>(_ titleKey: LocalizedStringKey, isPresented: Binding<Bool>, @ViewBuilder actions: @escaping () -> Actions) -> some View {
-    modifier(AlertModifier(title: titleKey.resolved, isPresented: isPresented, message: { EmptyView() }, actions: actions))
+    _modified(AlertModifier(title: titleKey.resolved, isPresented: isPresented, message: { EmptyView() }, actions: actions))
   }
   nonisolated func alert<Actions: View, Message: View>(_ titleKey: LocalizedStringKey, isPresented: Binding<Bool>, @ViewBuilder actions: @escaping () -> Actions, @ViewBuilder message: @escaping () -> Message) -> some View {
-    modifier(AlertModifier(title: titleKey.resolved, isPresented: isPresented, message: message, actions: actions))
+    _modified(AlertModifier(title: titleKey.resolved, isPresented: isPresented, message: message, actions: actions))
   }
   nonisolated func alert<Actions: View, T>(_ titleKey: LocalizedStringKey, isPresented: Binding<Bool>, presenting data: T?, @ViewBuilder actions: @escaping (T) -> Actions) -> some View {
-    modifier(AlertModifier(title: titleKey.resolved, isPresented: _presentingBinding(isPresented, data), message: { EmptyView() }, actions: _presenting(data, actions)))
+    _modified(AlertModifier(title: titleKey.resolved, isPresented: _presentingBinding(isPresented, data), message: { EmptyView() }, actions: _presenting(data, actions)))
   }
   nonisolated func alert<Actions: View, Message: View, T>(_ titleKey: LocalizedStringKey, isPresented: Binding<Bool>, presenting data: T?, @ViewBuilder actions: @escaping (T) -> Actions, @ViewBuilder message: @escaping (T) -> Message) -> some View {
-    modifier(AlertModifier(title: titleKey.resolved, isPresented: _presentingBinding(isPresented, data), message: _presenting(data, message), actions: _presenting(data, actions)))
+    _modified(AlertModifier(title: titleKey.resolved, isPresented: _presentingBinding(isPresented, data), message: _presenting(data, message), actions: _presenting(data, actions)))
   }
 
   @_disfavoredOverload nonisolated func alert<S: StringProtocol, Actions: View>(_ title: S, isPresented: Binding<Bool>, @ViewBuilder actions: @escaping () -> Actions) -> some View {
-    modifier(AlertModifier(title: String(title), isPresented: isPresented, message: { EmptyView() }, actions: actions))
+    _modified(AlertModifier(title: String(title), isPresented: isPresented, message: { EmptyView() }, actions: actions))
   }
   @_disfavoredOverload nonisolated func alert<S: StringProtocol, Actions: View, Message: View>(_ title: S, isPresented: Binding<Bool>, @ViewBuilder actions: @escaping () -> Actions, @ViewBuilder message: @escaping () -> Message) -> some View {
-    modifier(AlertModifier(title: String(title), isPresented: isPresented, message: message, actions: actions))
+    _modified(AlertModifier(title: String(title), isPresented: isPresented, message: message, actions: actions))
   }
   @_disfavoredOverload nonisolated func alert<S: StringProtocol, Actions: View, T>(_ title: S, isPresented: Binding<Bool>, presenting data: T?, @ViewBuilder actions: @escaping (T) -> Actions) -> some View {
-    modifier(AlertModifier(title: String(title), isPresented: _presentingBinding(isPresented, data), message: { EmptyView() }, actions: _presenting(data, actions)))
+    _modified(AlertModifier(title: String(title), isPresented: _presentingBinding(isPresented, data), message: { EmptyView() }, actions: _presenting(data, actions)))
   }
   @_disfavoredOverload nonisolated func alert<S: StringProtocol, Actions: View, Message: View, T>(_ title: S, isPresented: Binding<Bool>, presenting data: T?, @ViewBuilder actions: @escaping (T) -> Actions, @ViewBuilder message: @escaping (T) -> Message) -> some View {
-    modifier(AlertModifier(title: String(title), isPresented: _presentingBinding(isPresented, data), message: _presenting(data, message), actions: _presenting(data, actions)))
+    _modified(AlertModifier(title: String(title), isPresented: _presentingBinding(isPresented, data), message: _presenting(data, message), actions: _presenting(data, actions)))
   }
 
   nonisolated func alert<Actions: View>(_ title: Text, isPresented: Binding<Bool>, @ViewBuilder actions: @escaping () -> Actions) -> some View {
-    modifier(AlertModifier(title: title.value, isPresented: isPresented, message: { EmptyView() }, actions: actions))
+    _modified(AlertModifier(title: title.value, isPresented: isPresented, message: { EmptyView() }, actions: actions))
   }
   nonisolated func alert<Actions: View, Message: View>(_ title: Text, isPresented: Binding<Bool>, @ViewBuilder actions: @escaping () -> Actions, @ViewBuilder message: @escaping () -> Message) -> some View {
-    modifier(AlertModifier(title: title.value, isPresented: isPresented, message: message, actions: actions))
+    _modified(AlertModifier(title: title.value, isPresented: isPresented, message: message, actions: actions))
   }
   nonisolated func alert<Actions: View, T>(_ title: Text, isPresented: Binding<Bool>, presenting data: T?, @ViewBuilder actions: @escaping (T) -> Actions) -> some View {
-    modifier(AlertModifier(title: title.value, isPresented: _presentingBinding(isPresented, data), message: { EmptyView() }, actions: _presenting(data, actions)))
+    _modified(AlertModifier(title: title.value, isPresented: _presentingBinding(isPresented, data), message: { EmptyView() }, actions: _presenting(data, actions)))
   }
   nonisolated func alert<Actions: View, Message: View, T>(_ title: Text, isPresented: Binding<Bool>, presenting data: T?, @ViewBuilder actions: @escaping (T) -> Actions, @ViewBuilder message: @escaping (T) -> Message) -> some View {
-    modifier(AlertModifier(title: title.value, isPresented: _presentingBinding(isPresented, data), message: _presenting(data, message), actions: _presenting(data, actions)))
+    _modified(AlertModifier(title: title.value, isPresented: _presentingBinding(isPresented, data), message: _presenting(data, message), actions: _presenting(data, actions)))
   }
 
   // MARK: Confirmation dialog

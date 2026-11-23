@@ -159,12 +159,12 @@ nonisolated struct _ValueTransactionModifier<Value: Equatable>: ViewModifier {
 public extension View {
   /// Changes the transaction of the state changes this view shows.
   nonisolated func transaction(_ transform: @escaping (inout Transaction) -> Void) -> some View {
-    modifier(_TransactionModifier(transform: transform))
+    _modified(_TransactionModifier(transform: transform))
   }
 
   /// Changes the transaction of the state changes this view shows, in the commits in which `value` changed.
   nonisolated func transaction(value: some Equatable, _ transform: @escaping (inout Transaction) -> Void) -> some View {
-    modifier(_ValueTransactionModifier(value: value, transform: transform))
+    _modified(_ValueTransactionModifier(value: value, transform: transform))
   }
 
   /// Changes the transaction for the modifiers `body` applies to this view, and only for them.

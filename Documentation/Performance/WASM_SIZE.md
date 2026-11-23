@@ -67,23 +67,34 @@ two modules and the attribution of the module as it ships. The report stays in `
   bytes are the ones the report gives for the whole module, not a file size: a file also holds the data segments, and the two files of
   a split hold the split's own imports and stubs.
 
-Measured on 2026-11-22: 1,575,673 B of code at 100 views and 2,065,598 B at 200, so 4.9 KB of code for each view; the two modules
-of the bundle are 498,548 B and 602,041 B with Brotli -q11.
+Measured on 2026-11-23: 1,433,328 B of code at 100 views and 1,900,676 B at 200, so 4.7 KB of code for each view; the two modules
+of the bundle are 460,298 B and 549,815 B with Brotli -q11.
 
 ## Where the bytes are
 
 - **Per-type duplication of generic code.** Each view type gets its own copy of the generic code that wraps it. The framework moves
   the type-independent part into non-generic functions, so that each view type keeps only what depends on it.
-- **Nested modifier chains.** A modifier chain nests by type (`ModifiedContent<ModifiedContent<…>, M>`), and each level holds the inner
-  view by value. Without boxing, each level's copy, destroy and closure-context witnesses copy the whole chain beneath it, so a chain of
-  depth N compiles to outlined code of order N². `_ViewBox`, a final class that holds the wrapped view, reduces each level to a pointer
-  copy. `ModifiedContent` and `_ConditionalContent` use it.
+- **Nested modifier chains.** A chain of `modifier(_:)` nests by type (`ModifiedContent<ModifiedContent<…>, M>`), and each level holds
+  the inner view by value. Without boxing, each level's copy, destroy and closure-context witnesses copy the whole chain beneath it, so a
+  chain of depth N compiles to outlined code of order N². `_ViewBox`, a final class that holds the wrapped view, reduces each level to a
+  pointer copy. `ModifiedContent` and `_ConditionalContent` use it.
+- **One type for every modified view.** The framework's own modifiers (`padding`, `font`, `onAppear` and the rest) declare `some View`
+  and return `_ModifiedView`, which erases what it modifies when the modified view is formed. A chain is then one type however long it
+  is and whatever it modifies, so the code that holds or renders one (`AnyView.init`, a conditional, a `ForEach` row, a view builder
+  block) is compiled once and not once for every chain. What the chain's type told the runtime is in the value: a tag formed from the
+  tag of the content and the modifier's type names the view's state scope and its node (`View._swiftUIWebTypeTag`), and a view that
+  renders a modified view in its own place (`ModifiedContent`, `_ConditionalContent`, a `ForEach` row) is named after it. For any other
+  type the tag is a constant, so it costs that type nothing. Any other generic view that holds a modified view (a stack, an
+  application's own container) is named by its own type, as one that holds several children is.
+- **The children of a view builder block.** `_ViewBuilderContent` holds its children erased, so one non-generic function renders every
+  block (`_renderBuilderChildren`), and what is compiled for a child's type is its erasure.
 - **Modifier builders.** `frame(...)`, `padding(...)` and `fixedSize(...)` build their style tables in non-generic functions
   (`_frameModifier`, `_paddingModifier`, `_fixedSizeModifier`). The generic methods only wrap the result. Their specializations are
   about 190 KB on the Showcase, almost all of it the unavoidable per-type `_render` that calls `body`.
-- **Type-erased views and `ForEach`.** Each `AnyView` closure would carry the environment and state-scope bookkeeping and format the
-  view's type name on every render. `_enterRenderScope` and `_exitRenderScope` hold that bookkeeping once, and the name is computed once
-  per `AnyView`. `ForEach`'s algorithm (occurrence keys, the lazy descriptor, the eager fragment) is in `_renderKeyedCollection`, so a
+- **Type-erased views and `ForEach`.** An erased view renders through `_AnyViewRenderer.render`, which holds the environment and
+  state-scope bookkeeping (`_enterRenderScope`, `_exitRenderScope`) and the naming of the node once: the renderer of a view type
+  overrides only `renderContent`, the call into the view's own `_render`. `AnyView._render` is a call, not a copy in every view that
+  holds an erased view. `ForEach`'s algorithm (occurrence keys, the lazy descriptor, the eager fragment) is in `_renderKeyedCollection`, so a
   `ForEach` specialization is only the element lookup and the `content` call.
 - **Conditional content.** `_ConditionalContent._render` keys the branch and the state scope in the non-generic `_renderBranch`. The
   per-type part is one `AnyView` erasure.
@@ -129,6 +140,24 @@ from 292,429 B to 271,077 B with Brotli (`app.wasm` from 174,063 B to 160,995 B)
 bundles (`Tools/compare-react.mjs`, 10 rounds, CPU 1x) found no significant difference in any load or interaction metric. The
 synthetic application of 200 views (`make large-app-size`) went from 2,279,113 B of code to 2,065,598 B (-9.4 %), its two modules
 from 648,894 B to 602,041 B with Brotli (-7.2 %), and a view from 5.3 KB of code to 4.9 KB.
+
+The one type for every modified view and the erased children of a view builder block, measured on the same application a day later,
+when it had grown (release, Brotli -q11, 2026-11-23):
+
+| | Before | After | Change |
+|---|---|---|---|
+| Code of the optimized module | 6,730,513 B | 6,040,097 B | -10.3 % |
+| Functions | 22,369 | 17,558 | -21.5 % |
+| One module, raw | 7,357,609 B | 6,569,612 B | -10.7 % |
+| One module, Brotli | 1,535,773 B | 1,411,384 B | -8.1 % |
+| `app.wasm` of the split, Brotli | 474,319 B | 430,450 B | -9.2 % |
+| `app-rest.wasm` of the split, Brotli | 1,215,177 B | 1,104,299 B | -9.1 % |
+
+The framework code copied for the application's types went from 1,562,703 B (8,948 copies) to 936,654 B (5,869); the application's own
+code did not shrink (3,138,304 B before, 3,224,955 B after). The Board benchmark's two modules went from 271,077 B to 265,360 B with
+Brotli, and an interleaved comparison of the two Board bundles (`Tools/compare-react.mjs`, 10 rounds, CPU 1x) found no significant
+difference in any load or interaction metric. The synthetic application of 200 views went from 2,065,598 B of code to 1,900,676 B
+(-8.0 %), its two modules from 602,041 B to 549,815 B with Brotli (-8.7 %), and a view from 4.9 KB of code to 4.7 KB.
 
 ## Options that were measured
 

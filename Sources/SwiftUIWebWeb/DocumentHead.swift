@@ -105,8 +105,8 @@ public extension View {
   ///     .meta(name: "robots", content: "noindex")
   ///   }
   /// ```
-  nonisolated func documentHead(@HeadBuilder _ content: () -> [HeadElement]) -> ModifiedContent<Self, DocumentHeadModifier> {
-    modifier(DocumentHeadModifier(elements: content()))
+  nonisolated func documentHead(@HeadBuilder _ content: () -> [HeadElement]) -> some View {
+    _modified(DocumentHeadModifier(elements: content()))
   }
 }
 

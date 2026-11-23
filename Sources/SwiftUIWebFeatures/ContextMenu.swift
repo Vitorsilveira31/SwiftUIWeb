@@ -9,11 +9,11 @@
 /// The optional `preview` of iOS has no browser equivalent and is not shown.
 public extension View {
   nonisolated func contextMenu<MenuItems: View>(@ViewBuilder menuItems: () -> MenuItems) -> some View {
-    modifier(ContextMenuModifier(items: menuItems()))
+    _modified(ContextMenuModifier(items: menuItems()))
   }
 
   nonisolated func contextMenu<MenuItems: View, Preview: View>(@ViewBuilder menuItems: () -> MenuItems, @ViewBuilder preview: () -> Preview) -> some View {
-    modifier(ContextMenuModifier(items: menuItems()))
+    _modified(ContextMenuModifier(items: menuItems()))
   }
 }
 

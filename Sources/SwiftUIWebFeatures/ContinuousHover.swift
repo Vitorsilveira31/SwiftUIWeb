@@ -29,6 +29,6 @@ public extension View {
     coordinateSpace: some CoordinateSpaceProtocol = .local,
     perform action: @escaping (HoverPhase) -> Void
   ) -> some View {
-    modifier(ContinuousHoverModifier(action: _mainActor(action)))
+    _modified(ContinuousHoverModifier(action: _mainActor(action)))
   }
 }

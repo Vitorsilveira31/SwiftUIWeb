@@ -28,6 +28,6 @@ nonisolated struct PointerStyleModifier: ViewModifier {
 
 public extension View {
   nonisolated func pointerStyle(_ style: PointerStyle?) -> some View {
-    modifier(PointerStyleModifier(style: style))
+    _modified(PointerStyleModifier(style: style))
   }
 }

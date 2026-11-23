@@ -11,7 +11,7 @@ public extension View {
     phases: KeyPress.Phases = [.down, .repeat],
     action: @escaping (KeyPress) -> KeyPress.Result
   ) -> some View {
-    modifier(OnKeyPressModifier(phases: phases, matches: { press in
+    _modified(OnKeyPressModifier(phases: phases, matches: { press in
       !press.characters.isEmpty && press.characters.unicodeScalars.allSatisfy { characters.contains($0) }
     }, action: action))
   }

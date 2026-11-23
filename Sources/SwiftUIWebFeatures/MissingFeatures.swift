@@ -94,15 +94,15 @@ public extension View {
   // overload and are identified by their browser token; app-defined styles are
   // rendered through their own `makeBody`.
   nonisolated func buttonStyle<S: ButtonStyle>(_ style: S) -> some View {
-    modifier(ButtonStyleModifier(style: style))
+    _modified(ButtonStyleModifier(style: style))
   }
 
   nonisolated func buttonStyle<S: PrimitiveButtonStyle>(_ style: S) -> some View {
-    modifier(PrimitiveButtonStyleModifier(style: style))
+    _modified(PrimitiveButtonStyleModifier(style: style))
   }
 
   nonisolated func controlSize(_ size: ControlSize) -> some View {
-    modifier(ControlSizeModifier(size: size))
+    _modified(ControlSizeModifier(size: size))
   }
 }
 
@@ -230,21 +230,21 @@ private func _safeAreaEdgeName(_ edge: Edge.Set) -> String {
 
 public extension View {
   nonisolated func refreshable(action: @escaping @Sendable () async -> Void) -> some View {
-    modifier(RefreshableModifier(action: { await action() }))
+    _modified(RefreshableModifier(action: { await action() }))
   }
 
   nonisolated func redacted(reason: RedactionReasons) -> some View {
-    modifier(RedactedModifier(reasons: reason))
+    _modified(RedactedModifier(reasons: reason))
   }
 
-  nonisolated func unredacted() -> some View { modifier(UnredactedModifier()) }
+  nonisolated func unredacted() -> some View { _modified(UnredactedModifier()) }
 
   nonisolated func safeAreaInset<Inset: View>(edge: VerticalEdge, alignment: HorizontalAlignment = .center, spacing: Double? = nil, @ViewBuilder content: @escaping () -> Inset) -> some View {
-    modifier(SafeAreaInsetModifier(edge: edge == .top ? .top : .bottom, alignment: Alignment(horizontal: alignment, vertical: .center), spacing: spacing, content: content))
+    _modified(SafeAreaInsetModifier(edge: edge == .top ? .top : .bottom, alignment: Alignment(horizontal: alignment, vertical: .center), spacing: spacing, content: content))
   }
 
   nonisolated func safeAreaInset<Inset: View>(edge: HorizontalEdge, alignment: VerticalAlignment = .center, spacing: Double? = nil, @ViewBuilder content: @escaping () -> Inset) -> some View {
-    modifier(SafeAreaInsetModifier(edge: edge == .leading ? .leading : .trailing, alignment: Alignment(horizontal: .center, vertical: alignment), spacing: spacing, content: content))
+    _modified(SafeAreaInsetModifier(edge: edge == .leading ? .leading : .trailing, alignment: Alignment(horizontal: .center, vertical: alignment), spacing: spacing, content: content))
   }
 }
 
@@ -277,7 +277,7 @@ package nonisolated struct AccessibilityMetadataModifier: ViewModifier {
 
 public extension View {
   @_disfavoredOverload nonisolated func accessibilityValue<S: StringProtocol>(_ value: S) -> some View {
-    modifier(AccessibilityMetadataModifier(value: String(value)))
+    _modified(AccessibilityMetadataModifier(value: String(value)))
   }
 
   nonisolated func accessibilityValue(_ value: Text) -> some View {
@@ -285,7 +285,7 @@ public extension View {
   }
 
   @_disfavoredOverload nonisolated func accessibilityHint<S: StringProtocol>(_ hint: S) -> some View {
-    modifier(AccessibilityMetadataModifier(hint: String(hint)))
+    _modified(AccessibilityMetadataModifier(hint: String(hint)))
   }
 
   nonisolated func accessibilityHint(_ hint: Text) -> some View {
@@ -293,15 +293,15 @@ public extension View {
   }
 
   nonisolated func accessibilityAddTraits(_ traits: AccessibilityTraits) -> some View {
-    modifier(AccessibilityMetadataModifier(addTraits: traits))
+    _modified(AccessibilityMetadataModifier(addTraits: traits))
   }
 
   nonisolated func accessibilityRemoveTraits(_ traits: AccessibilityTraits) -> some View {
-    modifier(AccessibilityMetadataModifier(removeTraits: traits))
+    _modified(AccessibilityMetadataModifier(removeTraits: traits))
   }
 
   nonisolated func accessibilityHidden(_ hidden: Bool) -> some View {
-    modifier(AccessibilityMetadataModifier(hidden: hidden))
+    _modified(AccessibilityMetadataModifier(hidden: hidden))
   }
 }
 
@@ -376,15 +376,15 @@ package nonisolated struct SubmitModifier: ViewModifier {
 
 public extension View {
   nonisolated func onChange<Value: Equatable>(of value: Value, initial: Bool = false, _ action: @escaping () -> Void) -> some View {
-    modifier(OnChangeNoArgumentModifier(value: value, initial: initial, action: action))
+    _modified(OnChangeNoArgumentModifier(value: value, initial: initial, action: action))
   }
 
   nonisolated func onChange<Value: Equatable>(of value: Value, initial: Bool = false, _ action: @escaping (Value, Value) -> Void) -> some View {
-    modifier(OnChangePairModifier(value: value, initial: initial, action: action))
+    _modified(OnChangePairModifier(value: value, initial: initial, action: action))
   }
 
   nonisolated func onSubmit(of triggers: SubmitTriggers = .text, _ action: @escaping () -> Void) -> some View {
-    modifier(SubmitModifier(triggers: triggers, action: _mainActor(action)))
+    _modified(SubmitModifier(triggers: triggers, action: _mainActor(action)))
   }
 }
 

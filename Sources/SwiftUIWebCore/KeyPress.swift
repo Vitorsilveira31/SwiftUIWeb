@@ -127,26 +127,26 @@ public extension View {
   /// Performs `action` when `key` is pressed (down or repeat) while this view
   /// or one of its descendants has focus.
   nonisolated func onKeyPress(_ key: KeyEquivalent, action: @escaping () -> KeyPress.Result) -> some View {
-    modifier(OnKeyPressModifier(phases: [.down, .repeat], matches: { $0.key == key }, action: { _ in action() }))
+    _modified(OnKeyPressModifier(phases: [.down, .repeat], matches: { $0.key == key }, action: { _ in action() }))
   }
   nonisolated func onKeyPress(
     _ key: KeyEquivalent,
     phases: KeyPress.Phases,
     action: @escaping (KeyPress) -> KeyPress.Result
   ) -> some View {
-    modifier(OnKeyPressModifier(phases: phases, matches: { $0.key == key }, action: action))
+    _modified(OnKeyPressModifier(phases: phases, matches: { $0.key == key }, action: action))
   }
   nonisolated func onKeyPress(
     keys: Set<KeyEquivalent>,
     phases: KeyPress.Phases = [.down, .repeat],
     action: @escaping (KeyPress) -> KeyPress.Result
   ) -> some View {
-    modifier(OnKeyPressModifier(phases: phases, matches: { keys.contains($0.key) }, action: action))
+    _modified(OnKeyPressModifier(phases: phases, matches: { keys.contains($0.key) }, action: action))
   }
   nonisolated func onKeyPress(
     phases: KeyPress.Phases = [.down, .repeat],
     action: @escaping (KeyPress) -> KeyPress.Result
   ) -> some View {
-    modifier(OnKeyPressModifier(phases: phases, matches: { _ in true }, action: action))
+    _modified(OnKeyPressModifier(phases: phases, matches: { _ in true }, action: action))
   }
 }

@@ -8636,6 +8636,12 @@
     {
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/Core.swift",
+      "signature": "public struct _ViewTypeTag: Sendable",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebCore",
+      "file": "Sources/SwiftUIWebCore/Core.swift",
       "signature": "public subscript<K: EnvironmentKey>(_ key: K.Type) -> K.Value",
       "availability": []
     },
@@ -14672,6 +14678,12 @@
     {
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/Modifiers.swift",
+      "signature": "public nonisolated var _swiftUIWebTypeTag: _ViewTypeTag",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebCore",
+      "file": "Sources/SwiftUIWebCore/Modifiers.swift",
       "signature": "public nonisolated var background: Background",
       "availability": []
     },
@@ -20403,6 +20415,12 @@
       "target": "SwiftUIWebCore",
       "file": "Sources/SwiftUIWebCore/ViewBuilder.swift",
       "signature": "public nonisolated struct TupleView<T>: View",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebCore",
+      "file": "Sources/SwiftUIWebCore/ViewBuilder.swift",
+      "signature": "public nonisolated var _swiftUIWebTypeTag: _ViewTypeTag",
       "availability": []
     },
     {

@@ -77,7 +77,7 @@ nonisolated package struct KeyboardShortcutModifier: ViewModifier {
 
 public extension View {
   nonisolated func keyboardShortcut(_ shortcut: KeyboardShortcut) -> some View {
-    modifier(KeyboardShortcutModifier(shortcut: shortcut))
+    _modified(KeyboardShortcutModifier(shortcut: shortcut))
   }
 }
 

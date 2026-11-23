@@ -345,7 +345,7 @@ public extension ViewModifier {
 public extension View {
   /// Draws the view transformed by `transform`, about its top-leading corner, without changing its layout.
   nonisolated func projectionEffect(_ transform: ProjectionTransform) -> some View {
-    modifier(_ProjectionEffectModifier(transform: transform))
+    _modified(_ProjectionEffectModifier(transform: transform))
   }
 }
 

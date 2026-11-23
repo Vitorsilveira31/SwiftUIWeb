@@ -216,7 +216,7 @@ public extension MenuStyle where Self == ButtonMenuStyle {
 public extension View {
   /// `lineLimit(_:reservesSpace:)`: with `reservesSpace`, the text keeps room for `limit` lines even when it needs fewer.
   nonisolated func lineLimit(_ limit: Int, reservesSpace: Bool) -> some View {
-    lineLimit(limit).modifier(StyleModifier(styles: reservesSpace ? ["min-height": "calc(\(limit) * 1lh)"] : .init()))
+    lineLimit(limit)._modified(StyleModifier(styles: reservesSpace ? ["min-height": "calc(\(limit) * 1lh)"] : .init()))
   }
 }
 

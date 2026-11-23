@@ -685,7 +685,7 @@ private nonisolated struct _OutlineRow<Element, RowContent: View>: View {
     }
 
     return AnyView(row
-      .modifier(_OutlineRowMetadata(depth: depth, hasChildren: hasChildren, expanded: expanded))
+      ._modified(_OutlineRowMetadata(depth: depth, hasChildren: hasChildren, expanded: expanded))
       .padding(.leading, Double(depth * 16)))
   }
 }

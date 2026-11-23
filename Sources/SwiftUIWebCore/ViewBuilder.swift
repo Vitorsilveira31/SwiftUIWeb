@@ -15,21 +15,16 @@
     accumulated: First,
     next: Next
   ) -> _ViewBuilderContent<Never> {
-    _ViewBuilderContent(
-      childAppenders: [
-        _viewBuilderChildAppender(accumulated),
-        _viewBuilderChildAppender(next)
-      ]
-    )
+    _ViewBuilderContent(children: [AnyView(accumulated), AnyView(next)])
   }
 
   public static func buildPartialBlock<Next: View>(
     accumulated: _ViewBuilderContent<Never>,
     next: Next
   ) -> _ViewBuilderContent<Never> {
-    var childAppenders = accumulated.childAppenders
-    childAppenders.append(_viewBuilderChildAppender(next))
-    return _ViewBuilderContent(childAppenders: childAppenders)
+    var children = accumulated.children
+    children.append(AnyView(next))
+    return _ViewBuilderContent(children: children)
   }
 
   public static func buildEither<TrueContent: View, FalseContent: View>(first: TrueContent) -> _ConditionalContent<TrueContent, FalseContent> { .trueContent(first) }
@@ -144,6 +139,15 @@ extension _ConditionalContent: View where TrueContent: View, FalseContent: View 
     switch branch {
     case .trueContent(let box): return _renderBranch(AnyView(box.value), taken: true, in: context)
     case .falseContent(let box): return _renderBranch(AnyView(box.value), taken: false, in: context)
+    }
+  }
+
+  /// The type, unless the branch that was taken is named by its value (a modified view of the framework): the type
+  /// does not spell what that view modifies, and the branch renders in the conditional's own place.
+  @inline(__always) public nonisolated var _swiftUIWebTypeTag: _ViewTypeTag {
+    switch branch {
+    case .trueContent(let box): return .holding(box.value._swiftUIWebTypeTag, in: Self.self)
+    case .falseContent(let box): return .holding(box.value._swiftUIWebTypeTag, in: Self.self)
     }
   }
 }

@@ -160,7 +160,7 @@ public extension View {
     // Optional tints match SwiftUI's ability to clear an inherited tint.  The
     // nil case is represented by a no-op modifier so the source remains
     // portable without adding a second overload.
-    modifier(TintModifier(color: color))
+    _modified(TintModifier(color: color))
   }
 }
 

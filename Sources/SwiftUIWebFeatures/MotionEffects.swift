@@ -136,8 +136,8 @@ nonisolated struct _VisualEffectView<Content: View>: View {
   var body: some View {
     let encode = self.encode
     return content
-      .modifier(_EncodedVisualEffect(encoded: measured.map { encode($0.proxy) } ?? ""))
-      .modifier(_UntransformedGeometryModifier())
+      ._modified(_EncodedVisualEffect(encoded: measured.map { encode($0.proxy) } ?? ""))
+      ._modified(_UntransformedGeometryModifier())
       // The effect is run on the proxy so that what it reads of it (a position, which the page then follows as an ancestor
       // scrolls) is noted; the measurement is what is kept.
       .onGeometryChange(for: _MeasuredGeometry.self, of: { proxy in _ = encode(proxy); return proxy._measured }) { measured = $0 }
@@ -177,7 +177,7 @@ nonisolated struct _EncodedVisualEffect: ViewModifier {
 public extension View {
   /// Multiplies each color channel of the view by `color`'s: white leaves it unchanged, black makes it black.
   nonisolated func colorMultiply(_ color: Color) -> some View {
-    modifier(_ColorMultiplyModifier(color: color))
+    _modified(_ColorMultiplyModifier(color: color))
   }
 }
 
@@ -208,12 +208,12 @@ public extension View {
   /// Flashes the scroll indicators of the scroll views below whenever `value` changes.
   nonisolated func scrollIndicatorsFlash(trigger value: some Equatable) -> some View {
     nonisolated(unsafe) let value = value
-    return modifier(_ScrollFlashModifier(generation: { store, key in store._identityGeneration(key: key, value: value) }, onAppear: false))
+    return _modified(_ScrollFlashModifier(generation: { store, key in store._identityGeneration(key: key, value: value) }, onAppear: false))
   }
 
   /// Flashes the scroll indicators of the scroll views below when they appear, if `onAppear`.
   nonisolated func scrollIndicatorsFlash(onAppear: Bool) -> some View {
-    modifier(_ScrollFlashModifier(generation: nil, onAppear: onAppear))
+    _modified(_ScrollFlashModifier(generation: nil, onAppear: onAppear))
   }
 }
 
@@ -244,7 +244,7 @@ public extension View {
     transition: @escaping @Sendable (EmptyVisualEffect, ScrollTransitionPhase) -> some VisualEffect
   ) -> some View {
     scrollTransition(topLeading, axis: axis, transition: transition)
-      .modifier(_ScrollTransitionTrailingModifier(configuration: bottomTrailing))
+      ._modified(_ScrollTransitionTrailingModifier(configuration: bottomTrailing))
   }
 }
 

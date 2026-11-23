@@ -117,6 +117,28 @@ re-creates expecting its new initial value to replace the state: give the view a
 SwiftUI. The source lowering writes `_installState()` for each view that keeps state (`state-installation`); a view
 nested in a private type, or a state declared inside an `#if` in the view, is still installed on its first read.
 
+### The framework's modifiers declare `some View`
+
+About a hundred modifiers declared a concrete result: `zIndex(_:)`, `blur(radius:)`, `scaleEffect(_:)`, `toolbar(_:for:)`,
+`listStyle(_:)` and the others built on the same modifier returned `ModifiedContent<Self, _SemanticCompatibilityModifier>`,
+and the browser's own ones (`webHoverUnderline()`, `documentHead(_:)`, `path(_:)`, `onKeyDown(perform:)`, the photo
+picker) a `ModifiedContent` of their modifier. They declare `some View` now, as SwiftUI declares the ones it has.
+`modifier(_:)` still returns `ModifiedContent<Self, Modifier>`.
+
+- Code that spelled the concrete type (a property typed `ModifiedContent<Text, _SemanticCompatibilityModifier>`) writes
+  `some View`, or `AnyView` where a type has to be named.
+- `onDelete(perform:)` and `onMove(perform:)` come before those modifiers, as in SwiftUI
+  (`ForEach(rows) { ... }.onDelete { ... }.listRowInsets(insets)`): after one of them the result is no longer a
+  `DynamicViewContent`.
+
+Behind that result every modified view of the framework is one type, which is what makes a release smaller
+(`Performance/WASM_SIZE.md`). A modified view is still told from another by what it modifies and by its modifiers, so its
+state and its `onAppear` follow the rules they did. One case differs: a generic view that holds a modified view (the
+application's `Card<Content>` or the framework's `DisclosureGroup`, around `Header().padding()`) is named by its own
+type whatever that content modifies, as it already was when it held several children. Its content is still replaced
+when it becomes a view of another type; the holder itself, and a state of its own, are kept. Where the holder has to
+become another view when its content does, give it an `.id(_:)`.
+
 ### Looks that changed
 
 - **A `DOMViewRepresentable` takes the frame it is offered**, as a `UIViewRepresentable` without an intrinsic size

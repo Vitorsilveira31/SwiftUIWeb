@@ -306,7 +306,7 @@ public extension View {
   /// advertises every representation the value has.
   nonisolated func draggable<T: Transferable>(_ payload: @autoclosure @escaping () -> T) -> some View {
     nonisolated(unsafe) let payload = payload
-    return modifier(DragSourceModifier(descriptor: _DragSourceDescriptor(
+    return _modified(DragSourceModifier(descriptor: _DragSourceDescriptor(
       export: { try await payload()._swiftUIWebExportAll() },
       preferredTypes: T.exportedContentTypes(),
       embeddedText: _swiftUIWebDescribe(payload())

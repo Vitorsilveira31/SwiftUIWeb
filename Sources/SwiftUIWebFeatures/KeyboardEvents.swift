@@ -39,12 +39,12 @@ package extension View {
   /// Receives key presses while this view is the nearest registered keyboard
   /// event owner. Editable controls are identified in the event value so the
   /// application can leave text editing and browser shortcuts untouched.
-  nonisolated func onKeyDown(preventsDefault: Bool = false, perform action: @escaping @MainActor (SwiftUIWebKeyEvent) -> Void) -> ModifiedContent<Self, KeyboardEventModifier> {
-    modifier(KeyboardEventModifier(name: "keyDown", preventsDefault: preventsDefault, action: action))
+  nonisolated func onKeyDown(preventsDefault: Bool = false, perform action: @escaping @MainActor (SwiftUIWebKeyEvent) -> Void) -> some View {
+    _modified(KeyboardEventModifier(name: "keyDown", preventsDefault: preventsDefault, action: action))
   }
 
-  nonisolated func onKeyUp(perform action: @escaping @MainActor (SwiftUIWebKeyEvent) -> Void) -> ModifiedContent<Self, KeyboardEventModifier> {
-    modifier(KeyboardEventModifier(name: "keyUp", preventsDefault: false, action: action))
+  nonisolated func onKeyUp(perform action: @escaping @MainActor (SwiftUIWebKeyEvent) -> Void) -> some View {
+    _modified(KeyboardEventModifier(name: "keyUp", preventsDefault: false, action: action))
   }
 }
 

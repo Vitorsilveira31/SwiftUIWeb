@@ -11,25 +11,25 @@
 public extension View {
   @_disfavoredOverload
   nonisolated func background<Background: View>(_ background: Background, alignment: Alignment = .center) -> some View {
-    modifier(BackgroundModifier(content: { background }, alignment: alignment))
+    _modified(BackgroundModifier(content: { background }, alignment: alignment))
   }
 
   @_disfavoredOverload
   nonisolated func overlay<Overlay: View>(_ overlay: Overlay, alignment: Alignment = .center) -> some View {
-    modifier(OverlayModifier(content: { overlay }, alignment: alignment))
+    _modified(OverlayModifier(content: { overlay }, alignment: alignment))
   }
 
   /// Layers a paint over the view's bounds.
   nonisolated func overlay<S: ShapeStyle>(_ style: S, ignoresSafeAreaEdges edges: Edge.Set = .all) -> some View {
     nonisolated(unsafe) let style = style
-    return modifier(OverlayModifier(content: { _ShapeView(shape: Rectangle(), style: style, stroke: nil) }, alignment: .center))
+    return _modified(OverlayModifier(content: { _ShapeView(shape: Rectangle(), style: style, stroke: nil) }, alignment: .center))
   }
 
   /// Layers a paint, clipped to `shape`, over the view's bounds.
   nonisolated func overlay<S: ShapeStyle, T: Shape>(_ style: S, in shape: T, fillStyle: FillStyle = FillStyle()) -> some View {
     nonisolated(unsafe) let shape = shape
     nonisolated(unsafe) let style = style
-    return modifier(OverlayModifier(content: { _ShapeView(shape: shape, style: style, stroke: nil, fillStyle: fillStyle) }, alignment: .center))
+    return _modified(OverlayModifier(content: { _ShapeView(shape: shape, style: style, stroke: nil, fillStyle: fillStyle) }, alignment: .center))
   }
 
   /// Fills the view's bounds with the environment's background style.

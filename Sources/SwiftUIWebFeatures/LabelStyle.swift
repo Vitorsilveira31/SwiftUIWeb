@@ -12,6 +12,6 @@ public extension View {
     let box = _MainActorBox(style)
     var render: (@MainActor (LabelStyleConfiguration) -> AnyView)?
     if kind == .custom { render = { AnyView(box.value.makeBody(configuration: $0)) } }
-    return modifier(LabelStyleModifier(renderer: _LabelStyleRenderer(kind: kind, render: render)))
+    return _modified(LabelStyleModifier(renderer: _LabelStyleRenderer(kind: kind, render: render)))
   }
 }

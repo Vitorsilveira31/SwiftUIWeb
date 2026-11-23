@@ -630,15 +630,15 @@ public extension Image {
 
 public extension View {
 
-  nonisolated func underline(_ active: Bool = true, color: Color? = nil) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
+  nonisolated func underline(_ active: Bool = true, color: Color? = nil) -> some View {
     var styles: _NodeValues = ["text-decoration-line": active ? "underline" : "none"]
     if let color { styles["text-decoration-color"] = color.cssValue }
-    return modifier(_SemanticCompatibilityModifier(styles: styles))
+    return _modified(_SemanticCompatibilityModifier(styles: styles))
   }
-  @_disfavoredOverload nonisolated func tracking(_ value: Float) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { tracking(Double(value)) }
-  nonisolated func tracking(_ value: Double) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_trackingModifier(value)) }
-  nonisolated func toolbar(_ visibility: Visibility, for bars: ToolbarPlacement...) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_toolbarModifier(visibility, for: bars)) }
-  nonisolated func gesture<G: Gesture>(_ gesture: G, including mask: GestureMask = .all) -> some View { modifier(GestureCompatibilityModifier(gesture: gesture, mask: mask)) }
+  @_disfavoredOverload nonisolated func tracking(_ value: Float) -> some View { tracking(Double(value)) }
+  nonisolated func tracking(_ value: Double) -> some View { _modified(_trackingModifier(value)) }
+  nonisolated func toolbar(_ visibility: Visibility, for bars: ToolbarPlacement...) -> some View { _modified(_toolbarModifier(visibility, for: bars)) }
+  nonisolated func gesture<G: Gesture>(_ gesture: G, including mask: GestureMask = .all) -> some View { _modified(GestureCompatibilityModifier(gesture: gesture, mask: mask)) }
 }
 
 package func _scrollDecodeID<ID: Hashable>(_ value: String, as: ID.Type) -> ID? {
@@ -783,19 +783,19 @@ public extension View {
   @_disfavoredOverload nonisolated func padding(_ edges: Edge.Set, _ length: Float? = nil) -> some View { padding(edges, length.map(Double.init)) }
   @_disfavoredOverload nonisolated func offset(x: Float = 0, y: Float = 0) -> some View { offset(x: Double(x), y: Double(y)) }
   @_disfavoredOverload nonisolated func opacity(_ value: Float) -> some View { opacity(Double(value)) }
-  package nonisolated func _safeAreaPadding(_ edges: Edge.Set = .all, _ insets: EdgeInsets) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
+  package nonisolated func _safeAreaPadding(_ edges: Edge.Set = .all, _ insets: EdgeInsets) -> some View {
     var styles = _NodeValues()
     if edges.contains(.top) { styles["padding-top"] = "calc(env(safe-area-inset-top, 0px) + \(insets.top.clean)px)" }
     if edges.contains(.leading) { styles["padding-left"] = "calc(env(safe-area-inset-left, 0px) + \(insets.leading.clean)px)" }
     if edges.contains(.bottom) { styles["padding-bottom"] = "calc(env(safe-area-inset-bottom, 0px) + \(insets.bottom.clean)px)" }
     if edges.contains(.trailing) { styles["padding-right"] = "calc(env(safe-area-inset-right, 0px) + \(insets.trailing.clean)px)" }
-    return modifier(_SemanticCompatibilityModifier(styles: styles))
+    return _modified(_SemanticCompatibilityModifier(styles: styles))
   }
-  nonisolated func blur(radius: Double, opaque: Bool = false) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_blurModifier(radius: radius))
+  nonisolated func blur(radius: Double, opaque: Bool = false) -> some View {
+    _modified(_blurModifier(radius: radius))
   }
   nonisolated func mask<Mask: View>(alignment: Alignment = .center, @ViewBuilder _ mask: @escaping () -> Mask) -> some View {
-    modifier(MaskCompatibilityModifier(mask: mask))
+    _modified(MaskCompatibilityModifier(mask: mask))
   }
 }
 

@@ -14,15 +14,15 @@
 ///   keeps only its first element (for example an avatar), centered.
 extension View {
   public nonisolated func tabViewSidebarHeader<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-    modifier(_TabViewSidebarContentModifier(placement: "header", content: content()))
+    _modified(_TabViewSidebarContentModifier(placement: "header", content: content()))
   }
 
   public nonisolated func tabViewSidebarFooter<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-    modifier(_TabViewSidebarContentModifier(placement: "footer", content: content()))
+    _modified(_TabViewSidebarContentModifier(placement: "footer", content: content()))
   }
 
   public nonisolated func tabViewSidebarBottomBar<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-    modifier(_TabViewSidebarContentModifier(placement: "bottom-bar", content: content()))
+    _modified(_TabViewSidebarContentModifier(placement: "bottom-bar", content: content()))
   }
 }
 
