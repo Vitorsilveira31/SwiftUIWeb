@@ -183,25 +183,44 @@ enum ViewDeclarations {
       guard let declaration = scope.node.as(ExtensionDeclSyntax.self), declaration.genericWhereClause == nil,
         declaration.extendedType.trimmedDescription == qualified
       else { continue }
-      let declares = declaration.memberBlock.members.contains { member in
-        guard let function = member.decl.as(FunctionDeclSyntax.self), function.name.text == name else { return false }
-        return isWritten(function)
-      }
-      if declares { types.insert(qualified) }
+      if declares(name, in: declaration.memberBlock) { types.insert(qualified) }
     }
     return types
   }
 
+  /// Whether `block` holds, as a member of its own, the method a pass writes as `func name()` (`isWritten(_:)`). The
+  /// body of a type is asked too: a method declared there is the same declaration as one written in an extension.
+  static func declares(_ name: String, in block: MemberBlockSyntax) -> Bool {
+    block.members.contains { member in
+      guard let function = member.decl.as(FunctionDeclSyntax.self) else { return false }
+      // A name in backticks is the same name.
+      var declared = Substring(function.name.text)
+      if declared.count > 2, declared.first == "`", declared.last == "`" { declared = declared.dropFirst().dropLast() }
+      return declared == name && isWritten(function)
+    }
+  }
+
   /// Whether `function` is the declaration a pass writes as `func name()`: a method of an instance with no parameter,
   /// generic parameter, constraint or result, and not `async`. One that differs in any of these (`static`, `async`,
-  /// `where T: Equatable`, a result) is another declaration, which the written one can stand beside. `throws` and
-  /// `mutating` make no other declaration: the compiler takes the written one for a second declaration of it.
+  /// `where T: Equatable`, a result) is another declaration, which the written one can stand beside. `throws`,
+  /// `mutating` and a result spelled `Void` make no other declaration: the compiler takes the written one for a second
+  /// declaration of it.
   private static func isWritten(_ function: FunctionDeclSyntax) -> Bool {
     let signature = function.signature
-    let result = signature.returnClause?.type.trimmedDescription
     return signature.parameterClause.parameters.isEmpty && signature.effectSpecifiers?.asyncSpecifier == nil
-      && (result == nil || result == "Void" || result == "()" || result == "Swift.Void")
+      && (signature.returnClause.map { isVoid($0.type) } ?? true)
       && function.genericParameterClause == nil && function.genericWhereClause == nil
       && !function.modifiers.contains(.static) && !function.modifiers.contains(.class)
+  }
+
+  /// Whether `type` is `Void` as a result can spell it: `Void`, `Swift.Void`, `()`, or one of them in parentheses.
+  private static func isVoid(_ type: TypeSyntax) -> Bool {
+    if let tuple = type.as(TupleTypeSyntax.self) {
+      if tuple.elements.isEmpty { return true }
+      guard tuple.elements.count == 1, let only = tuple.elements.first, only.firstName == nil else { return false }
+      return isVoid(only.type)
+    }
+    let name = type.trimmedDescription
+    return name == "Void" || name == "Swift.Void"
   }
 }

@@ -141,15 +141,32 @@ import Testing
     }
   }
 
-  @Test func aThrowingOrMutatingMethodOfTheNameIsTheSameDeclaration() {
-    // The compiler takes `func _installState()` beside either of these for a second declaration, so the view is left alone.
+  @Test func anotherSpellingOfTheMethodIsTheSameDeclaration() {
+    // The compiler takes `func _installState()` beside any of these for a second declaration, so the view is left alone.
     let view = "struct V: View {\n  @State var on = false\n}\n\n"
-    for method in ["func _installState() throws {}", "mutating func _installState() {}", "func _installState() -> Void {}"] {
+    let spellings = [
+      "func _installState() throws {}", "mutating func _installState() {}", "nonisolated func _installState() {}",
+      "func _installState() -> Void {}", "func _installState() -> (Void) {}", "func _installState() -> Swift.Void {}",
+      "func _installState() -> (()) {}", "func `_installState`() {}",
+    ]
+    for method in spellings {
       let source = view + "extension V {\n  \(method)\n}\n"
       let result = installations(source)
-      #expect(result.counts["state-installation"] == nil)
+      #expect(result.counts["state-installation"] == nil, "\(method)")
       #expect(result.text == source)
     }
+  }
+
+  @Test func aViewThatDeclaresTheMethodInItsBodyIsLeftAlone() {
+    // An extension with the method would declare it a second time.
+    let source = "struct V: View {\n  @State var on = false\n  func _installState() { _on._install() }\n}\n"
+    let result = installations(source)
+    #expect(result.counts["state-installation"] == nil)
+    #expect(result.text == source)
+    // A method inside a conditional block of the body is not the view's: without the block the view has none, so the
+    // pass writes its own, as it does for a conditional block of an extension.
+    let conditional = "struct W: View {\n  @State var on = false\n  #if DEBUG\n  func _installState() {}\n  #endif\n}\n"
+    #expect(installations(conditional).counts["state-installation"] == 1)
   }
 
   @Test func theInstallationOfAViewInAConditionalBlockIsFoundInThatBlock() {

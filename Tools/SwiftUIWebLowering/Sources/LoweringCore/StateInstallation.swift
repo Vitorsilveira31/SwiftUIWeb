@@ -11,7 +11,8 @@ import SwiftSyntax
 /// `extension Player { func _installState() { _engine._install(); _model._install() } }`, the properties in the order
 /// they are declared, follows the declaration at file scope that holds the view, as `view-inputs` places its extension.
 /// A view nested in a private type, one in another `#if` branch than that declaration, a property inside an `#if` and a
-/// `static` one are left alone (the runtime then adopts them when they are first read).
+/// `static` one are left alone (the runtime then adopts them when they are first read). So is a view that declares
+/// `_installState()` itself, in its body or in an extension.
 ///
 /// Applies to every source, application or framework. Runs after `observable-state`, which turns the `@State` of a model
 /// into `@StateObject`.
@@ -50,7 +51,8 @@ public struct StateInstallationTransform: SourceTransform {
         }
       }.first ?? ""
       let qualified = path.joined(separator: ".")
-      if installed.contains(qualified) { continue }
+      // In an extension, or in the view's own body: either way a second one would be a second declaration.
+      if installed.contains(qualified) || ViewDeclarations.declares("_installState", in: view.memberBlock) { continue }
       guard let outer = ViewDeclarations.outermostScope(of: scope, in: index), outer.path.count == 1 else { continue }
       if ViewDeclarations.conditionalBranches(of: scope.node) != ViewDeclarations.conditionalBranches(of: outer.node) { continue }
       let calls = names.map { "_\($0)._install()" }.joined(separator: "; ")
