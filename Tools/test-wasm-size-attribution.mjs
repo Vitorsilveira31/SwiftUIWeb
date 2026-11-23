@@ -103,6 +103,27 @@ await test("addressTaken lists the defined functions in the element section, not
   assert.deepEqual([...addressTaken(wasmWith({ payloads: [filled(2)] }))], []);
 });
 
+await test("addressTaken reads every element segment form", () => {
+  // Four defined functions, no imports. The second module of a split has the form with an explicit table (flags 2).
+  const segments = Buffer.concat([
+    Buffer.from([5]),
+    // flags 2: table 0, offset i32.const 0, element kind, function 0
+    Buffer.from([2, 0, 0x41, 0, 0x0b, 0x00, 1, 0]),
+    // flags 1 (passive): element kind, function 1
+    Buffer.from([1, 0x00, 1, 1]),
+    // flags 4: offset global.get 0, expressions `ref.func 2` and `ref.null func`
+    Buffer.from([4, 0x23, 0, 0x0b, 2, 0xd2, 2, 0x0b, 0xd0, 0x70, 0x0b]),
+    // flags 7 (declarative): reference type, expression `ref.func 3`
+    Buffer.from([7, 0x70, 1, 0xd2, 3, 0x0b]),
+    // flags 6: table 1, offset i32.const 128 (two LEB bytes), reference type, no elements
+    Buffer.from([6, 1, 0x41, 0x80, 0x01, 0x0b, 0x70, 0]),
+  ]);
+  const bytes = wasmWith({ payloads: [filled(2), filled(2), filled(2), filled(2)], extra: [section(9, segments)] });
+  assert.deepEqual([...addressTaken(bytes)].sort(), [0, 1, 2, 3]);
+  const unknown = wasmWith({ payloads: [filled(2)], extra: [section(9, Buffer.from([1, 8, 0]))] });
+  assert.throws(() => addressTaken(unknown), /element segment 0 has flags 8/);
+});
+
 await test("splitOverhead counts a forwarding stub apart from a real function, with each entry's size prefix", () => {
   // Stub: no locals, local.get, i32.const, call_indirect, end (10 bytes with its size prefix). Real: i32.const, drop (6 bytes).
   const stub = Buffer.from([0, 0x20, 0, 0x41, 1, 0x11, 0, 0, 0x0b]);

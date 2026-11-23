@@ -140,27 +140,59 @@ export function readProfile(bytes) {
   return { hash: data.subarray(0, 8).toString("hex"), ran };
 }
 
-/** The defined-function indices whose address is taken (the element section); a split needs a stub for each. */
+// The index after a constant expression (a segment's offset, or one element): its opcodes up to `end`.
+function skipConstantExpression(bytes, start, what) {
+  let at = start;
+  for (;;) {
+    const op = bytes[at];
+    at += 1;
+    if (op === 0x0b) return at;
+    // i32.const, i64.const, global.get, ref.null and ref.func carry one LEB; the extended-constant arithmetic carries none.
+    if (op === 0x41 || op === 0x42 || op === 0x23 || op === 0xd0 || op === 0xd2) while (bytes[at++] & 0x80);
+    else if (![0x6a, 0x6b, 0x6c, 0x7c, 0x7d, 0x7e].includes(op)) throw new Error(`${what}: unexpected opcode 0x${(op ?? 0).toString(16)} in a constant expression`);
+  }
+}
+
+/**
+ * The defined-function indices whose address is taken: every function an element segment names, whatever the segment's
+ * form (active, passive or declarative; function indices or `ref.func` expressions). A split needs a stub for each one it
+ * moves.
+ */
 export function addressTaken(wasmBytes) {
   const taken = new Set();
   const element = sectionPayload(wasmBytes, 9);
   if (!element) return taken;
   const importPayload = sectionPayload(wasmBytes, 2);
   const imports = importPayload ? countFunctionImports(importPayload) : 0;
+  const take = (index) => {
+    if (index >= imports) taken.add(index - imports);
+  };
   let [count, at] = leb(element, 0);
   for (let segment = 0; segment < count; segment += 1) {
     let flags;
     [flags, at] = leb(element, at);
-    if (flags !== 0) throw new Error(`element segment ${segment} has flags ${flags}; only the plain form (flags 0) is read`);
-    at += 1; // i32.const
-    while (element[at++] & 0x80);
-    at += 1; // end
+    if (flags > 7) throw new Error(`element segment ${segment} has flags ${flags}, which is not an element segment form`);
+    const active = (flags & 1) === 0;
+    const expressions = (flags & 4) !== 0;
+    if (active) {
+      // An explicit table index (flags 2 and 6), then the offset.
+      if (flags & 2) [, at] = leb(element, at);
+      at = skipConstantExpression(element, at, `element segment ${segment}`);
+    }
+    // Every form but the two plain ones (0 and 4) names its element kind or reference type.
+    if (!active || (flags & 2)) at += 1;
     let entries;
     [entries, at] = leb(element, at);
     for (let entry = 0; entry < entries; entry += 1) {
-      let index;
-      [index, at] = leb(element, at);
-      if (index >= imports) taken.add(index - imports);
+      if (!expressions) {
+        let index;
+        [index, at] = leb(element, at);
+        take(index);
+      } else {
+        // `ref.func index` names a function; `ref.null type` names none.
+        if (element[at] === 0xd2) take(leb(element, at + 1)[0]);
+        at = skipConstantExpression(element, at, `element segment ${segment}`);
+      }
     }
   }
   return taken;
