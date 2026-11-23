@@ -255,7 +255,7 @@ let tests = 0;
   let calls = 0;
   page.SwiftUIWebServices = { queue: [], define(name, factory) { this.queue.push([name, factory]); } };
   page.SwiftUIWebServices.define('ledger', () => ({ record() { calls += 1; return 'ok'; } }));
-  const worker = hostFor(page);
+  const worker = hostFor(page, { remoteDOM: true, services: createServiceHost(page) });
   const id = next;
   assert.equal((await call(worker, 'ledger', 'record', '{"entry":1}')).status, 0);
   const sent = worker.sentSinceSnapshot();
@@ -267,6 +267,16 @@ let tests = 0;
   assert.equal(replayed.status, -6);
   assert.match(replayed.text, /already sent/);
   assert.equal(calls, 1, 'the page made the call once');
+  tests++;
+}
+
+{ // On the main thread nothing moves threads, so finished calls are not kept for a replay that cannot happen.
+  const page = {};
+  page.SwiftUIWebServices = { queue: [], define(name, factory) { this.queue.push([name, factory]); } };
+  page.SwiftUIWebServices.define('analytics', () => ({ capture: () => '' }));
+  const mainThread = hostFor(page);
+  for (let i = 0; i < 50; i++) assert.equal((await call(mainThread, 'analytics', 'capture', `{"n":${i}}`)).status, 0);
+  assert.equal(mainThread.sentSinceSnapshot().length, 0);
   tests++;
 }
 

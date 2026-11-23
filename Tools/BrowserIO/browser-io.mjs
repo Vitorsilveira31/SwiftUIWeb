@@ -75,6 +75,9 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
   // Side-effecting fetches started since the last snapshot (their id, operation and packet), and on a thread that took
   // the app over, the ones the Worker already sent: a replay asking for one of them again fails instead of sending it.
   let sent = []; const refusals = new Map();
+  // Only a runtime that can move threads (the worker's, `remoteDOM`) takes snapshots, which forget these entries; on the
+  // main thread nothing would ever forget them, so nothing is recorded there.
+  const recordSent = entry => { if (remoteDOM) sent.push(entry); };
   const takeRefusal = (id, operation, packet) => {
     const key = `${id}:${operation}`; const packets = refusals.get(key); if (!packets) return false;
     const at = packets.findIndex(candidate => sameBytes(candidate, packet)); if (at < 0) return false;
@@ -234,7 +237,7 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
     const op = operations.get(id); if (!op) return;
     // A request that only reads can run again after the app moved threads; anything else is reported as cancelled.
     op.restart = !hasBody && ['GET', 'HEAD'].includes(method);
-    if (!op.restart) { op.packet = null; sent.push({ id, operation: BrowserIOOperation.fetch, packet }); }
+    if (!op.restart) { op.packet = null; recordSent({ id, operation: BrowserIOOperation.fetch, packet }); }
     if (typeof environment.fetch !== 'function') throw new IOError(-7, 'Fetch is unavailable');
     if (timeout) op.timer = setTimeout(() => { if (!operations.has(id)) return; op.controller.abort(); fail(id, new IOError(-5, 'Request timed out')); }, Math.min(timeout, 2147483647));
     if (reportsUpload && hasBody && !streaming && credentials !== 'omit' && redirect === 'follow' && typeof environment.XMLHttpRequest === 'function') {
@@ -275,7 +278,7 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
   async function serviceCall(id, packet) {
     const input = new Reader(packet); const name = input.text(); const method = input.text(); const payload = input.text(); input.finish();
     if (!serviceHost) throw new IOError(-7, 'Page services are unavailable in this runtime');
-    sent.push({ id, operation: BrowserIOOperation.service, packet });
+    recordSent({ id, operation: BrowserIOOperation.service, packet });
     const result = await serviceHost.call(name, method, payload);
     if (operations.has(id)) emit(id, 0, new Writer().text(result).bytes());
   }
