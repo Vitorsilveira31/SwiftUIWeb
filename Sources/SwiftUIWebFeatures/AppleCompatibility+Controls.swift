@@ -106,7 +106,7 @@ public extension View {
   /// The tint of a list row's icon, over the app's tint (`--list-item-tint`): Food Truck's city rows in the sidebar,
   /// `.listItemTint(.secondary)`, have grey icons, as on iPad. nil leaves the row's icon in the app's tint.
   nonisolated func listItemTint(_ tint: Color?) -> some View {
-    modifier(_SemanticCompatibilityModifier(styles: tint.map { ["--list-item-tint": $0.cssValue] } ?? .init()))
+    _modified(_SemanticCompatibilityModifier(styles: tint.map { ["--list-item-tint": $0.cssValue] } ?? .init()))
   }
 
   nonisolated func headerProminence(_ prominence: Prominence) -> Self { self }
@@ -115,28 +115,28 @@ public extension View {
   nonisolated func gridCellColumns(_ count: Int) -> some View {
     // At most 1 000 columns: a count from data would otherwise overflow the column arithmetic (Int is 32 bits in the
     // browser build) or ask for a grid of a billion tracks.
-    modifier(GridCellModifier(name: "data-grid-cell-columns", value: String(min(max(1, count), 1_000))))
+    _modified(GridCellModifier(name: "data-grid-cell-columns", value: String(min(max(1, count), 1_000))))
   }
 
   /// Where a grid cell anchors itself in its slot. The grid places cells itself and reads this attribute.
   nonisolated func gridCellAnchor(_ anchor: UnitPoint) -> some View {
-    modifier(GridCellModifier(name: "data-grid-cell-anchor", value: "\(anchor.x),\(anchor.y)"))
+    _modified(GridCellModifier(name: "data-grid-cell-anchor", value: "\(anchor.x),\(anchor.y)"))
   }
 
   /// The axes on which the cell does not contribute to its column or row size; it fills the slot on them instead.
   nonisolated func gridCellUnsizedAxes(_ axes: Axis.Set) -> some View {
-    modifier(GridCellModifier(name: "data-grid-unsized-axes", value: String(axes.rawValue)))
+    _modified(GridCellModifier(name: "data-grid-unsized-axes", value: String(axes.rawValue)))
   }
 
   /// The horizontal alignment of the whole column this cell belongs to, overriding the grid's alignment.
   nonisolated func gridColumnAlignment(_ guide: HorizontalAlignment) -> some View {
-    modifier(GridCellModifier(name: "data-grid-column-alignment", value: guide.cssValue))
+    _modified(GridCellModifier(name: "data-grid-column-alignment", value: guide.cssValue))
   }
 
   /// The style `.background()` and `background(in:)` paint inside this view: a custom property the views inside inherit,
   /// as they inherit the environment value in SwiftUI (`BackgroundStyle`).
   nonisolated func backgroundStyle<S: ShapeStyle>(_ style: S) -> some View {
-    modifier(_SemanticCompatibilityModifier(attributes: [:], styles: ["--swu-background-style": style._swiftUIWebCSSValue]))
+    _modified(_SemanticCompatibilityModifier(attributes: [:], styles: ["--swu-background-style": style._swiftUIWebCSSValue]))
   }
 }
 

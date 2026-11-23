@@ -26,15 +26,15 @@ public extension View {
   /// Stores a value for the nearest custom layout. Values are read from a
   /// `LayoutSubview` using `subview[MyKey.self]`.
   nonisolated func layoutValue<K: LayoutValueKey>(key: K.Type, value: K.Value) -> some View {
-    modifier(LayoutValueModifier(key: key, value: value))
+    _modified(LayoutValueModifier(key: key, value: value))
   }
 
   @preconcurrency nonisolated func alignmentGuide(_ guide: HorizontalAlignment, computeValue: @escaping @Sendable (ViewDimensions) -> CGFloat) -> some View {
-    modifier(AlignmentGuideModifier(key: guide.cssValue, computeValue: computeValue))
+    _modified(AlignmentGuideModifier(key: guide.cssValue, computeValue: computeValue))
   }
 
   @preconcurrency nonisolated func alignmentGuide(_ guide: VerticalAlignment, computeValue: @escaping @Sendable (ViewDimensions) -> CGFloat) -> some View {
-    modifier(AlignmentGuideModifier(key: guide.cssValue, computeValue: computeValue))
+    _modified(AlignmentGuideModifier(key: guide.cssValue, computeValue: computeValue))
   }
 }
 

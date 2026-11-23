@@ -2258,15 +2258,15 @@ public nonisolated struct NavigationSplitView<Sidebar: View, Content: View, Deta
 public extension View {
   /// The width of a `NavigationSplitView` column. The column the modified view belongs to gets that width (or a
   /// range for the layout to choose from); the host does not let the user resize it.
-  nonisolated func navigationSplitViewColumnWidth(_ width: CGFloat) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
+  nonisolated func navigationSplitViewColumnWidth(_ width: CGFloat) -> some View {
     navigationSplitViewColumnWidth(min: width, ideal: width, max: width)
   }
 
-  nonisolated func navigationSplitViewColumnWidth(min: CGFloat? = nil, ideal: CGFloat, max: CGFloat? = nil) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
+  nonisolated func navigationSplitViewColumnWidth(min: CGFloat? = nil, ideal: CGFloat, max: CGFloat? = nil) -> some View {
     var attributes: _NodeValues = ["data-column-width-ideal": _layoutNumber(Double(ideal))]
     if let min { attributes["data-column-width-min"] = _layoutNumber(Double(min)) }
     if let max { attributes["data-column-width-max"] = _layoutNumber(Double(max)) }
-    return modifier(_SemanticCompatibilityModifier(attributes: attributes))
+    return _modified(_SemanticCompatibilityModifier(attributes: attributes))
   }
 }
 
@@ -2610,14 +2610,14 @@ public extension View {
     for value: Value.Type,
     @ViewBuilder destination: @escaping (Value) -> Destination
   ) -> some View {
-    modifier(NavigationDestinationModifier(value: value, destination: destination))
+    _modified(NavigationDestinationModifier(value: value, destination: destination))
   }
 
   nonisolated func navigationDestination<Destination: View>(
     isPresented: Binding<Bool>,
     @ViewBuilder destination: @escaping () -> Destination
   ) -> some View {
-    modifier(PresentedNavigationDestinationModifier(isPresented: isPresented, destination: destination))
+    _modified(PresentedNavigationDestinationModifier(isPresented: isPresented, destination: destination))
   }
 
   nonisolated func navigationDestination<Item: Hashable, Destination: View>(
@@ -2628,25 +2628,25 @@ public extension View {
     let wrapped = Binding<_HashableIdentified<Item>?>(
       _unchecked: { item.wrappedValue.map { _HashableIdentified($0) } },
       set: { item.wrappedValue = $0?.value })
-    return modifier(ItemNavigationDestinationModifier(item: wrapped, destination: { destination($0.value) }))
+    return _modified(ItemNavigationDestinationModifier(item: wrapped, destination: { destination($0.value) }))
   }
 
   nonisolated func navigationTitle<S: StringProtocol>(_ title: S) -> some View {
     // A string literal reaches this overload before the LocalizedStringKey one, so a registered key is translated
     // here; any other string resolves to itself.
-    modifier(NavigationTitleModifier(title: LocalizedStringKey(String(title)).resolved))
+    _modified(NavigationTitleModifier(title: LocalizedStringKey(String(title)).resolved))
   }
 
   nonisolated func navigationTitle(_ title: Text) -> some View {
-    modifier(NavigationTitleModifier(title: title.value))
+    _modified(NavigationTitleModifier(title: title.value))
   }
 
   nonisolated func navigationTitle(_ titleKey: LocalizedStringKey) -> some View {
-    modifier(NavigationTitleModifier(title: titleKey.resolved))
+    _modified(NavigationTitleModifier(title: titleKey.resolved))
   }
 
   nonisolated func navigationBarTitleDisplayMode(_ mode: NavigationBarItem.TitleDisplayMode) -> some View {
-    modifier(NavigationBarTitleDisplayModeModifier(mode: mode))
+    _modified(NavigationBarTitleDisplayModeModifier(mode: mode))
   }
 }
 

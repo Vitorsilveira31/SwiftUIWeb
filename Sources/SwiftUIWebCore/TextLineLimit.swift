@@ -30,24 +30,24 @@ extension EnvironmentValues {
 extension View {
   /// Sets the maximum number of lines that text can occupy in this view.
   public nonisolated func lineLimit(_ number: Int?) -> some View {
-    modifier(EnvironmentOverride(apply: { $0.lineLimit = number; $0._lineLimitMinimum = nil }))
+    _modified(EnvironmentOverride(apply: { $0.lineLimit = number; $0._lineLimitMinimum = nil }))
   }
 
   /// SwiftUI's `lineLimit(_:)` with a range: a multi-line field keeps at least the lower bound of lines and grows to the
   /// upper bound, then scrolls. Text is limited to the upper bound.
   public nonisolated func lineLimit(_ limit: ClosedRange<Int>) -> some View {
-    modifier(EnvironmentOverride(apply: { $0.lineLimit = limit.upperBound; $0._lineLimitMinimum = limit.lowerBound }))
+    _modified(EnvironmentOverride(apply: { $0.lineLimit = limit.upperBound; $0._lineLimitMinimum = limit.lowerBound }))
   }
 
   /// SwiftUI's `lineLimit(_:)` from a lower bound: a multi-line field keeps at least that many lines and grows without a
   /// maximum.
   public nonisolated func lineLimit(_ limit: PartialRangeFrom<Int>) -> some View {
-    modifier(EnvironmentOverride(apply: { $0.lineLimit = nil; $0._lineLimitMinimum = limit.lowerBound }))
+    _modified(EnvironmentOverride(apply: { $0.lineLimit = nil; $0._lineLimitMinimum = limit.lowerBound }))
   }
 
   /// SwiftUI's `lineLimit(_:)` up to an upper bound: a multi-line field grows to that many lines, then scrolls.
   public nonisolated func lineLimit(_ limit: PartialRangeThrough<Int>) -> some View {
-    modifier(EnvironmentOverride(apply: { $0.lineLimit = limit.upperBound; $0._lineLimitMinimum = nil }))
+    _modified(EnvironmentOverride(apply: { $0.lineLimit = limit.upperBound; $0._lineLimitMinimum = nil }))
   }
 }
 

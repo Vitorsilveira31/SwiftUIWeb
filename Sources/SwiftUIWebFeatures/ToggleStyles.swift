@@ -11,6 +11,6 @@ package nonisolated struct ToggleStyleModifier: ViewModifier {
 
 public extension View {
   nonisolated func toggleStyle<S: ToggleStyle>(_ style: S) -> some View {
-    modifier(ToggleStyleModifier(style: style._swiftUIWebToggleStyle))
+    _modified(ToggleStyleModifier(style: style._swiftUIWebToggleStyle))
   }
 }

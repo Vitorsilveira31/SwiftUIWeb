@@ -451,121 +451,121 @@ public extension View {
   /// The callback is stored as backend-neutral event metadata; browser hosts
   /// may invoke it when the document is opened or history changes.
   nonisolated func onOpenURL(perform action: @escaping (URL) -> ()) -> some View {
-    modifier(OpenURLModifier(action: _mainActor(action)))
+    _modified(OpenURLModifier(action: _mainActor(action)))
   }
 
   // SwiftUI's `View` spellings of the content-mode modifiers, for any view
   // (an `Image` uses its own overloads above).
-  nonisolated func scaledToFit() -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_scaledToFit2Modifier())
+  nonisolated func scaledToFit() -> some View {
+    _modified(_scaledToFit2Modifier())
   }
 
-  nonisolated func scaledToFill() -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_scaledToFill2Modifier())
+  nonisolated func scaledToFill() -> some View {
+    _modified(_scaledToFill2Modifier())
   }
 
-  nonisolated func aspectRatio(_ aspectRatio: Double? = nil, contentMode: ContentMode) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_aspectRatioModifier(aspectRatio, contentMode: contentMode))
+  nonisolated func aspectRatio(_ aspectRatio: Double? = nil, contentMode: ContentMode) -> some View {
+    _modified(_aspectRatioModifier(aspectRatio, contentMode: contentMode))
   }
 
-  nonisolated func fontWeight(_ weight: Font.Weight?) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_fontWeightModifier(weight))
+  nonisolated func fontWeight(_ weight: Font.Weight?) -> some View {
+    _modified(_fontWeightModifier(weight))
   }
 
   /// Paint order among siblings. CSS `z-index` accepts integers only, so
   /// whole values map exactly and fractional values round away from zero
   /// (keeping them above/below a `0` sibling). The browser layout
   /// positions stack children absolutely, so the value orders siblings.
-  nonisolated func zIndex(_ value: Double) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_zIndexModifier(value))
+  nonisolated func zIndex(_ value: Double) -> some View {
+    _modified(_zIndexModifier(value))
   }
 
-  @_disfavoredOverload nonisolated func zIndex(_ value: Float) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
+  @_disfavoredOverload nonisolated func zIndex(_ value: Float) -> some View {
     zIndex(Double(value))
   }
 
-  nonisolated func fontDesign(_ design: Font.Design?) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_fontDesignModifier(design))
+  nonisolated func fontDesign(_ design: Font.Design?) -> some View {
+    _modified(_fontDesignModifier(design))
   }
 
-  nonisolated func italic(_ active: Bool = true) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_italicModifier(active))
+  nonisolated func italic(_ active: Bool = true) -> some View {
+    _modified(_italicModifier(active))
   }
 
-  nonisolated func strikethrough(_ active: Bool = true, color: Color? = nil) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
+  nonisolated func strikethrough(_ active: Bool = true, color: Color? = nil) -> some View {
     var styles: _NodeValues = ["text-decoration-line": active ? "line-through" : "none"]
     if let color { styles["text-decoration-color"] = color.cssValue }
-    return modifier(_SemanticCompatibilityModifier(styles: styles))
+    return _modified(_SemanticCompatibilityModifier(styles: styles))
   }
 
-  @_disfavoredOverload nonisolated func kerning(_ value: Float) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { kerning(Double(value)) }
+  @_disfavoredOverload nonisolated func kerning(_ value: Float) -> some View { kerning(Double(value)) }
 
-  nonisolated func kerning(_ value: Double) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_kerningModifier(value)) }
+  nonisolated func kerning(_ value: Double) -> some View { _modified(_kerningModifier(value)) }
 
-  @_disfavoredOverload nonisolated func baselineOffset(_ value: Float) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { baselineOffset(Double(value)) }
+  @_disfavoredOverload nonisolated func baselineOffset(_ value: Float) -> some View { baselineOffset(Double(value)) }
 
-  nonisolated func baselineOffset(_ value: Double) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_baselineOffsetModifier(value)) }
+  nonisolated func baselineOffset(_ value: Double) -> some View { _modified(_baselineOffsetModifier(value)) }
 
-  @_disfavoredOverload nonisolated func lineSpacing(_ value: Float) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { lineSpacing(Double(value)) }
+  @_disfavoredOverload nonisolated func lineSpacing(_ value: Float) -> some View { lineSpacing(Double(value)) }
 
   /// SwiftUI adds the spacing to the font's natural line height (about 1.2em for
   /// the studio's fonts), which CSS cannot express with `normal`, so the browser
   /// uses 1.2em as the base.
-  nonisolated func lineSpacing(_ value: Double) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_lineSpacingModifier(value)) }
+  nonisolated func lineSpacing(_ value: Double) -> some View { _modified(_lineSpacingModifier(value)) }
 
-  nonisolated func monospacedDigit() -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_monospacedDigitModifier()) }
+  nonisolated func monospacedDigit() -> some View { _modified(_monospacedDigitModifier()) }
 
-  nonisolated func textCase(_ textCase: Text.Case?) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_textCaseModifier(textCase)) }
+  nonisolated func textCase(_ textCase: Text.Case?) -> some View { _modified(_textCaseModifier(textCase)) }
 
-  nonisolated func textInputAutocapitalization(_ behavior: TextInputAutocapitalization?) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_textInputAutocapitalizationModifier(behavior))
+  nonisolated func textInputAutocapitalization(_ behavior: TextInputAutocapitalization?) -> some View {
+    _modified(_textInputAutocapitalizationModifier(behavior))
   }
 
-  nonisolated func contentTransition(_ transition: ContentTransition) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_contentTransitionModifier(transition))
+  nonisolated func contentTransition(_ transition: ContentTransition) -> some View {
+    _modified(_contentTransitionModifier(transition))
   }
 
-  nonisolated func listStyle<S: ListStyle>(_ style: S) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_listStyleModifier(style._swiftUIWebListStyle)) }
+  nonisolated func listStyle<S: ListStyle>(_ style: S) -> some View { _modified(_listStyleModifier(style._swiftUIWebListStyle)) }
 
-  nonisolated func formStyle<S: FormStyle>(_ style: S) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_formStyleModifier(style._swiftUIWebFormStyle)) }
+  nonisolated func formStyle<S: FormStyle>(_ style: S) -> some View { _modified(_formStyleModifier(style._swiftUIWebFormStyle)) }
 
-  nonisolated func datePickerStyle<S: DatePickerStyle>(_ style: S) -> ModifiedContent<Self, _DatePickerStyleModifier<S>> { modifier(_DatePickerStyleModifier(style: style)) }
+  nonisolated func datePickerStyle<S: DatePickerStyle>(_ style: S) -> some View { _modified(_DatePickerStyleModifier(style: style)) }
 
-  nonisolated func buttonBorderShape(_ shape: ButtonBorderShape) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_buttonBorderShapeModifier(shape))
+  nonisolated func buttonBorderShape(_ shape: ButtonBorderShape) -> some View {
+    _modified(_buttonBorderShapeModifier(shape))
   }
 
-  nonisolated func swipeActions<Actions: View>(edge: HorizontalEdge = .trailing, allowsFullSwipe: Bool = true, @ViewBuilder content: @escaping () -> Actions) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
+  nonisolated func swipeActions<Actions: View>(edge: HorizontalEdge = .trailing, allowsFullSwipe: Bool = true, @ViewBuilder content: @escaping () -> Actions) -> some View {
     let edgeName = edge == .leading ? "leading" : "trailing"
-    return modifier(_swipeActionsModifier(edge: edgeName, allowsFullSwipe: allowsFullSwipe, content: { AnyView(content()) }))
+    return _modified(_swipeActionsModifier(edge: edgeName, allowsFullSwipe: allowsFullSwipe, content: { AnyView(content()) }))
   }
 
-  nonisolated func scrollBounceBehavior(_ behavior: ScrollBounceBehavior, axes: Axis.Set = .vertical) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_scrollBounceBehaviorModifier(behavior, axes: axes)) }
+  nonisolated func scrollBounceBehavior(_ behavior: ScrollBounceBehavior, axes: Axis.Set = .vertical) -> some View { _modified(_scrollBounceBehaviorModifier(behavior, axes: axes)) }
 
-  nonisolated func presentationDragIndicator(_ visibility: Visibility) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_presentationDragIndicatorModifier(visibility)) }
+  nonisolated func presentationDragIndicator(_ visibility: Visibility) -> some View { _modified(_presentationDragIndicatorModifier(visibility)) }
 
   /// iOS 18's spelling of `toolbar(_:for:)`, which Apple deprecates; it records the same per-placement visibility.
-  nonisolated func toolbarVisibility(_ visibility: Visibility, for bars: ToolbarPlacement...) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_toolbarModifier(visibility, for: bars)) }
+  nonisolated func toolbarVisibility(_ visibility: Visibility, for bars: ToolbarPlacement...) -> some View { _modified(_toolbarModifier(visibility, for: bars)) }
 
-  nonisolated func toolbarBackground(_ visibility: Visibility, for bars: ToolbarPlacement...) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_toolbarBackgroundModifier(visibility, for: bars)) }
+  nonisolated func toolbarBackground(_ visibility: Visibility, for bars: ToolbarPlacement...) -> some View { _modified(_toolbarBackgroundModifier(visibility, for: bars)) }
 
-  nonisolated func toolbarBackground<S: ShapeStyle>(_ style: S, for bars: ToolbarPlacement...) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_toolbarBackgroundStyleModifier(style._swiftUIWebCSSValue, for: bars)) }
+  nonisolated func toolbarBackground<S: ShapeStyle>(_ style: S, for bars: ToolbarPlacement...) -> some View { _modified(_toolbarBackgroundStyleModifier(style._swiftUIWebCSSValue, for: bars)) }
 
-  nonisolated func toolbarBackgroundVisibility(_ visibility: Visibility, for bars: ToolbarPlacement...) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_toolbarBackgroundModifier(visibility, for: bars)) }
+  nonisolated func toolbarBackgroundVisibility(_ visibility: Visibility, for bars: ToolbarPlacement...) -> some View { _modified(_toolbarBackgroundModifier(visibility, for: bars)) }
 
   /// Reports a value derived from the nearest scroll container's geometry.
   /// The transform runs only after the browser's native metrics change and
   /// the action is coalesced by the normal Fiber refresh scheduler.
   nonisolated func onScrollGeometryChange<Value: Equatable>(for type: Value.Type, of transform: @escaping (ScrollGeometry) -> Value, action: @escaping (Value, Value) -> Void) -> some View {
-    modifier(ScrollGeometryChangeModifier(transform: transform, action: _mainActor(action)))
+    _modified(ScrollGeometryChangeModifier(transform: transform, action: _mainActor(action)))
   }
 
   nonisolated func onScrollPhaseChange(_ action: @escaping (ScrollPhase, ScrollPhase, ScrollPhaseChangeContext) -> Void) -> some View {
-    modifier(ScrollPhaseChangeModifier(action: _mainActor(action)))
+    _modified(ScrollPhaseChangeModifier(action: _mainActor(action)))
   }
 
   nonisolated func onScrollPhaseChange(_ action: @escaping (ScrollPhase, ScrollPhase) -> Void) -> some View {
-    modifier(ScrollPhaseChangeModifier(action: _mainActor({ old, new, _ in action(old, new) })))
+    _modified(ScrollPhaseChangeModifier(action: _mainActor({ old, new, _ in action(old, new) })))
   }
 
   /// Receives the IDs of currently visible scroll targets.  This is backed by
@@ -574,10 +574,10 @@ public extension View {
   /// accepted for SwiftUI source compatibility; the browser observer reports
   /// visibility with its own rule rather than the fraction given here.
   nonisolated func onScrollTargetVisibilityChange<ID: Hashable>(idType: ID.Type, threshold: Double = 0.5, _ action: @escaping ([ID]) -> Void) -> some View {
-    modifier(ScrollTargetVisibilityModifier(action: _mainActor(action)))
+    _modified(ScrollTargetVisibilityModifier(action: _mainActor(action)))
   }
 
-  nonisolated func highPriorityGesture<G: Gesture>(_ gesture: G, including mask: GestureMask = .all) -> some View { modifier(GestureCompatibilityModifier(gesture: gesture, mask: mask, priority: "high")) }
+  nonisolated func highPriorityGesture<G: Gesture>(_ gesture: G, including mask: GestureMask = .all) -> some View { _modified(GestureCompatibilityModifier(gesture: gesture, mask: mask, priority: "high")) }
 }
 
 package nonisolated struct ScrollGeometryChangeModifier<Value: Equatable>: ViewModifier {
@@ -770,168 +770,168 @@ public extension AnyGesture {
 public extension View {
   @_disfavoredOverload nonisolated func cornerRadius(_ radius: Float) -> some View { cornerRadius(Double(radius)) }
 
-  nonisolated func scaleEffect(_ scale: Double, anchor: UnitPoint = .center) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_scaleEffectModifier(scale, anchor: anchor))
+  nonisolated func scaleEffect(_ scale: Double, anchor: UnitPoint = .center) -> some View {
+    _modified(_scaleEffectModifier(scale, anchor: anchor))
   }
 
-  nonisolated func scaleEffect(x: Double = 1, y: Double = 1, anchor: UnitPoint = .center) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_scaleEffectModifier(x: x, y: y, anchor: anchor))
+  nonisolated func scaleEffect(x: Double = 1, y: Double = 1, anchor: UnitPoint = .center) -> some View {
+    _modified(_scaleEffectModifier(x: x, y: y, anchor: anchor))
   }
 
-  nonisolated func rotationEffect(_ angle: Angle, anchor: UnitPoint = .center) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_rotationEffectModifier(angle, anchor: anchor))
+  nonisolated func rotationEffect(_ angle: Angle, anchor: UnitPoint = .center) -> some View {
+    _modified(_rotationEffectModifier(angle, anchor: anchor))
   }
 
-  nonisolated func transformEffect(_ transform: CGAffineTransform) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_transformEffectModifier(transform))
+  nonisolated func transformEffect(_ transform: CGAffineTransform) -> some View {
+    _modified(_transformEffectModifier(transform))
   }
 
-  nonisolated func rotation3DEffect(_ angle: Angle, axis: (x: Double, y: Double, z: Double), anchor: UnitPoint = .center, anchorZ: Double = 0) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_rotation3DEffectModifier(angle, axis: axis, anchor: anchor, anchorZ: anchorZ))
+  nonisolated func rotation3DEffect(_ angle: Angle, axis: (x: Double, y: Double, z: Double), anchor: UnitPoint = .center, anchorZ: Double = 0) -> some View {
+    _modified(_rotation3DEffectModifier(angle, axis: axis, anchor: anchor, anchorZ: anchorZ))
   }
 
-  nonisolated func rotation3DEffect(_ angle: Angle, axis: (x: Double, y: Double, z: Double), anchor: UnitPoint = .center, anchorZ: Double = 0, perspective: Double = 1) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_rotation3DEffectModifier(angle, axis: axis, anchor: anchor, anchorZ: anchorZ, perspective: perspective))
+  nonisolated func rotation3DEffect(_ angle: Angle, axis: (x: Double, y: Double, z: Double), anchor: UnitPoint = .center, anchorZ: Double = 0, perspective: Double = 1) -> some View {
+    _modified(_rotation3DEffectModifier(angle, axis: axis, anchor: anchor, anchorZ: anchorZ, perspective: perspective))
   }
 
-  nonisolated func minimumScaleFactor(_ factor: Double) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_minimumScaleFactorModifier(factor)) }
+  nonisolated func minimumScaleFactor(_ factor: Double) -> some View { _modified(_minimumScaleFactorModifier(factor)) }
 
-  nonisolated func shadow(color: Color = Color("rgba(0,0,0,0.15)"), radius: Double, x: Double = 0, y: Double = 0) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_shadowModifier(color: color, radius: radius, x: x, y: y))
+  nonisolated func shadow(color: Color = Color("rgba(0,0,0,0.15)"), radius: Double, x: Double = 0, y: Double = 0) -> some View {
+    _modified(_shadowModifier(color: color, radius: radius, x: x, y: y))
   }
 
-  nonisolated func allowsHitTesting(_ enabled: Bool) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_allowsHitTestingModifier(enabled)) }
+  nonisolated func allowsHitTesting(_ enabled: Bool) -> some View { _modified(_allowsHitTestingModifier(enabled)) }
 
-  nonisolated func labelsHidden() -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_labelsHiddenModifier())
+  nonisolated func labelsHidden() -> some View {
+    _modified(_labelsHiddenModifier())
   }
 
-  nonisolated func safeAreaPadding(_ edges: Edge.Set = .all, _ length: Double? = nil) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { contentMargins(edges, length) }
+  nonisolated func safeAreaPadding(_ edges: Edge.Set = .all, _ length: Double? = nil) -> some View { contentMargins(edges, length) }
 
-  nonisolated func safeAreaPadding(_ insets: EdgeInsets) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
+  nonisolated func safeAreaPadding(_ insets: EdgeInsets) -> some View {
     _safeAreaPadding(.all, insets)
   }
 
-  nonisolated func ignoresSafeArea(_ regions: SafeAreaRegions = .all, edges: Edge.Set = .all) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_ignoresSafeAreaModifier())
+  nonisolated func ignoresSafeArea(_ regions: SafeAreaRegions = .all, edges: Edge.Set = .all) -> some View {
+    _modified(_ignoresSafeAreaModifier())
   }
 
-  nonisolated func scrollIndicators(_ visibility: ScrollIndicatorVisibility) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_scrollIndicatorsModifier(visibility)) }
+  nonisolated func scrollIndicators(_ visibility: ScrollIndicatorVisibility) -> some View { _modified(_scrollIndicatorsModifier(visibility)) }
 
-  nonisolated func scrollDismissesKeyboard(_ mode: ScrollDismissesKeyboardMode) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_scrollDismissesKeyboardModifier(mode)) }
+  nonisolated func scrollDismissesKeyboard(_ mode: ScrollDismissesKeyboardMode) -> some View { _modified(_scrollDismissesKeyboardModifier(mode)) }
 
-  nonisolated func scrollContentBackground(_ visibility: Visibility) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_scrollContentBackgroundModifier(visibility))
+  nonisolated func scrollContentBackground(_ visibility: Visibility) -> some View {
+    _modified(_scrollContentBackgroundModifier(visibility))
   }
 
   /// Controls whether the host applies a native edge fade/effect.  Browsers
   /// do not expose SwiftUI's material edge effect directly, so the semantic
   /// marker lets the design-system stylesheet choose the closest CSS affordance.
-  nonisolated func scrollEdgeEffectHidden(_ hidden: Bool = true, for edges: Edge.Set = .all) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_scrollEdgeEffectHiddenModifier(hidden, for: edges))
+  nonisolated func scrollEdgeEffectHidden(_ hidden: Bool = true, for edges: Edge.Set = .all) -> some View {
+    _modified(_scrollEdgeEffectHiddenModifier(hidden, for: edges))
   }
 
-  nonisolated func defaultScrollAnchor(_ anchor: UnitPoint) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_defaultScrollAnchorModifier(anchor))
+  nonisolated func defaultScrollAnchor(_ anchor: UnitPoint) -> some View {
+    _modified(_defaultScrollAnchorModifier(anchor))
   }
 
-  nonisolated func scrollDisabled(_ disabled: Bool) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_scrollDisabledModifier(disabled))
+  nonisolated func scrollDisabled(_ disabled: Bool) -> some View {
+    _modified(_scrollDisabledModifier(disabled))
   }
 
-  nonisolated func scrollClipDisabled(_ disabled: Bool = true) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_scrollClipDisabledModifier(disabled))
+  nonisolated func scrollClipDisabled(_ disabled: Bool = true) -> some View {
+    _modified(_scrollClipDisabledModifier(disabled))
   }
 
-  nonisolated func interactiveDismissDisabled(_ disabled: Bool = true) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_interactiveDismissDisabledModifier(disabled)) }
+  nonisolated func interactiveDismissDisabled(_ disabled: Bool = true) -> some View { _modified(_interactiveDismissDisabledModifier(disabled)) }
 
-  nonisolated func presentationBackgroundInteraction(_ interaction: PresentationBackgroundInteraction) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_presentationBackgroundInteractionModifier(interaction)) }
+  nonisolated func presentationBackgroundInteraction(_ interaction: PresentationBackgroundInteraction) -> some View { _modified(_presentationBackgroundInteractionModifier(interaction)) }
 
-  nonisolated func blendMode(_ mode: BlendMode) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_blendModeModifier(mode))
+  nonisolated func blendMode(_ mode: BlendMode) -> some View {
+    _modified(_blendModeModifier(mode))
   }
 
-  nonisolated func compositingGroup() -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_compositingGroupModifier())
+  nonisolated func compositingGroup() -> some View {
+    _modified(_compositingGroupModifier())
   }
 
-  nonisolated func drawingGroup(opaque: Bool = false, colorMode: ColorRenderingMode = .nonLinear) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_drawingGroupModifier(opaque: opaque, colorMode: colorMode))
+  nonisolated func drawingGroup(opaque: Bool = false, colorMode: ColorRenderingMode = .nonLinear) -> some View {
+    _modified(_drawingGroupModifier(opaque: opaque, colorMode: colorMode))
   }
 
-  nonisolated func brightness(_ amount: Double) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_brightnessModifier(amount))
+  nonisolated func brightness(_ amount: Double) -> some View {
+    _modified(_brightnessModifier(amount))
   }
 
-  nonisolated func contrast(_ amount: Double) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_contrastModifier(amount))
+  nonisolated func contrast(_ amount: Double) -> some View {
+    _modified(_contrastModifier(amount))
   }
 
-  nonisolated func saturation(_ amount: Double) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_saturationModifier(amount))
+  nonisolated func saturation(_ amount: Double) -> some View {
+    _modified(_saturationModifier(amount))
   }
 
-  nonisolated func grayscale(_ amount: Double) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_grayscaleModifier(amount))
+  nonisolated func grayscale(_ amount: Double) -> some View {
+    _modified(_grayscaleModifier(amount))
   }
 
-  nonisolated func colorInvert() -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_colorInvertModifier())
+  nonisolated func colorInvert() -> some View {
+    _modified(_colorInvertModifier())
   }
 
-  nonisolated func hueRotation(_ angle: Angle) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_hueRotationModifier(angle))
+  nonisolated func hueRotation(_ angle: Angle) -> some View {
+    _modified(_hueRotationModifier(angle))
   }
 
-  nonisolated func toolbarColorScheme(_ colorScheme: ColorScheme?, for bars: ToolbarPlacement...) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_toolbarColorSchemeModifier(colorScheme, for: bars)) }
+  nonisolated func toolbarColorScheme(_ colorScheme: ColorScheme?, for bars: ToolbarPlacement...) -> some View { _modified(_toolbarColorSchemeModifier(colorScheme, for: bars)) }
 
-  nonisolated func toolbarRole(_ role: ToolbarRole) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_toolbarRoleModifier(role)) }
+  nonisolated func toolbarRole(_ role: ToolbarRole) -> some View { _modified(_toolbarRoleModifier(role)) }
 
-  nonisolated func textContentType(_ type: UITextContentType?) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_textContentTypeModifier(type)) }
+  nonisolated func textContentType(_ type: UITextContentType?) -> some View { _modified(_textContentTypeModifier(type)) }
 
-  nonisolated func submitLabel(_ label: SubmitLabel) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_submitLabelModifier(label)) }
+  nonisolated func submitLabel(_ label: SubmitLabel) -> some View { _modified(_submitLabelModifier(label)) }
 
-  nonisolated func keyboardType(_ type: UIKeyboardType) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_keyboardTypeModifier(type)) }
+  nonisolated func keyboardType(_ type: UIKeyboardType) -> some View { _modified(_keyboardTypeModifier(type)) }
 
-  nonisolated func autocorrectionDisabled(_ disabled: Bool = true) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_autocorrectionDisabledModifier(disabled)) }
+  nonisolated func autocorrectionDisabled(_ disabled: Bool = true) -> some View { _modified(_autocorrectionDisabledModifier(disabled)) }
 
-  nonisolated func dynamicTypeSize(_ size: DynamicTypeSize) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_dynamicTypeSizeModifier(size)) }
+  nonisolated func dynamicTypeSize(_ size: DynamicTypeSize) -> some View { _modified(_dynamicTypeSizeModifier(size)) }
 
-  nonisolated func pickerStyle<S: PickerStyle>(_ style: S) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
+  nonisolated func pickerStyle<S: PickerStyle>(_ style: S) -> some View {
     let value = style._swiftUIWebPickerStyle
-    return modifier(_SemanticCompatibilityModifier(attributes: ["data-picker-style": value], environment: { $0._pickerStyle = value }))
+    return _modified(_SemanticCompatibilityModifier(attributes: ["data-picker-style": value], environment: { $0._pickerStyle = value }))
   }
 
-  nonisolated func textFieldStyle<S: TextFieldStyle>(_ style: S) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
+  nonisolated func textFieldStyle<S: TextFieldStyle>(_ style: S) -> some View {
     let value = style._swiftUIWebTextFieldStyle
-    return modifier(_SemanticCompatibilityModifier(attributes: ["data-text-field-style": value], environment: { $0._textFieldStyle = value }))
+    return _modified(_SemanticCompatibilityModifier(attributes: ["data-text-field-style": value], environment: { $0._textFieldStyle = value }))
   }
 
   /// Reports whether a view intersects its nearest scroll viewport. The
   /// browser adapter can realize this metadata with IntersectionObserver;
   /// static/WASI hosts retain the API and leave the callback untouched.
   nonisolated func onScrollVisibilityChange(threshold: Double = 0, _ action: @escaping (Bool) -> Void) -> some View {
-    modifier(ScrollVisibilityModifier(threshold: threshold, action: action))
+    _modified(ScrollVisibilityModifier(threshold: threshold, action: action))
   }
 
-  nonisolated func simultaneousGesture<G: Gesture>(_ gesture: G, including mask: GestureMask = .all) -> some View { modifier(GestureCompatibilityModifier(gesture: gesture, mask: mask, priority: "simultaneous")) }
+  nonisolated func simultaneousGesture<G: Gesture>(_ gesture: G, including mask: GestureMask = .all) -> some View { _modified(GestureCompatibilityModifier(gesture: gesture, mask: mask, priority: "simultaneous")) }
 
-  nonisolated func scrollTargetLayout(isEnabled: Bool = true) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_scrollTargetLayoutModifier(isEnabled: isEnabled)) }
+  nonisolated func scrollTargetLayout(isEnabled: Bool = true) -> some View { _modified(_scrollTargetLayoutModifier(isEnabled: isEnabled)) }
 
   /// Scroll snapping. The attribute value is the host stylesheet token
   /// (`paging`, `view-aligned`, `continuous`) mapped to CSS scroll-snap.
-  nonisolated func scrollTargetBehavior(_ behavior: some ScrollTargetBehavior) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_scrollTargetBehaviorModifier(behavior._swiftUIWebScrollTargetBehavior))
+  nonisolated func scrollTargetBehavior(_ behavior: some ScrollTargetBehavior) -> some View {
+    _modified(_scrollTargetBehaviorModifier(behavior._swiftUIWebScrollTargetBehavior))
   }
 
   nonisolated func scrollPosition(id: Binding<(some Hashable)?>, anchor: UnitPoint? = nil) -> some View { _scrollPositionByID(id, anchor: anchor) }
 
   fileprivate nonisolated func _scrollPositionByID<ID: Hashable>(_ id: Binding<ID?>, anchor: UnitPoint?) -> some View {
-    modifier(ScrollPositionModifier(binding: id, anchor: anchor))
+    _modified(ScrollPositionModifier(binding: id, anchor: anchor))
   }
 
   nonisolated func scrollPosition(_ position: Binding<ScrollPosition>, anchor: UnitPoint? = nil) -> some View {
-    modifier(ScrollPositionValueModifier(binding: position, anchor: anchor))
+    _modified(ScrollPositionValueModifier(binding: position, anchor: anchor))
   }
 
   /// SwiftUI's scroll transition. The closure receives the empty effect and the phase; the browser
@@ -949,40 +949,40 @@ public extension View {
     axis: Axis?,
     transition: @escaping @Sendable (EmptyVisualEffect, ScrollTransitionPhase) -> Effect
   ) -> some View {
-    modifier(_ScrollTransitionModifier(configuration: configuration, axis: axis, transition: transition))
+    _modified(_ScrollTransitionModifier(configuration: configuration, axis: axis, transition: transition))
   }
 
-  nonisolated func navigationBarBackButtonHidden(_ hidden: Bool = true) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_navigationBarBackButtonHiddenModifier(hidden)) }
+  nonisolated func navigationBarBackButtonHidden(_ hidden: Bool = true) -> some View { _modified(_navigationBarBackButtonHiddenModifier(hidden)) }
 
-  nonisolated func listRowSeparator(_ visibility: Visibility, edges: VerticalEdge.Set = .all) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
+  nonisolated func listRowSeparator(_ visibility: Visibility, edges: VerticalEdge.Set = .all) -> some View {
     var sides: Edge.Set = []
     if edges.contains(.top) { sides.insert(.top) }
     if edges.contains(.bottom) { sides.insert(.bottom) }
-    return modifier(_listRowSeparatorModifier(visibility, edges: sides))
+    return _modified(_listRowSeparatorModifier(visibility, edges: sides))
   }
 
-  nonisolated func listRowBackground<Background: View>(_ background: Background) -> some View { modifier(BackgroundModifier(content: { background }, alignment: .center, isListRowBackground: true)) }
+  nonisolated func listRowBackground<Background: View>(_ background: Background) -> some View { _modified(BackgroundModifier(content: { background }, alignment: .center, isListRowBackground: true)) }
 
-  nonisolated func listRowInsets(_ insets: EdgeInsets?) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { modifier(_listRowInsetsModifier(insets)) }
+  nonisolated func listRowInsets(_ insets: EdgeInsets?) -> some View { _modified(_listRowInsetsModifier(insets)) }
 
-  nonisolated func contentMargins(_ edges: Edge.Set = .all, _ length: Double?, for placement: ContentMarginPlacement = .automatic) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_contentMarginsModifier(edges, length, for: placement))
+  nonisolated func contentMargins(_ edges: Edge.Set = .all, _ length: Double?, for placement: ContentMarginPlacement = .automatic) -> some View {
+    _modified(_contentMarginsModifier(edges, length, for: placement))
   }
 
   /// SwiftUI also accepts per-edge insets for scroll content. Preserve the
   /// shape instead of forcing applications to split this into four modifiers;
   /// the renderer emits only the selected edges and keeps the placement token
   /// available to browser hosts.
-  nonisolated func contentMargins(_ edges: Edge.Set = .all, _ insets: EdgeInsets, for placement: ContentMarginPlacement = .automatic) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_contentMarginsModifier(edges, insets, for: placement))
+  nonisolated func contentMargins(_ edges: Edge.Set = .all, _ insets: EdgeInsets, for placement: ContentMarginPlacement = .automatic) -> some View {
+    _modified(_contentMarginsModifier(edges, insets, for: placement))
   }
 
-  nonisolated func contentMargins(_ length: Double, for placement: ContentMarginPlacement = .automatic) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
+  nonisolated func contentMargins(_ length: Double, for placement: ContentMarginPlacement = .automatic) -> some View {
     contentMargins(.all, length, for: placement)
   }
 
   nonisolated func onLongPressGesture(minimumDuration: Double = 0.5, maximumDistance: CGFloat = 10, perform action: @escaping () -> Void, onPressingChanged: ((Bool) -> Void)? = nil) -> some View {
-    modifier(LongPressCompatibilityModifier(minimumDuration: minimumDuration, maximumDistance: Double(maximumDistance), action: _mainActor(action), onPressingChanged: _mainActor(onPressingChanged)))
+    _modified(LongPressCompatibilityModifier(minimumDuration: minimumDuration, maximumDistance: Double(maximumDistance), action: _mainActor(action), onPressingChanged: _mainActor(onPressingChanged)))
   }
 }
 

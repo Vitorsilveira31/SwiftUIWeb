@@ -27,7 +27,7 @@ public extension View {
   /// (buttons, fields, links) stay reachable, because hiding a focusable
   /// control from assistive technology is invalid on the web.
   nonisolated func accessibilityElement(children: AccessibilityChildBehavior = .ignore) -> some View {
-    modifier(AccessibilityElementModifier(behavior: children))
+    _modified(AccessibilityElementModifier(behavior: children))
   }
 }
 

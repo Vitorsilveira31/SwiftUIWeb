@@ -296,7 +296,7 @@ public extension View {
     allowsMultipleSelection: Bool,
     onCompletion: @escaping (Result<[URL], Error>) -> Void
   ) -> some View {
-    modifier(FileImporterModifier(isPresented: isPresented, allowedContentTypes: allowedContentTypes, allowsMultipleSelection: allowsMultipleSelection, onCompletion: onCompletion))
+    _modified(FileImporterModifier(isPresented: isPresented, allowedContentTypes: allowedContentTypes, allowsMultipleSelection: allowsMultipleSelection, onCompletion: onCompletion))
   }
 
   /// As ``fileImporter(isPresented:allowedContentTypes:allowsMultipleSelection:onCompletion:)``, calling
@@ -308,7 +308,7 @@ public extension View {
     onCompletion: @escaping (Result<[URL], Error>) -> Void,
     onCancellation: @escaping () -> Void
   ) -> some View {
-    modifier(FileImporterModifier(isPresented: isPresented, allowedContentTypes: allowedContentTypes, allowsMultipleSelection: allowsMultipleSelection, onCompletion: onCompletion, onCancellation: onCancellation))
+    _modified(FileImporterModifier(isPresented: isPresented, allowedContentTypes: allowedContentTypes, allowsMultipleSelection: allowsMultipleSelection, onCompletion: onCompletion, onCancellation: onCancellation))
   }
 
   /// Presents a save panel that writes `document` in `contentType`.
@@ -319,7 +319,7 @@ public extension View {
     defaultFilename: String? = nil,
     onCompletion: @escaping (Result<URL, Error>) -> Void
   ) -> some View {
-    modifier(FileExporterModifier(isPresented: isPresented, document: document, contentType: contentType, defaultFilename: defaultFilename, onCompletion: onCompletion))
+    _modified(FileExporterModifier(isPresented: isPresented, document: document, contentType: contentType, defaultFilename: defaultFilename, onCompletion: onCompletion))
   }
 
   /// As ``fileExporter(isPresented:document:contentType:defaultFilename:onCompletion:)``, calling `onCancellation` when the user dismisses the panel.
@@ -331,7 +331,7 @@ public extension View {
     onCompletion: @escaping (Result<URL, Error>) -> Void,
     onCancellation: @escaping () -> Void
   ) -> some View {
-    modifier(FileExporterModifier(isPresented: isPresented, document: document, contentType: contentType, defaultFilename: defaultFilename, onCompletion: onCompletion, onCancellation: onCancellation))
+    _modified(FileExporterModifier(isPresented: isPresented, document: document, contentType: contentType, defaultFilename: defaultFilename, onCompletion: onCompletion, onCancellation: onCancellation))
   }
 
   /// Presents a save panel whose content type is optional (the document's first writable type is used when nil).
@@ -343,7 +343,7 @@ public extension View {
     onCompletion: @escaping (Result<URL, Error>) -> Void,
     onCancellation: (() -> Void)? = nil
   ) -> some View {
-    modifier(FileExporterModifier(isPresented: isPresented, document: document, contentType: contentType, defaultFilename: defaultFilename, onCompletion: onCompletion, onCancellation: onCancellation))
+    _modified(FileExporterModifier(isPresented: isPresented, document: document, contentType: contentType, defaultFilename: defaultFilename, onCompletion: onCompletion, onCancellation: onCancellation))
   }
 
   /// Presents a save panel for `document`, offering the listed content types.
@@ -355,7 +355,7 @@ public extension View {
     onCompletion: @escaping (Result<URL, Error>) -> Void,
     onCancellation: @escaping () -> Void = {}
   ) -> some View {
-    modifier(FileExporterModifier(isPresented: isPresented, document: document, contentType: contentTypes.first, defaultFilename: defaultFilename, onCompletion: onCompletion, onCancellation: onCancellation))
+    _modified(FileExporterModifier(isPresented: isPresented, document: document, contentType: contentTypes.first, defaultFilename: defaultFilename, onCompletion: onCompletion, onCancellation: onCancellation))
   }
 
   /// Presents a panel that moves `file` to a location the person chooses.
@@ -364,7 +364,7 @@ public extension View {
   /// API and remove it from the app's storage; other browsers download a copy and keep the
   /// source.
   nonisolated func fileMover(isPresented: Binding<Bool>, file: URL?, onCompletion: @escaping (Result<URL, Error>) -> Void) -> some View {
-    modifier(FileMoverModifier(isPresented: isPresented, files: file.map { [$0] } ?? [], onCompletion: { result in
+    _modified(FileMoverModifier(isPresented: isPresented, files: file.map { [$0] } ?? [], onCompletion: { result in
       switch result {
       case .success(let urls):
         if let first = urls.first {
@@ -381,7 +381,7 @@ public extension View {
   /// As ``fileMover(isPresented:file:onCompletion:)``, calling `onCancellation` (instead of
   /// `onCompletion` with an error) when the person dismisses the panel.
   nonisolated func fileMover(isPresented: Binding<Bool>, file: URL?, onCompletion: @escaping (Result<URL, Error>) -> Void, onCancellation: @escaping () -> Void) -> some View {
-    modifier(FileMoverModifier(isPresented: isPresented, files: file.map { [$0] } ?? [], onCompletion: { result in
+    _modified(FileMoverModifier(isPresented: isPresented, files: file.map { [$0] } ?? [], onCompletion: { result in
       switch result {
       case .success(let urls):
         if let first = urls.first {
@@ -397,12 +397,12 @@ public extension View {
 
   /// The multi-file form of ``fileMover(isPresented:file:onCompletion:)``.
   nonisolated func fileMover<C: Collection>(isPresented: Binding<Bool>, files: C, onCompletion: @escaping (Result<[URL], Error>) -> Void) -> some View where C.Element == URL {
-    modifier(FileMoverModifier(isPresented: isPresented, files: Array(files), onCompletion: onCompletion))
+    _modified(FileMoverModifier(isPresented: isPresented, files: Array(files), onCompletion: onCompletion))
   }
 
   /// As ``fileMover(isPresented:files:onCompletion:)``, calling `onCancellation` when the person dismisses the panel.
   nonisolated func fileMover<C: Collection>(isPresented: Binding<Bool>, files: C, onCompletion: @escaping (Result<[URL], Error>) -> Void, onCancellation: @escaping () -> Void) -> some View where C.Element == URL {
-    modifier(FileMoverModifier(isPresented: isPresented, files: Array(files), onCompletion: onCompletion, onCancellation: onCancellation))
+    _modified(FileMoverModifier(isPresented: isPresented, files: Array(files), onCompletion: onCompletion, onCancellation: onCancellation))
   }
 }
 

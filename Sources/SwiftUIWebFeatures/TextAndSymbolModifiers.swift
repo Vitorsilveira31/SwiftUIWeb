@@ -87,24 +87,24 @@ public extension View {
   /// Ellipsis placement for truncated text. `.tail` and `.head` are exact
   /// for single-line text (`.head` uses a right-to-left text-overflow box);
   /// `.middle` has no CSS primitive and truncates at the tail.
-  nonisolated func truncationMode(_ mode: Text.TruncationMode) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_truncationModeModifier(mode))
+  nonisolated func truncationMode(_ mode: Text.TruncationMode) -> some View {
+    _modified(_truncationModeModifier(mode))
   }
 
   /// Primary and secondary hierarchical styles. The primary style is the
   /// foreground; the secondary is exposed to content as `--secondary-style`.
-  nonisolated func foregroundStyle<S1: ShapeStyle, S2: ShapeStyle>(_ primary: S1, _ secondary: S2) -> ModifiedContent<some View, _SemanticCompatibilityModifier> {
+  nonisolated func foregroundStyle<S1: ShapeStyle, S2: ShapeStyle>(_ primary: S1, _ secondary: S2) -> some View {
     let secondaryPaint = secondary._swiftUIWebCSSValue
     // The CSS variables let rendered secondary levels read the style; the environment lets a Canvas below read it too.
-    return foregroundStyle(primary).modifier(_SemanticCompatibilityModifier(
+    return foregroundStyle(primary)._modified(_SemanticCompatibilityModifier(
       styles: ["--secondary-style": secondaryPaint],
       environment: { $0._foregroundSecondaryPaint = secondaryPaint }
     ))
   }
 
-  nonisolated func foregroundStyle<S1: ShapeStyle, S2: ShapeStyle, S3: ShapeStyle>(_ primary: S1, _ secondary: S2, _ tertiary: S3) -> ModifiedContent<some View, _SemanticCompatibilityModifier> {
+  nonisolated func foregroundStyle<S1: ShapeStyle, S2: ShapeStyle, S3: ShapeStyle>(_ primary: S1, _ secondary: S2, _ tertiary: S3) -> some View {
     let secondaryPaint = secondary._swiftUIWebCSSValue, tertiaryPaint = tertiary._swiftUIWebCSSValue
-    return foregroundStyle(primary).modifier(_SemanticCompatibilityModifier(
+    return foregroundStyle(primary)._modified(_SemanticCompatibilityModifier(
       styles: [
         "--secondary-style": secondaryPaint,
         "--tertiary-style": tertiaryPaint
@@ -118,65 +118,65 @@ public extension View {
 
   /// Enables or disables user text selection in the subtree.
   nonisolated func textSelection<S: TextSelectability>(_ selectability: S) -> some View {
-    modifier(_textSelectionModifier(allowsSelection: S.allowsSelection))
+    _modified(_textSelectionModifier(allowsSelection: S.allowsSelection))
   }
 
   /// Sets the font width (condensed/expanded) of text in the subtree.
-  nonisolated func fontWidth(_ width: Font.Width?) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_fontWidthModifier(width))
+  nonisolated func fontWidth(_ width: Font.Width?) -> some View {
+    _modified(_fontWidthModifier(width))
   }
 
   /// Lets text tighten inter-character spacing before truncating; the
   /// browser has no equivalent, so this is metadata only.
-  nonisolated func allowsTightening(_ flag: Bool) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_allowsTighteningModifier(flag))
+  nonisolated func allowsTightening(_ flag: Bool) -> some View {
+    _modified(_allowsTighteningModifier(flag))
   }
 
   /// Scales symbol images relative to the surrounding font, like SF Symbols
   /// (`.small` ≈ 0.78em, `.medium` = 1em, `.large` ≈ 1.29em).
-  nonisolated func imageScale(_ scale: Image.Scale) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_imageScaleModifier(scale))
+  nonisolated func imageScale(_ scale: Image.Scale) -> some View {
+    _modified(_imageScaleModifier(scale))
   }
 
   /// Symbol rendering mode; browser symbols render monochrome.
-  nonisolated func symbolRenderingMode(_ mode: SymbolRenderingMode?) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_symbolRenderingModeModifier(mode))
+  nonisolated func symbolRenderingMode(_ mode: SymbolRenderingMode?) -> some View {
+    _modified(_symbolRenderingModeModifier(mode))
   }
 
   /// Symbol variant preference, recorded for hosts that map symbol names.
-  nonisolated func symbolVariant(_ variant: SymbolVariants) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_symbolVariantModifier(variant))
+  nonisolated func symbolVariant(_ variant: SymbolVariants) -> some View {
+    _modified(_symbolVariantModifier(variant))
   }
 
   /// Pointer help text (iPadOS/macOS tooltip) as the browser tooltip.
-  nonisolated func help(_ textKey: LocalizedStringKey) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_helpModifier(textKey.resolved))
+  nonisolated func help(_ textKey: LocalizedStringKey) -> some View {
+    _modified(_helpModifier(textKey.resolved))
   }
 
-  @_disfavoredOverload nonisolated func help<S: StringProtocol>(_ text: S) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_helpModifier(String(text)))
+  @_disfavoredOverload nonisolated func help<S: StringProtocol>(_ text: S) -> some View {
+    _modified(_helpModifier(String(text)))
   }
 
-  nonisolated func help(_ text: Text) -> ModifiedContent<Self, _SemanticCompatibilityModifier> { help(text.value) }
+  nonisolated func help(_ text: Text) -> some View { help(text.value) }
 
   /// Marks privacy-sensitive content: its text is replaced by placeholders, and never written to the page, when the
   /// environment's `redactionReasons` holds `.privacy` (`.redacted(reason: .privacy)` above it), as on Apple platforms.
   nonisolated func privacySensitive(_ sensitive: Bool = true) -> some View {
-    modifier(_PrivacySensitiveModifier(sensitive: sensitive))
+    _modified(_PrivacySensitiveModifier(sensitive: sensitive))
   }
 
   /// Haptic feedback when `trigger` changes. Browsers expose no general
   /// haptics, so the trigger is observed and the feedback is recorded as
   /// metadata (`data-sensory-feedback`) without a side effect.
-  nonisolated func sensoryFeedback<T: Equatable>(_ feedback: SensoryFeedback, trigger: T) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_SemanticCompatibilityModifier(attributes: ["data-sensory-feedback": feedback.rawValue]))
+  nonisolated func sensoryFeedback<T: Equatable>(_ feedback: SensoryFeedback, trigger: T) -> some View {
+    _modified(_SemanticCompatibilityModifier(attributes: ["data-sensory-feedback": feedback.rawValue]))
   }
 
   /// Sets the shape `ContainerRelativeShape` takes in the views below: its corner radius, which the page inherits
   /// (`--container-shape-radius`). Food Truck's cards clip to it and are rounded by the Grid's 12-point rectangle.
-  nonisolated func containerShape<T: InsettableShape>(_ shape: T) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
+  nonisolated func containerShape<T: InsettableShape>(_ shape: T) -> some View {
     let radius = _containerShapeRadius(shape)
-    return modifier(_SemanticCompatibilityModifier(
+    return _modified(_SemanticCompatibilityModifier(
       attributes: ["data-container-shape": "true"], styles: ["--container-shape-radius": radius],
       environment: { $0._containerShapeRadius = radius }
     ))

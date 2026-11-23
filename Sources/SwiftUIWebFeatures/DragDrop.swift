@@ -83,7 +83,7 @@ package nonisolated struct DropTargetModifier: ViewModifier {
 public extension View {
   /// Starts a drag whose item is the provider `data` returns.
   nonisolated func onDrag(_ data: @escaping () -> NSItemProvider) -> some View {
-    modifier(_onDragModifier(_mainActorReturning(data)))
+    _modified(_onDragModifier(_mainActorReturning(data)))
   }
 
   /// Starts a drag with a preview. Browser hosts draw their native drag image, so the SwiftUI `preview`
@@ -98,7 +98,7 @@ public extension View {
   /// DataTransfer synchronously, then dispatch this callback for source UI
   /// such as highlighting compatible destinations.
   @_spi(Renderer) nonisolated func onDrag<T: Transferable>(_ value: T, onStarted: @escaping @MainActor () -> Void) -> some View {
-    modifier(DragSourceModifier(descriptor: _DragSourceDescriptor(
+    _modified(DragSourceModifier(descriptor: _DragSourceDescriptor(
       export: { try await value._swiftUIWebExportAll() },
       preferredTypes: T.exportedContentTypes(),
       embeddedText: _swiftUIWebDescribe(value),
@@ -109,12 +109,12 @@ public extension View {
   /// Accepts drops of the listed types. `action` receives the providers whose content matches.
   nonisolated func onDrop(of supportedContentTypes: [UTType], isTargeted: Binding<Bool>?, perform action: @escaping ([NSItemProvider]) -> Bool) -> some View {
     nonisolated(unsafe) let action = action
-    return modifier(_onDropModifier(of: supportedContentTypes, isTargeted: isTargeted, perform: { providers, _ in action(providers) }))
+    return _modified(_onDropModifier(of: supportedContentTypes, isTargeted: isTargeted, perform: { providers, _ in action(providers) }))
   }
 
   /// As ``onDrop(of:isTargeted:perform:)``, also reporting where the drop happened.
   nonisolated func onDrop(of supportedContentTypes: [UTType], isTargeted: Binding<Bool>?, perform action: @escaping ([NSItemProvider], CGPoint) -> Bool) -> some View {
-    modifier(_onDropModifier(of: supportedContentTypes, isTargeted: isTargeted, perform: _mainActorReturning(action)))
+    _modified(_onDropModifier(of: supportedContentTypes, isTargeted: isTargeted, perform: _mainActorReturning(action)))
   }
 
   /// Modern Transferable destination.  Providers are loaded asynchronously at
@@ -127,7 +127,7 @@ public extension View {
       operation.start(providers, location: info.location)
       return true
     })
-    return modifier(DropTargetModifier(descriptor: descriptor))
+    return _modified(DropTargetModifier(descriptor: descriptor))
   }
 }
 

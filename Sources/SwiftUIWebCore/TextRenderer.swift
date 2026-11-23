@@ -402,7 +402,7 @@ public extension GraphicsContext {
 public extension View {
   /// Draws the text views in this view with `renderer`.
   nonisolated func textRenderer<T>(_ renderer: T) -> some View where T: TextRenderer {
-    modifier(_TextRendererModifier(renderer: renderer))
+    _modified(_TextRendererModifier(renderer: renderer))
   }
 }
 

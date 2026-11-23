@@ -35,29 +35,29 @@ private func _hoverPixels(_ value: Double) -> Int {
 
 @_spi(Renderer) public extension View {
   /// Background that changes to `hover` while the pointer is over the view.
-  nonisolated func webHoverBackground(_ base: Color, hover: Color) -> ModifiedContent<Self, _WebHoverModifier> {
-    modifier(_WebHoverModifier(
+  nonisolated func webHoverBackground(_ base: Color, hover: Color) -> some View {
+    _modified(_WebHoverModifier(
       attributes: ["data-hover-bg": ""],
       styles: ["--hover-bg-base": base.cssValue, "--hover-bg": hover.cssValue]
     ))
   }
 
   /// Text and icon color that changes to `hover` while the pointer is over the view.
-  nonisolated func webHoverForeground(_ base: Color, hover: Color) -> ModifiedContent<Self, _WebHoverModifier> {
-    modifier(_WebHoverModifier(
+  nonisolated func webHoverForeground(_ base: Color, hover: Color) -> some View {
+    _modified(_WebHoverModifier(
       attributes: ["data-hover-fg": ""],
       styles: ["--hover-fg-base": base.cssValue, "--hover-fg": hover.cssValue]
     ))
   }
 
   /// Underlines the text inside the view while the pointer is over it.
-  nonisolated func webHoverUnderline() -> ModifiedContent<Self, _WebHoverModifier> {
-    modifier(_WebHoverModifier(attributes: ["data-hover-underline": ""]))
+  nonisolated func webHoverUnderline() -> some View {
+    _modified(_WebHoverModifier(attributes: ["data-hover-underline": ""]))
   }
 
   /// Soft shadow shown while the pointer is over the view.
-  nonisolated func webHoverShadow(_ color: Color, radius: Double, y: Double) -> ModifiedContent<Self, _WebHoverModifier> {
-    modifier(_WebHoverModifier(
+  nonisolated func webHoverShadow(_ color: Color, radius: Double, y: Double) -> some View {
+    _modified(_WebHoverModifier(
       attributes: ["data-hover-shadow": ""],
       styles: [
         "--hover-shadow-color": color.cssValue,
@@ -69,22 +69,22 @@ private func _hoverPixels(_ value: Double) -> Int {
 
   /// Makes shapes inside this view read their stroke color from
   /// `Color.webHoverStroke(fallback:)`, which switches to `hover` under the pointer.
-  nonisolated func webHoverStroke(base: Color, hover: Color) -> ModifiedContent<Self, _WebHoverModifier> {
-    modifier(_WebHoverModifier(
+  nonisolated func webHoverStroke(base: Color, hover: Color) -> some View {
+    _modified(_WebHoverModifier(
       attributes: ["data-hover-stroke": ""],
       styles: ["--hover-stroke-base": base.cssValue, "--hover-stroke-hover": hover.cssValue]
     ))
   }
 
   /// Marks the view whose hover raises the descendants marked `webLiftedByHover(shadow:)`.
-  nonisolated func webHoverLiftsChildren() -> ModifiedContent<Self, _WebHoverModifier> {
-    modifier(_WebHoverModifier(attributes: ["data-hover-lifts": ""]))
+  nonisolated func webHoverLiftsChildren() -> some View {
+    _modified(_WebHoverModifier(attributes: ["data-hover-lifts": ""]))
   }
 
   /// Raised by 3 points with a soft shadow while an ancestor marked
   /// `webHoverLiftsChildren()` is hovered.
-  nonisolated func webLiftedByHover(shadow: Color) -> ModifiedContent<Self, _WebHoverModifier> {
-    modifier(_WebHoverModifier(
+  nonisolated func webLiftedByHover(shadow: Color) -> some View {
+    _modified(_WebHoverModifier(
       attributes: ["data-lift-target": ""],
       styles: ["--hover-lift-shadow": shadow.cssValue]
     ))

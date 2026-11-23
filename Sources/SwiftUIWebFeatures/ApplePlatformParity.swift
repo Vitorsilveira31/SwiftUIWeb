@@ -112,8 +112,8 @@ public extension View {
   nonisolated func matchedGeometryEffect<ID: Hashable>(id: ID, in namespace: Namespace.ID, properties: MatchedGeometryProperties = .frame, anchor: UnitPoint = .center, isSource: Bool = true) -> some View {
     let name = _viewTransitionName(id: id, in: namespace)
     // Only the source names the element: a second element with the name would abort the browser transition.
-    return modifier(ViewTransitionNameModifier(name: isSource ? name : nil))
-      .modifier(_MatchedGeometryModifier(name: name, properties: properties, anchor: anchor, isSource: isSource))
+    return _modified(ViewTransitionNameModifier(name: isSource ? name : nil))
+      ._modified(_MatchedGeometryModifier(name: name, properties: properties, anchor: anchor, isSource: isSource))
   }
 
   @_disfavoredOverload nonisolated func accessibilityInputLabels<S: StringProtocol>(_ inputLabels: [S]) -> some View { self }
@@ -188,16 +188,16 @@ public extension ShareLink where Label == Text {
 public extension View {
   nonisolated func progressViewStyle<S: ProgressViewStyle>(_ style: S) -> some View {
     let token = style._swiftUIWebProgressStyle
-    return modifier(EnvironmentOverride(apply: { $0._progressViewStyle = token }))
+    return _modified(EnvironmentOverride(apply: { $0._progressViewStyle = token }))
   }
 }
 
 
 public extension View {
-  nonisolated func navigationTransition(_ style: NavigationTransition) -> some View { modifier(NavigationTransitionModifier(transition: style)) }
+  nonisolated func navigationTransition(_ style: NavigationTransition) -> some View { _modified(NavigationTransitionModifier(transition: style)) }
 
   nonisolated func matchedTransitionSource(id: some Hashable, in namespace: Namespace.ID) -> some View {
-    modifier(ViewTransitionNameModifier(name: _viewTransitionName(id: id, in: namespace)))
+    _modified(ViewTransitionNameModifier(name: _viewTransitionName(id: id, in: namespace)))
   }
 
   /// The representation replaces the accessibility tree of the view in SwiftUI; the browser exposes the view's own
@@ -242,7 +242,7 @@ public extension View {
   /// The presentation's own surface takes the style: a sheet or a cover paints it under its content, in place of the
   /// default panel colour.
   nonisolated func presentationBackground<S: ShapeStyle>(_ style: S) -> some View {
-    modifier(_SemanticCompatibilityModifier(attributes: ["data-presentation-background": style._swiftUIWebCSSValue]))
+    _modified(_SemanticCompatibilityModifier(attributes: ["data-presentation-background": style._swiftUIWebCSSValue]))
   }
 
   nonisolated func presentationBackground<V: View>(alignment: Alignment = .center, @ViewBuilder content: () -> V) -> some View { self }

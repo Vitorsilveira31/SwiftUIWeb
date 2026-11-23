@@ -259,12 +259,12 @@ public extension TableStyle where Self == BorderedTableStyle {
 }
 
 public extension View {
-  nonisolated func tableStyle<S: TableStyle>(_ style: S) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_SemanticCompatibilityModifier(attributes: ["data-table-style": style._swiftUIWebTableStyle]))
+  nonisolated func tableStyle<S: TableStyle>(_ style: S) -> some View {
+    _modified(_SemanticCompatibilityModifier(attributes: ["data-table-style": style._swiftUIWebTableStyle]))
   }
 
-  nonisolated func tableColumnHeaders(_ visibility: Visibility) -> ModifiedContent<Self, _SemanticCompatibilityModifier> {
-    modifier(_SemanticCompatibilityModifier(attributes: ["data-table-column-headers": visibility.rawValue]))
+  nonisolated func tableColumnHeaders(_ visibility: Visibility) -> some View {
+    _modified(_SemanticCompatibilityModifier(attributes: ["data-table-column-headers": visibility.rawValue]))
   }
 }
 

@@ -42,13 +42,13 @@ public extension View {
   ///   .path("en", "components", selectedComponent)   // /en/components/slider
   ///   #endif
   /// ```
-  nonisolated func path(_ segments: String...) -> ModifiedContent<Self, DocumentPathModifier> {
-    modifier(DocumentPathModifier(path: _documentPath(segments)))
+  nonisolated func path(_ segments: String...) -> some View {
+    _modified(DocumentPathModifier(path: _documentPath(segments)))
   }
 
   /// The same, for segments held in an array.
-  nonisolated func path(_ segments: [String]) -> ModifiedContent<Self, DocumentPathModifier> {
-    modifier(DocumentPathModifier(path: _documentPath(segments)))
+  nonisolated func path(_ segments: [String]) -> some View {
+    _modified(DocumentPathModifier(path: _documentPath(segments)))
   }
 }
 

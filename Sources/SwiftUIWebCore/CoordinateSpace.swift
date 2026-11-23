@@ -112,11 +112,11 @@ nonisolated struct CoordinateSpaceModifier: ViewModifier {
 public extension View {
   /// Names the modified view's coordinate space (SwiftUI iOS 17+ spelling).
   nonisolated func coordinateSpace(_ name: NamedCoordinateSpace) -> some View {
-    modifier(CoordinateSpaceModifier(key: name._key))
+    _modified(CoordinateSpaceModifier(key: name._key))
   }
 
   /// Names the modified view's coordinate space with any `Hashable` value.
   nonisolated func coordinateSpace<Name: Hashable>(name: Name) -> some View {
-    modifier(CoordinateSpaceModifier(key: _coordinateSpaceKey(name)))
+    _modified(CoordinateSpaceModifier(key: _coordinateSpaceKey(name)))
   }
 }

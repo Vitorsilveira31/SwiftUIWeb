@@ -31,6 +31,11 @@ public protocol View {
   /// a later value of the view brings. The source lowering writes it for an application's views (Embedded Swift has no
   /// reflection); elsewhere the default finds the properties with a `Mirror`.
   func _installState()
+  /// What names this view where it is rendered: its state scope, and the descriptor of its node, which tells it from a
+  /// view of another type in the same place. The view's type, for almost every view. A modified view of the framework
+  /// has one type whatever it modifies, so its value names it, and a view that renders one in its own place
+  /// (`ModifiedContent`, `_ConditionalContent`) names what it holds as well (`_ViewTypeTag`).
+  nonisolated var _swiftUIWebTypeTag: _ViewTypeTag { get }
 }
 
 /// Collections below this size stay on the ordinary eager path when the
@@ -43,6 +48,7 @@ public extension View {
   static var _comparesInputs: Bool { false }
   static func _sameInputs(_ lhs: Self, _ rhs: Self) -> Bool { false }
   static var _swiftUIWebRendersItself: Bool { false }
+  @inline(__always) nonisolated var _swiftUIWebTypeTag: _ViewTypeTag { _ViewTypeTag(Self.self) }
   package nonisolated func eraseToAnyView() -> AnyView { AnyView(self) }
   func _render(in context: _RenderContext) -> _RenderNode {
     _installState()
@@ -127,7 +133,7 @@ struct _RenderScopeSaved {
 /// Primitive views (`Body == Never`) keep their custom renderer path.
 @MainActor private func _makeObservationBodyRenderer<V: View>(_ view: V) -> @MainActor (_RenderContext) -> _RenderNode {
   if V.Body.self == Never.self || V._swiftUIWebRendersItself {
-    let tag = _swiftUIWebTypeName(V.self)
+    let tag = view._swiftUIWebTypeTag.text
     return { context in
       let saved = _enterRenderScope(context, viewTag: tag)
       let node = view._render(in: context)
@@ -377,10 +383,11 @@ func _describedRenderer(_ render: @escaping @MainActor (_RenderContext) -> _Rend
   /// their state still reaches them, and their tokens. A copy of the remembered node is returned: what wraps the view
   /// (its modifiers) writes into the node it gets, which must stay as the view returned it.
   ///
-  /// `sameInputs` tells whether the renderer holding the remembered value holds a value of the new one's type with the
-  /// same inputs (`_ViewRenderer.hasSameInputs`); it runs only when there is a memo at `path`.
-  func _reusedView(at path: _FiberPath, context: _RenderContext, sameInputs: (_AnyViewRenderer) -> Bool) -> _RenderNode? {
-    guard let memo = viewMemos[path], let holder = viewMemoValues[path], sameInputs(holder) else { return nil }
+  /// `candidate` holds the new value: it tells whether the renderer holding the remembered value holds a value of the
+  /// same type with the same inputs (`_AnyViewRenderer.hasSameInputs(as:)`), which is asked only when there is a memo at
+  /// `path`. A renderer and not a closure: given a closure, the optimizer copies this whole function for each view type.
+  func _reusedView(at path: _FiberPath, context: _RenderContext, candidate: _AnyViewRenderer) -> _RenderNode? {
+    guard let memo = viewMemos[path], let holder = viewMemoValues[path], candidate.hasSameInputs(as: holder) else { return nil }
     // A GeometryReader below has been drawn for a new size since (`StateStore._forgetViews(above:)`): what was remembered
     // holds its old drawing, and an owner's own render does not always tell (a custom Layout renders its subviews again to
     // measure them, under other owners). Food Truck's tiles kept donuts drawn for 23 points in 155-point boxes.
@@ -622,6 +629,69 @@ extension Never: View {
   public func _render(in context: _RenderContext) -> _RenderNode { .empty() }
 }
 
+/// What names a view's type in a state key and in the descriptor of its node (`View._swiftUIWebTypeTag`). An Embedded
+/// build has no type names, so there it is the type's identifier, and the text is formed from it when asked.
+///
+/// A tag names either a type or a value. Every modified view of the framework has one type, so the tag of one is formed
+/// from its value: the tag of what it modifies and its modifier's type (`init(_:modifiedBy:)`). A view that renders a
+/// view so named in its own place names it too (`holding(_:in:)`): its own type does not spell what that view modifies.
+public struct _ViewTypeTag: Sendable {
+  #if hasFeature(Embedded)
+  let id: UInt64
+  @inline(__always) init<V>(_ type: V.Type) { id = UInt64(UInt(bitPattern: _storedTypeID(type))) }
+  /// The tag of a view tagged `content` under a modifier of type `modifier`, for the one type every modified view of
+  /// the framework has. It tells chains apart as the types `ModifiedContent<Content, Modifier>` do; it is not the
+  /// identifier of that type, which a `ModifiedContent` whose type spells its whole chain keeps.
+  @inline(__always) init<M>(_ content: _ViewTypeTag, modifiedBy modifier: M.Type) {
+    id = _modifiedViewTypeID(content: content.id, modifier: UInt64(UInt(bitPattern: _storedTypeID(modifier))))
+  }
+  @inline(__always) private init<V>(_ held: _ViewTypeTag, in type: V.Type) {
+    id = _modifiedViewTypeID(content: held.id, modifier: UInt64(UInt(bitPattern: _storedTypeID(type))))
+  }
+  /// Whether the tag names a value: the identifier of a type is an address, which has no top bit, so for a type this
+  /// is a constant the compiler folds.
+  @inline(__always) var namesValue: Bool { id >> 63 != 0 }
+  var text: String { _viewTypeTagText(id) }
+  #else
+  let text: String
+  let namesValue: Bool
+  init<V>(_ type: V.Type) { text = _swiftUIWebTypeName(type); namesValue = false }
+  /// The name of the type `modifier(_:)` gives the same view, `ModifiedContent<Content, Modifier>`: on a host that has
+  /// type names, a node reads the same whichever of the two formed it.
+  init<M>(_ content: _ViewTypeTag, modifiedBy modifier: M.Type) {
+    text = "SwiftUIWebCore.ModifiedContent<\(content.text), \(_swiftUIWebTypeName(modifier))>"
+    namesValue = true
+  }
+  private init<V>(_ held: _ViewTypeTag, in type: V.Type) {
+    text = "\(_swiftUIWebTypeName(type))|\(held.text)"
+    namesValue = true
+  }
+  #endif
+
+  /// The tag of a view of type `type` that renders the view tagged `held` in its own place. Its type alone while
+  /// `held` names a type, which the type then spells in full; its type and `held` once `held` names a value.
+  @inline(__always) static func holding<V>(_ held: _ViewTypeTag, in type: V.Type) -> _ViewTypeTag {
+    held.namesValue ? _ViewTypeTag(held, in: type) : _ViewTypeTag(type)
+  }
+}
+
+/// The identifier of a modified view, from the identifier of what it modifies and the one of its modifier's type. The
+/// two are mixed in order, so a chain is told from the same modifiers applied in another order, and the top bit keeps
+/// the result apart from the identifier of a type, which is an address. An Embedded build names a modified view with it
+/// (`_ViewTypeTag`); it is plain arithmetic, so that every host can test it.
+func _modifiedViewTypeID(content: UInt64, modifier: UInt64) -> UInt64 {
+  let mixed = (content ^ 0xcbf2_9ce4_8422_2325) &* 0x0000_0100_0000_01b3
+  return ((mixed ^ modifier) &* 0x9e37_79b9_7f4a_7c15) | (1 << 63)
+}
+
+#if hasFeature(Embedded)
+/// The text of a tag: the spelling `_swiftUIWebTypeName` gives a type, for any identifier.
+@inline(never)
+func _viewTypeTagText(_ id: UInt64) -> String {
+  "type-" + String(id)
+}
+#endif
+
 /// What an `AnyView` renders. A class with an overridden `render` rather than
 /// a stored closure because erased boundaries sit on the render recursion: a
 /// call through a closure adds the closure's specialization, reabstraction
@@ -629,41 +699,76 @@ extension Never: View {
 /// Worker's WebAssembly on a stack small enough that those frames bound how
 /// deep a view tree renders.
 class _AnyViewRenderer {
-  @MainActor func render(_ context: _RenderContext) -> _RenderNode { .empty() }
+  /// The type of the view, which names its state scope and the node it returns; nil for a renderer that renders in
+  /// the scope of its caller. The name is text, formed when the view renders: formed where a view is erased, it would
+  /// be written out in every view's body.
+  let type: _ViewTypeTag?
+  /// Whether the view is formed on every render: its state scope is then "content" whatever its type.
+  let formsContent: Bool
+  /// The tag of the view the last render formed, where its value names it: a renderer that forms its view on every
+  /// render (`formsContent`) knows only the view's type before.
+  var formed: _ViewTypeTag?
+
+  init(type: _ViewTypeTag? = nil, formsContent: Bool = false) {
+    self.type = type
+    self.formsContent = formsContent
+  }
+
+  /// Renders the view in its scope. Neither the scope nor the descriptor depends on the view's type, so they are
+  /// here, once, and a renderer overrides `renderContent` alone: the code compiled for each view type is the call into
+  /// its `_render`. Inlined into its few callers, because a method of its own would be one more frame at every erased
+  /// boundary of the render recursion.
+  @inline(__always) @MainActor final func render(_ context: _RenderContext) -> _RenderNode {
+    guard let type else { return renderContent(context) }
+    let scope = formsContent ? "content" : type.text
+    let saved = _enterRenderScope(context, viewTag: scope)
+    let node = renderContent(context)
+    _exitRenderScope(saved)
+    postDescriptor(to: node, scope: scope)
+    return node
+  }
+
+  /// Names the node a render returned. Not part of `render`, which sits on the render recursion: what this needs is on
+  /// the stack only once the nested render has returned.
+  @MainActor final func postDescriptor(to node: _RenderNode, scope: String) {
+    // The scope of a view that is not formed by its renderer is its name. One that is formed on every render is named
+    // now that it is known: by its value where that names it (`formed`), by its type otherwise.
+    guard formsContent, let type else { return node._postDescriptor(scope) }
+    node._postDescriptor((formed ?? type).text)
+  }
+
+  /// The view's own render, inside the scope `render` installed.
+  @MainActor func renderContent(_ context: _RenderContext) -> _RenderNode { .empty() }
   /// Whether the view compares its inputs, so that what it rendered can be reused (`_RenderOwnerRegistry._reusedView`).
   @MainActor var comparesInputs: Bool { false }
   /// What the view rendered at `path` last time, when it is still what it would render.
   @MainActor func reusedRender(at path: _FiberPath, context: _RenderContext, registry: _RenderOwnerRegistry) -> _RenderNode? { nil }
   /// Remembers what the view rendered at `path` and the environment entries it read.
   @MainActor func rememberRender(_ node: _RenderNode, reads: [(key: ObjectIdentifier, stamp: _EnvironmentStamp)], at path: _FiberPath, since: UInt64, registry: _RenderOwnerRegistry) {}
+  /// Whether `remembered` holds a value of this renderer's view type with the same inputs (`View._sameInputs`).
+  @MainActor func hasSameInputs(as remembered: _AnyViewRenderer) -> Bool { false }
 }
 
 /// Renders a concrete view in its own environment and state scope, tagging
 /// the node with the view's type name.
 private final class _ViewRenderer<V: View>: _AnyViewRenderer {
   private let view: V
-  private let tag: String
 
-  init(_ view: V, tag: String) {
+  init(_ view: V) {
     self.view = view
-    self.tag = tag
+    // The view says what names it: its type, or its value where the type does not tell (`View._swiftUIWebTypeTag`).
+    super.init(type: view._swiftUIWebTypeTag)
   }
 
-  @MainActor override func render(_ context: _RenderContext) -> _RenderNode {
-    let saved = _enterRenderScope(context, viewTag: tag)
-    let node = view._render(in: context)
-    _exitRenderScope(saved)
-    node._postDescriptor(tag)
-    return node
-  }
+  @MainActor override func renderContent(_ context: _RenderContext) -> _RenderNode { view._render(in: context) }
 
   @MainActor override var comparesInputs: Bool { V._comparesInputs }
 
   // `AnyView._render` asks for a remembered render only of a view that compares its inputs. Saying so here, where the
-  // answer is a constant of `V`, leaves the two functions below empty for every other view type.
+  // answer is a constant of `V`, leaves the functions below empty for every other view type.
   @MainActor override func reusedRender(at path: _FiberPath, context: _RenderContext, registry: _RenderOwnerRegistry) -> _RenderNode? {
     guard V._comparesInputs else { return nil }
-    return registry._reusedView(at: path, context: context) { remembered in _ViewRenderer<V>.hasSameInputs(remembered, as: view) }
+    return registry._reusedView(at: path, context: context, candidate: self)
   }
 
   @MainActor override func rememberRender(_ node: _RenderNode, reads: [(key: ObjectIdentifier, stamp: _EnvironmentStamp)], at path: _FiberPath, since: UInt64, registry: _RenderOwnerRegistry) {
@@ -672,10 +777,9 @@ private final class _ViewRenderer<V: View>: _AnyViewRenderer {
     registry._rememberView(at: path, holder: self, reads: reads, node: node, since: since)
   }
 
-  /// Whether `remembered` holds a value of type `V` with the inputs of `value` (`View._sameInputs`).
-  @MainActor static func hasSameInputs(_ remembered: _AnyViewRenderer, as value: V) -> Bool {
-    guard let remembered = remembered as? _ViewRenderer<V> else { return false }
-    return V._sameInputs(remembered.view, value)
+  @MainActor override func hasSameInputs(as remembered: _AnyViewRenderer) -> Bool {
+    guard V._comparesInputs, let remembered = remembered as? _ViewRenderer<V> else { return false }
+    return V._sameInputs(remembered.view, view)
   }
 }
 
@@ -686,17 +790,18 @@ private final class _ContentRenderer<Content: View>: _AnyViewRenderer {
 
   init(_ content: @escaping () -> Content) {
     self.content = content
+    super.init(type: _ViewTypeTag(Content.self), formsContent: true)
   }
 
-  @MainActor override func render(_ context: _RenderContext) -> _RenderNode {
-    let saved = _enterRenderScope(context, viewTag: "content")
+  @MainActor override func renderContent(_ context: _RenderContext) -> _RenderNode {
     let view = content()
     // Only a view that compares its inputs is remembered (see `_ViewRenderer.reusedRender`).
     if Content._comparesInputs { built = view }
-    let node = view._render(in: context)
-    _exitRenderScope(saved)
-    node._postDescriptor(_swiftUIWebTypeName(Content.self))
-    return node
+    // A view its value names (a modified view of the framework) is known once it is formed. For any other type the
+    // tag is a constant that names no value, and this is compiled away.
+    let tag = view._swiftUIWebTypeTag
+    formed = tag.namesValue ? tag : nil
+    return view._render(in: context)
   }
 
   /// The view the last render built, for `rememberRender`: a `ForEach` row is built from its element on every render.
@@ -710,7 +815,7 @@ private final class _ContentRenderer<Content: View>: _AnyViewRenderer {
     let saved = _enterRenderScope(context, viewTag: "content")
     let view = content()
     _exitRenderScope(saved)
-    return registry._reusedView(at: path, context: context) { remembered in _ViewRenderer<Content>.hasSameInputs(remembered, as: view) }
+    return registry._reusedView(at: path, context: context, candidate: _ViewRenderer(view))
   }
 
   @MainActor override func rememberRender(_ node: _RenderNode, reads: [(key: ObjectIdentifier, stamp: _EnvironmentStamp)], at path: _FiberPath, since: UInt64, registry: _RenderOwnerRegistry) {
@@ -722,7 +827,7 @@ private final class _ContentRenderer<Content: View>: _AnyViewRenderer {
       value = content()
     }
     // A renderer of its own holds the value: this one builds a new view on every render. It never renders, so it has no tag.
-    registry._rememberView(at: path, holder: _ViewRenderer(value, tag: ""), reads: reads, node: node, since: since)
+    registry._rememberView(at: path, holder: _ViewRenderer(value), reads: reads, node: node, since: since)
   }
 }
 
@@ -741,9 +846,10 @@ private final class _OwnerBoundaryRenderer<Owner: _OwnerBoundaryContent>: _AnyVi
 
   init(_ owner: Owner) {
     self.owner = owner
+    super.init()
   }
 
-  @MainActor override func render(_ context: _RenderContext) -> _RenderNode { owner._renderOwnerBoundary(in: context) }
+  @MainActor override func renderContent(_ context: _RenderContext) -> _RenderNode { owner._renderOwnerBoundary(in: context) }
 }
 
 /// Runs arbitrary renderer code as an owner boundary.
@@ -752,9 +858,10 @@ private final class _ClosureRenderer: _AnyViewRenderer {
 
   init(_ body: @escaping @MainActor (_RenderContext) -> _RenderNode) {
     self.body = body
+    super.init()
   }
 
-  @MainActor override func render(_ context: _RenderContext) -> _RenderNode { body(context) }
+  @MainActor override func renderContent(_ context: _RenderContext) -> _RenderNode { body(context) }
 }
 
 /// Gives the node another renderer returns a builder key: always when
@@ -770,9 +877,10 @@ private final class _KeyedRenderer: _AnyViewRenderer {
     self.base = base
     self.key = key
     self.overriding = overriding
+    super.init()
   }
 
-  @MainActor override func render(_ context: _RenderContext) -> _RenderNode {
+  @MainActor override func renderContent(_ context: _RenderContext) -> _RenderNode {
     let node = base.render(context)
     node._postKey(key, overriding: overriding)
     return node
@@ -832,6 +940,9 @@ public nonisolated struct AnyView: View {
     if let builderKey { builderKey.post(to: node) }
   }
 
+  /// The tag of the erased view's type; nil when what is erased is not a view (an owner boundary of renderer code).
+  var _typeTag: _ViewTypeTag? { renderer.type }
+
   /// Erases `view` without registering a retained owner of its own.
   @_spi(Renderer) public static func _unowned<V: View>(_ view: V) -> AnyView {
     var erased = AnyView(view)
@@ -858,13 +969,13 @@ public nonisolated struct AnyView: View {
   }
 
   public nonisolated init<V: View>(_ view: V) {
-    // The type name is a pure function of `V`; computing it once here rather
-    // than on every render keeps the per-type closure to the `_render` call.
-    let tag = _swiftUIWebTypeName(V.self)
     // SAFETY: the main-actor renderer and closures below are the only users of `view`, and they run on the main actor.
     nonisolated(unsafe) let view = view
-    renderer = _ViewRenderer(view, tag: tag)
+    renderer = _ViewRenderer(view)
     #if !hasFeature(Embedded)
+    // The text that names the view does not change; forming it once here rather
+    // than on every render keeps the per-type closure to the `_render` call.
+    let tag = view._swiftUIWebTypeTag.text
     if V.Body.self == Never.self {
       observationBodyRendererFactory = nil
     } else {
@@ -889,7 +1000,7 @@ public nonisolated struct AnyView: View {
     observationBodyRendererFactory = { context in
       let saved = _enterRenderScope(context, viewTag: "content")
       let view = content()
-      let renderer = _describedRenderer(_makeObservationBodyRenderer(view), tag: _swiftUIWebTypeName(Swift.type(of: view)))
+      let renderer = _describedRenderer(_makeObservationBodyRenderer(view), tag: view._swiftUIWebTypeTag.text)
       _exitRenderScope(saved)
       return renderer
     }
@@ -944,7 +1055,9 @@ public nonisolated struct AnyView: View {
     return keyed
   }
 
-  @MainActor public func _render(in context: _RenderContext) -> _RenderNode {
+  // Not inlined: every erased boundary renders through here, and a copy of it in the render of each view that holds
+  // an erased view is that much code for every view type.
+  @inline(never) @MainActor public func _render(in context: _RenderContext) -> _RenderNode {
     guard registersOwner, let registry = context._renderOwnerRegistry else {
       return renderKeyed(context)
     }

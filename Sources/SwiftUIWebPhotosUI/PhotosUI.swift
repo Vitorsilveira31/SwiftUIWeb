@@ -462,8 +462,8 @@ public extension View {
     matching: PhotosPickerFilter? = nil,
     preferredItemEncoding: PhotosPickerItem.EncodingDisambiguationPolicy = .automatic,
     photoLibrary: PHPhotoLibrary = .shared()
-  ) -> ModifiedContent<Self, PhotosPickerModifier> {
-    modifier(PhotosPickerModifier(isPresented: isPresented, selection: selection, matching: matching, preferredItemEncoding: preferredItemEncoding, photoLibrary: photoLibrary))
+  ) -> some View {
+    _modified(PhotosPickerModifier(isPresented: isPresented, selection: selection, matching: matching, preferredItemEncoding: preferredItemEncoding, photoLibrary: photoLibrary))
   }
 
   nonisolated func photosPicker(
@@ -474,8 +474,8 @@ public extension View {
     matching: PhotosPickerFilter? = nil,
     preferredItemEncoding: PhotosPickerItem.EncodingDisambiguationPolicy = .automatic,
     photoLibrary: PHPhotoLibrary = .shared()
-  ) -> ModifiedContent<Self, PhotosPickerModifier> {
-    modifier(PhotosPickerModifier(isPresented: isPresented, selection: selection, maxSelectionCount: maxSelectionCount, selectionBehavior: selectionBehavior, matching: matching, preferredItemEncoding: preferredItemEncoding, photoLibrary: photoLibrary))
+  ) -> some View {
+    _modified(PhotosPickerModifier(isPresented: isPresented, selection: selection, maxSelectionCount: maxSelectionCount, selectionBehavior: selectionBehavior, matching: matching, preferredItemEncoding: preferredItemEncoding, photoLibrary: photoLibrary))
   }
 }
 

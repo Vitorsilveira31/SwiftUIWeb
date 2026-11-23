@@ -17,7 +17,7 @@
 /// Along an unselected axis the view keeps its own size, like SwiftUI.
 public extension View {
   nonisolated func containerRelativeFrame(_ axes: Axis.Set, alignment: Alignment = .center) -> some View {
-    modifier(ContainerRelativeFrameModifier(axes: axes, alignment: alignment, samples: { _ in [(0, 0), (1000, 1000)] }))
+    _modified(ContainerRelativeFrameModifier(axes: axes, alignment: alignment, samples: { _ in [(0, 0), (1000, 1000)] }))
   }
 
   nonisolated func containerRelativeFrame(_ axes: Axis.Set, count: Int, span: Int = 1, spacing: CGFloat, alignment: Alignment = .center) -> some View {
@@ -27,13 +27,13 @@ public extension View {
     let length: (Double) -> Double = { container in
       ((container - spacing * (count - 1)) / count) * span + spacing * (span - 1)
     }
-    return modifier(ContainerRelativeFrameModifier(axes: axes, alignment: alignment, samples: { _ in
+    return _modified(ContainerRelativeFrameModifier(axes: axes, alignment: alignment, samples: { _ in
       [(0, length(0)), (1000, length(1000))]
     }))
   }
 
   nonisolated func containerRelativeFrame(_ axes: Axis.Set, alignment: Alignment = .center, _ length: @escaping (CGFloat, Axis) -> CGFloat) -> some View {
-    modifier(ContainerRelativeFrameModifier(axes: axes, alignment: alignment, samples: { axis in
+    _modified(ContainerRelativeFrameModifier(axes: axes, alignment: alignment, samples: { axis in
       _containerRelativeSampleLengths.map { ($0, Double(length(CGFloat($0), axis))) }
     }))
   }

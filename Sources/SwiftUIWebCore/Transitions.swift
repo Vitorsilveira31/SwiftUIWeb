@@ -263,8 +263,8 @@ public struct AnyTransition {
     nonisolated(unsafe) let active = active, identity = identity
     let resolver = _TransitionResolver { context in
       let placeholder = AnyView(Color.clear)
-      let activeNode = placeholder.modifier(active)._render(in: context.child(_FiberKey("transition-active")))
-      let identityNode = placeholder.modifier(identity)._render(in: context.child(_FiberKey("transition-identity")))
+      let activeNode = placeholder._modified(active)._render(in: context.child(_FiberKey("transition-active")))
+      let identityNode = placeholder._modified(identity)._render(in: context.child(_FiberKey("transition-identity")))
       let baseline = placeholder._render(in: context.child(_FiberKey("transition-base")))
       var state = _transitionDelta(active: activeNode, identity: identityNode)
       state.restingCSS = _transitionDelta(active: identityNode, identity: baseline).css
@@ -399,7 +399,7 @@ public nonisolated struct ScaleTransition: Transition {
   nonisolated public func body(content: ScaleTransition.Content, phase: TransitionPhase) -> some View {
     // What `scaleEffect(_:anchor:)` writes: that modifier is in SwiftUIWebFeatures, above this module.
     let value = phase.isIdentity ? 1 : scale
-    return content.modifier(_SemanticCompatibilityModifier(styles: ["transform": "scale(\(value))", "transform-origin": "\(anchor.x * 100)% \(anchor.y * 100)%"]))
+    return content._modified(_SemanticCompatibilityModifier(styles: ["transform": "scale(\(value))", "transform-origin": "\(anchor.x * 100)% \(anchor.y * 100)%"]))
   }
   public var _swiftUIWebAnyTransition: AnyTransition? {
     scale == 1e-5 && anchor == .center ? .scale : .scale(scale: scale, anchor: anchor)
@@ -505,10 +505,10 @@ public extension Transition where Self == BlurReplaceTransition {
 public extension View {
   @_disfavoredOverload
   nonisolated func transition(_ t: AnyTransition) -> some View {
-    modifier(_transitionModifier(t))
+    _modified(_transitionModifier(t))
   }
   nonisolated func transition<T: Transition>(_ transition: T) -> some View {
-    modifier(_transitionModifier(AnyTransition(transition)))
+    _modified(_transitionModifier(AnyTransition(transition)))
   }
 }
 

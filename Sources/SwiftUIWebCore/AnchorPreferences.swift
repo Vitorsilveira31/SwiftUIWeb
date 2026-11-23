@@ -169,37 +169,37 @@ extension GeometryProxy {
 public extension View {
   /// Gives the views above the preference `transform` makes of an anchor of this view.
   nonisolated func anchorPreference<A, K>(key _: K.Type = K.self, value: Anchor<A>.Source, transform: @escaping (Anchor<A>) -> K.Value) -> some View where K: PreferenceKey {
-    modifier(_AnchorPreferenceModifier<A, K>(source: value, update: { result, anchor in result = transform(anchor) }, replaces: false))
+    _modified(_AnchorPreferenceModifier<A, K>(source: value, update: { result, anchor in result = transform(anchor) }, replaces: false))
   }
 
   /// Changes the preference this view's subtree gives the views above, with an anchor of this view.
   nonisolated func transformAnchorPreference<A, K>(key _: K.Type = K.self, value: Anchor<A>.Source, transform: @escaping (inout K.Value, Anchor<A>) -> Void) -> some View where K: PreferenceKey {
-    modifier(_AnchorPreferenceModifier<A, K>(source: value, update: transform, replaces: true))
+    _modified(_AnchorPreferenceModifier<A, K>(source: value, update: transform, replaces: true))
   }
 
   /// Changes the preference this view's subtree gives the views above.
   nonisolated func transformPreference<K>(_ key: K.Type = K.self, _ callback: @escaping (inout K.Value) -> Void) -> some View where K: PreferenceKey {
-    modifier(_TransformPreferenceModifier<K>(callback: callback))
+    _modified(_TransformPreferenceModifier<K>(callback: callback))
   }
 
   /// Draws, over this view, what `transform` makes of the preference its subtree gives.
   @_disfavoredOverload nonisolated func overlayPreferenceValue<Key, T>(_ key: Key.Type = Key.self, @ViewBuilder _ transform: @escaping (Key.Value) -> T) -> some View where Key: PreferenceKey, T: View {
-    modifier(_PreferenceValueLayer<Key, T>(transform: transform, alignment: .center, overlay: true))
+    _modified(_PreferenceValueLayer<Key, T>(transform: transform, alignment: .center, overlay: true))
   }
 
   /// Draws, over this view and aligned by `alignment`, what `transform` makes of the preference its subtree gives.
   nonisolated func overlayPreferenceValue<K, V>(_ key: K.Type, alignment: Alignment = .center, @ViewBuilder _ transform: @escaping (K.Value) -> V) -> some View where K: PreferenceKey, V: View {
-    modifier(_PreferenceValueLayer<K, V>(transform: transform, alignment: alignment, overlay: true))
+    _modified(_PreferenceValueLayer<K, V>(transform: transform, alignment: alignment, overlay: true))
   }
 
   /// Draws, behind this view, what `transform` makes of the preference its subtree gives.
   @_disfavoredOverload nonisolated func backgroundPreferenceValue<Key, T>(_ key: Key.Type = Key.self, @ViewBuilder _ transform: @escaping (Key.Value) -> T) -> some View where Key: PreferenceKey, T: View {
-    modifier(_PreferenceValueLayer<Key, T>(transform: transform, alignment: .center, overlay: false))
+    _modified(_PreferenceValueLayer<Key, T>(transform: transform, alignment: .center, overlay: false))
   }
 
   /// Draws, behind this view and aligned by `alignment`, what `transform` makes of the preference its subtree gives.
   nonisolated func backgroundPreferenceValue<K, V>(_ key: K.Type, alignment: Alignment = .center, @ViewBuilder _ transform: @escaping (K.Value) -> V) -> some View where K: PreferenceKey, V: View {
-    modifier(_PreferenceValueLayer<K, V>(transform: transform, alignment: alignment, overlay: false))
+    _modified(_PreferenceValueLayer<K, V>(transform: transform, alignment: alignment, overlay: false))
   }
 }
 

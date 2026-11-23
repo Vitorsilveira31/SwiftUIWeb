@@ -99,14 +99,14 @@ public struct Shader: Equatable, Sendable {
 
 public extension View {
   /// A Metal color shader over the view; a browser draws the view unchanged.
-  nonisolated func colorEffect(_ shader: Shader, isEnabled: Bool = true) -> some View { modifier(_ShaderEffectModifier(kind: "color", shader: shader, isEnabled: isEnabled)) }
+  nonisolated func colorEffect(_ shader: Shader, isEnabled: Bool = true) -> some View { _modified(_ShaderEffectModifier(kind: "color", shader: shader, isEnabled: isEnabled)) }
   /// A Metal distortion shader over the view; a browser draws the view unchanged.
   nonisolated func distortionEffect(_ shader: Shader, maxSampleOffset: CGSize, isEnabled: Bool = true) -> some View {
-    modifier(_ShaderEffectModifier(kind: "distortion", shader: shader, isEnabled: isEnabled))
+    _modified(_ShaderEffectModifier(kind: "distortion", shader: shader, isEnabled: isEnabled))
   }
   /// A Metal layer shader over the view; a browser draws the view unchanged.
   nonisolated func layerEffect(_ shader: Shader, maxSampleOffset: CGSize, isEnabled: Bool = true) -> some View {
-    modifier(_ShaderEffectModifier(kind: "layer", shader: shader, isEnabled: isEnabled))
+    _modified(_ShaderEffectModifier(kind: "layer", shader: shader, isEnabled: isEnabled))
   }
 }
 

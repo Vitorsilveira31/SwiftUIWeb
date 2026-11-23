@@ -62,8 +62,45 @@ public struct ModifiedContent<Content: View, Modifier: ViewModifier> {
     // pure wrap of the immutable content, so erasing it once here is the same as erasing it on every boundary render.
     AnyView(_ownerBoundaryOf: _ModifierBoundary(modifier: modifier, content: AnyView._unowned(content)))._render(in: context)
   }
+  /// The type, which spells the whole chain, unless the content is named by its value (a modified view of the
+  /// framework, or a `ModifiedContent` over one): then the tag a `_ModifiedView` of the same chain has.
+  @inline(__always) public nonisolated var _swiftUIWebTypeTag: _ViewTypeTag {
+    let content = content._swiftUIWebTypeTag
+    return content.namesValue ? _ViewTypeTag(content, modifiedBy: Modifier.self) : _ViewTypeTag(Self.self)
+  }
 }
 extension ModifiedContent: View {}
+
+/// What a modifier of the framework returns: the modified view with its types erased when it is formed. A chain of
+/// modifiers is then one type however long it is and whatever it modifies, where `ModifiedContent<ModifiedContent<…>, M>`
+/// is another type at every level, each with its own copy of whatever renders or holds it. It holds the owner boundary
+/// that `ModifiedContent` forms on every render: the modifier and the erased content.
+///
+/// The framework's modifiers declare `some View`, as SwiftUI's do, so this type is not part of their signatures and
+/// stays inside the package. `modifier(_:)` still returns `ModifiedContent<Self, Modifier>`, which is its declared result.
+package nonisolated struct _ModifiedView: View {
+  package typealias Body = Never
+  private let boundary: AnyView
+  /// What the type `ModifiedContent<Content, Modifier>` names for a `ModifiedContent`: the view's state scope and the
+  /// descriptor of its node, which tell a view from one of another type in the same place. This type is the same for
+  /// every modified view, so the tag is in the value, formed from the tag of the content and the modifier's type.
+  private let tag: _ViewTypeTag
+  package nonisolated var _swiftUIWebTypeTag: _ViewTypeTag { tag }
+  /// Takes the content already erased, and is not inlined: what is compiled is one erasure for each content type and
+  /// one of these for each modifier type, not one of both for every pair of them.
+  @inline(never) nonisolated init<Modifier: ViewModifier>(content: AnyView, modifier: Modifier) {
+    tag = _ViewTypeTag(content._typeTag ?? _ViewTypeTag(AnyView.self), modifiedBy: Modifier.self)
+    boundary = AnyView(_ownerBoundaryOf: _ModifierBoundary(modifier: modifier, content: content))
+  }
+  @inline(__always) @MainActor package func _render(in context: _RenderContext) -> _RenderNode { boundary._render(in: context) }
+}
+
+extension View {
+  /// `modifier(_:)` for the framework's own modifiers, whose declared result is `some View`: see `_ModifiedView`.
+  package nonisolated func _modified<M: ViewModifier>(_ modifier: M) -> _ModifiedView {
+    _ModifiedView(content: AnyView._unowned(self), modifier: modifier)
+  }
+}
 
 /// The owner boundary of a `ModifiedContent`: its modifier and its erased content. Generic over the modifier alone, so a
 /// debug build compiles the render once per modifier type rather than once per modified view type.
@@ -200,34 +237,34 @@ package func _mainActor<A>(_ action: ((A) -> Void)?) -> (@MainActor (A) -> Void)
 
 public extension View {
   nonisolated func modifier<M: ViewModifier>(_ modifier: M) -> ModifiedContent<Self, M> { ModifiedContent(content: self, modifier: modifier) }
-  nonisolated func id<ID: Hashable>(_ id: ID) -> some View { modifier(IDModifier(id: _FiberKey(id))) }
+  nonisolated func id<ID: Hashable>(_ id: ID) -> some View { _modified(IDModifier(id: _FiberKey(id))) }
   /// `.id(account?.id)`: an optional identity. Written out so the optional is not cast as an unknown generic value.
-  nonisolated func id<ID: Hashable>(_ id: ID?) -> some View { modifier(IDModifier(id: _FiberKey(id))) }
+  nonisolated func id<ID: Hashable>(_ id: ID?) -> some View { _modified(IDModifier(id: _FiberKey(id))) }
   nonisolated func onTapGesture(count: Int = 1, perform action: @escaping () -> Void) -> some View {
-    modifier(_onTapGestureModifier(count: count, perform: _mainActor(action)))
+    _modified(_onTapGestureModifier(count: count, perform: _mainActor(action)))
   }
   package nonisolated func onFocus(_ action: @escaping @MainActor () -> Void) -> some View {
-    modifier(_onFocusModifier(action))
+    _modified(_onFocusModifier(action))
   }
   package nonisolated func onBlur(_ action: @escaping @MainActor () -> Void) -> some View {
-    modifier(_onBlurModifier(action))
+    _modified(_onBlurModifier(action))
   }
-  package nonisolated func focused<Value: Hashable>(_ binding: Binding<Value>, equals value: Value) -> some View { modifier(FocusedModifier(binding: binding, value: value, clear: nil)) }
+  package nonisolated func focused<Value: Hashable>(_ binding: Binding<Value>, equals value: Value) -> some View { _modified(FocusedModifier(binding: binding, value: value, clear: nil)) }
   nonisolated func focused<Value: Hashable>(_ binding: FocusState<Value>.Binding, equals value: Value) -> some View { focused(binding.binding, equals: value) }
   nonisolated func focused(_ binding: FocusState<Bool>.Binding) -> some View { focused(binding.binding) }
-  package nonisolated func focused(_ binding: Binding<Bool>) -> some View { modifier(FocusedModifier(binding: binding, value: true, clear: { binding.wrappedValue = false })) }
+  package nonisolated func focused(_ binding: Binding<Bool>) -> some View { _modified(FocusedModifier(binding: binding, value: true, clear: { binding.wrappedValue = false })) }
   nonisolated func onHover(perform action: @escaping (Bool) -> Void) -> some View {
-    modifier(_onHoverModifier(perform: _mainActor(action)))
+    _modified(_onHoverModifier(perform: _mainActor(action)))
   }
   nonisolated func hoverEffect(_ effect: some CustomHoverEffect = .automatic, isEnabled: Bool = true) -> some View {
-    modifier(HoverEffectModifier(effect: effect, isEnabled: isEnabled))
+    _modified(HoverEffectModifier(effect: effect, isEnabled: isEnabled))
   }
   @_spi(Renderer) nonisolated func hoverEffect(
     _ effect: some CustomHoverEffect,
     in group: HoverEffectGroup?,
     isEnabled: Bool = true
   ) -> some View {
-    modifier(HoverEffectModifier(effect: effect, group: group, isEnabled: isEnabled))
+    _modified(HoverEffectModifier(effect: effect, group: group, isEnabled: isEnabled))
   }
   @_spi(Renderer) nonisolated func hoverEffect<Content: HoverEffectContent>(
     in group: HoverEffectGroup? = nil,
@@ -235,133 +272,133 @@ public extension View {
     body: @escaping (EmptyHoverEffectContent, Bool, GeometryProxy) -> Content
   ) -> some View {
     let effect = ContentHoverEffect(group: group, isEnabled: isEnabled, body: body)
-    return modifier(HoverEffectModifier(effect: effect, group: group, isEnabled: isEnabled))
+    return _modified(HoverEffectModifier(effect: effect, group: group, isEnabled: isEnabled))
   }
   nonisolated func defaultHoverEffect(_ effect: HoverEffect?) -> some View {
-    modifier(_defaultHoverEffectModifier(effect ?? HoverEffect(EmptyHoverEffect())))
+    _modified(_defaultHoverEffectModifier(effect ?? HoverEffect(EmptyHoverEffect())))
   }
   nonisolated func defaultHoverEffect(_ effect: some CustomHoverEffect) -> some View {
-    modifier(_defaultHoverEffectModifier(HoverEffect(effect)))
+    _modified(_defaultHoverEffectModifier(HoverEffect(effect)))
   }
   nonisolated func hoverEffectDisabled(_ disabled: Bool = true) -> some View {
-    modifier(_hoverEffectDisabledModifier(disabled))
+    _modified(_hoverEffectDisabledModifier(disabled))
   }
   package nonisolated func hoverEffectGroup() -> some View {
-    modifier(_hoverEffectGroupModifier())
+    _modified(_hoverEffectGroupModifier())
   }
   package nonisolated func hoverEffectGroup(_ group: HoverEffectGroup?) -> some View {
-    modifier(_hoverEffectGroupModifier(group))
+    _modified(_hoverEffectGroupModifier(group))
   }
   package nonisolated func hoverEffectGroup(
     id: String? = nil,
     in namespace: Namespace.ID,
     behavior: HoverEffectGroup.Behavior = .activatesGroup
   ) -> some View {
-    modifier(_hoverEffectGroupModifier(id: id, in: namespace, behavior: behavior))
+    _modified(_hoverEffectGroupModifier(id: id, in: namespace, behavior: behavior))
   }
   package nonisolated func listRowHoverEffect(_ effect: HoverEffect?) -> some View {
-    modifier(_listRowHoverEffectModifier(effect))
+    _modified(_listRowHoverEffectModifier(effect))
   }
   package nonisolated func listRowHoverEffectDisabled(_ disabled: Bool = true) -> some View {
-    modifier(_listRowHoverEffectDisabledModifier(disabled))
+    _modified(_listRowHoverEffectDisabledModifier(disabled))
   }
   nonisolated func onAppear(perform action: (() -> Void)? = nil) -> some View {
-    modifier(_onAppearModifier(perform: _mainActor(action ?? {})))
+    _modified(_onAppearModifier(perform: _mainActor(action ?? {})))
   }
   nonisolated func onDisappear(perform action: (() -> Void)? = nil) -> some View {
-    modifier(_onDisappearModifier(perform: _mainActor(action ?? {})))
+    _modified(_onDisappearModifier(perform: _mainActor(action ?? {})))
   }
   nonisolated func foregroundColor(_ color: Color) -> some View {
-    modifier(_foregroundColorModifier(color))
+    _modified(_foregroundColorModifier(color))
   }
   /// SwiftUI's `background(_:ignoresSafeAreaEdges:)`. The paint fills the
   /// view's bounds; the browser surface has no device safe area to extend into.
-  nonisolated func background<S: ShapeStyle>(_ style: S, ignoresSafeAreaEdges edges: Edge.Set = .all) -> some View { modifier(ShapeStyleBackgroundModifier(style: style)) }
+  nonisolated func background<S: ShapeStyle>(_ style: S, ignoresSafeAreaEdges edges: Edge.Set = .all) -> some View { _modified(ShapeStyleBackgroundModifier(style: style)) }
   // The frame, padding and fixedSize modifiers build their style tables in
   // the non-generic `_*Modifier` functions below. Building them inside these
   // generic methods specialized the whole table construction (string
   // formatting, dictionary inserts) once per view type they were applied to,
   // about 5 KB each.
   nonisolated func padding(_ value: Double = 8) -> some View {
-    modifier(_paddingModifier(value))
+    _modified(_paddingModifier(value))
   }
   nonisolated func frame(width: Double? = nil, height: Double? = nil, alignment: Alignment = .center) -> some View {
-    modifier(_frameModifier(width: width, height: height, alignment: alignment))
+    _modified(_frameModifier(width: width, height: height, alignment: alignment))
   }
   nonisolated func offset(x: Double = 0, y: Double = 0) -> some View {
-    modifier(_offsetModifier(x: x, y: y))
+    _modified(_offsetModifier(x: x, y: y))
   }
   nonisolated func opacity(_ value: Double) -> some View {
-    modifier(_opacityModifier(value))
+    _modified(_opacityModifier(value))
   }
   @_disfavoredOverload nonisolated func accessibilityLabel<S: StringProtocol>(_ label: S) -> some View {
-    modifier(_accessibilityLabelModifier(String(label)))
+    _modified(_accessibilityLabelModifier(String(label)))
   }
   nonisolated func accessibilityLabel(_ label: Text) -> some View { accessibilityLabel(label.value) }
   nonisolated func accessibilityIdentifier(_ identifier: String) -> some View {
-    modifier(_accessibilityIdentifierModifier(identifier))
+    _modified(_accessibilityIdentifierModifier(identifier))
   }
   /// Sets a value for a plain `EnvironmentKey` type.  SwiftUI only spells
   /// environment injection with a key path, so this stays underscored and
   /// out of the SwiftUI-shaped surface.
-  nonisolated func _environment<K: EnvironmentKey>(_ key: K.Type, _ value: K.Value) -> some View { modifier(EnvironmentOverride(apply: { $0[key] = value })) }
+  nonisolated func _environment<K: EnvironmentKey>(_ key: K.Type, _ value: K.Value) -> some View { _modified(EnvironmentOverride(apply: { $0[key] = value })) }
   nonisolated func environment<Value>(_ keyPath: WritableKeyPath<EnvironmentValues, Value>, _ value: Value) -> some View {
-    modifier(EnvironmentOverride(apply: { $0[keyPath: keyPath] = value }, colorScheme: _environmentColorScheme(keyPath, value)))
+    _modified(EnvironmentOverride(apply: { $0[keyPath: keyPath] = value }, colorScheme: _environmentColorScheme(keyPath, value)))
   }
   /// SwiftUI's Observation-era environment injection.  This overload keeps
   /// model-based environment values distinct from key-path values and makes
   /// `@Environment(Model.self)` work without an app-specific router or
   /// object wrapper.
   nonisolated func environment<ObjectType: AnyObject>(_ object: ObjectType) -> some View {
-    modifier(EnvironmentOverride(apply: { $0._setEnvironmentObject(object) }))
+    _modified(EnvironmentOverride(apply: { $0._setEnvironmentObject(object) }))
   }
-  nonisolated func environmentObject<ObjectType: AnyObject>(_ object: ObjectType) -> some View { modifier(EnvironmentOverride(apply: { $0[EnvironmentObjectKey<ObjectType>.self] = object })) }
+  nonisolated func environmentObject<ObjectType: AnyObject>(_ object: ObjectType) -> some View { _modified(EnvironmentOverride(apply: { $0[EnvironmentObjectKey<ObjectType>.self] = object })) }
   /// Publishes a value from this subtree to an ancestor preference reader.
   nonisolated func preference<Key: PreferenceKey>(key: Key.Type = Key.self, value: Key.Value) -> some View {
-    modifier(PreferenceWritingModifier<Key>(value: value))
+    _modified(PreferenceWritingModifier<Key>(value: value))
   }
   /// Observes a reduced preference value after the modified subtree renders.
   /// The callback is invoked only when the reduced value changes, matching
   /// SwiftUI's invalidation semantics.
   nonisolated func onPreferenceChange<Key: PreferenceKey>(_ key: Key.Type = Key.self, perform action: @escaping (Key.Value) -> Void) -> some View where Key.Value: Equatable {
-    modifier(PreferenceActionModifier<Key>(action: _mainActor(action)))
+    _modified(PreferenceActionModifier<Key>(action: _mainActor(action)))
   }
-  nonisolated func foregroundStyle<S: ShapeStyle>(_ style: S) -> some View { modifier(ShapeStyleForegroundModifier(style: style)) }
+  nonisolated func foregroundStyle<S: ShapeStyle>(_ style: S) -> some View { _modified(ShapeStyleForegroundModifier(style: style)) }
   nonisolated func font(_ font: Font) -> some View {
-    modifier(_fontModifier(font))
+    _modified(_fontModifier(font))
   }
   nonisolated func bold() -> some View {
-    modifier(_boldModifier())
+    _modified(_boldModifier())
   }
   nonisolated func italic() -> some View {
-    modifier(_italicModifier())
+    _modified(_italicModifier())
   }
   nonisolated func disabled(_ disabled: Bool) -> some View {
-    modifier(_disabledModifier(disabled))
+    _modified(_disabledModifier(disabled))
   }
   nonisolated func hidden() -> some View {
-    modifier(_hiddenModifier())
+    _modified(_hiddenModifier())
   }
   nonisolated func clipped() -> some View {
-    modifier(_clippedModifier())
+    _modified(_clippedModifier())
   }
   nonisolated func cornerRadius(_ radius: Double) -> some View {
-    modifier(_cornerRadiusModifier(radius))
+    _modified(_cornerRadiusModifier(radius))
   }
   // The builder is not escaping, as in SwiftUI: a view may pass its own non-escaping content parameter straight in.
   nonisolated func background<Background: View>(alignment: Alignment = .center, @ViewBuilder content: () -> Background) -> some View {
     let background = content()
-    return modifier(BackgroundModifier(content: { background }, alignment: alignment))
+    return _modified(BackgroundModifier(content: { background }, alignment: alignment))
   }
   nonisolated func background<S: ShapeStyle, Clip: Shape>(_ style: S, in clip: Clip, fillStyle: FillStyle = FillStyle()) -> some View {
-    modifier(ShapeBackgroundModifier(style: style, clip: clip))
+    _modified(ShapeBackgroundModifier(style: style, clip: clip))
   }
   nonisolated func clipShape<Clip: Shape>(_ clip: Clip, style: FillStyle = FillStyle()) -> some View {
-    modifier(ClipShapeModifier(clip: clip, style: style))
+    _modified(ClipShapeModifier(clip: clip, style: style))
   }
   nonisolated func overlay<Overlay: View>(alignment: Alignment = .center, @ViewBuilder content: () -> Overlay) -> some View {
     let overlay = content()
-    return modifier(OverlayModifier(content: { overlay }, alignment: alignment))
+    return _modified(OverlayModifier(content: { overlay }, alignment: alignment))
   }
   /// Restricts the hit region of a view to a shape.  SwiftUIWeb keeps the
   /// SwiftUI spelling while expressing the geometry as CSS metadata that a
@@ -369,23 +406,23 @@ public extension View {
   /// controls.  Unknown/custom shapes still receive a stable semantic marker
   /// instead of silently disappearing from the render tree.
   nonisolated func contentShape<S: Shape>(_ shape: S, eoFill: Bool = false) -> some View {
-    modifier(ContentShapeModifier(shape: shape, eoFill: eoFill))
+    _modified(ContentShapeModifier(shape: shape, eoFill: eoFill))
   }
 
   nonisolated func frame(maxWidth: Double? = nil, maxHeight: Double? = nil, alignment: Alignment = .center) -> some View {
-    modifier(_frameModifier(maxWidth: maxWidth, maxHeight: maxHeight, alignment: alignment))
+    _modified(_frameModifier(maxWidth: maxWidth, maxHeight: maxHeight, alignment: alignment))
   }
   nonisolated func frame(minWidth: Double? = nil, idealWidth: Double? = nil, maxWidth: Double? = nil, minHeight: Double? = nil, idealHeight: Double? = nil, maxHeight: Double? = nil, alignment: Alignment = .center) -> some View {
-    modifier(_frameModifier(minWidth: minWidth, idealWidth: idealWidth, maxWidth: maxWidth, minHeight: minHeight, idealHeight: idealHeight, maxHeight: maxHeight, alignment: alignment))
+    _modified(_frameModifier(minWidth: minWidth, idealWidth: idealWidth, maxWidth: maxWidth, minHeight: minHeight, idealHeight: idealHeight, maxHeight: maxHeight, alignment: alignment))
   }
   nonisolated func padding(_ edges: Edge.Set, _ length: Double? = nil) -> some View {
-    modifier(_paddingModifier(edges, length))
+    _modified(_paddingModifier(edges, length))
   }
   nonisolated func multilineTextAlignment(_ alignment: TextAlignment) -> some View {
-    modifier(_multilineTextAlignmentModifier(alignment))
+    _modified(_multilineTextAlignmentModifier(alignment))
   }
   nonisolated func fixedSize(horizontal: Bool, vertical: Bool) -> some View {
-    modifier(_fixedSizeModifier(horizontal: horizontal, vertical: vertical))
+    _modified(_fixedSizeModifier(horizontal: horizontal, vertical: vertical))
   }
   nonisolated func fixedSize() -> some View {
     fixedSize(horizontal: true, vertical: true)
@@ -394,9 +431,9 @@ public extension View {
   /// value is semantic metadata; the reusable layout engine decides how extra
   /// space is allocated rather than delegating that decision to CSS flexbox.
   nonisolated func layoutPriority(_ value: Double) -> some View {
-    modifier(_layoutPriorityModifier(value))
+    _modified(_layoutPriorityModifier(value))
   }
-  nonisolated func onChange<Value: Equatable>(of value: Value, perform action: @escaping (Value) -> Void) -> some View { modifier(OnChangeModifier(value: value, action: _mainActor(action))) }
+  nonisolated func onChange<Value: Equatable>(of value: Value, perform action: @escaping (Value) -> Void) -> some View { _modified(OnChangeModifier(value: value, action: _mainActor(action))) }
   // Apple's public `task` overloads take a `sending @isolated(any)` action and
   // the call-site `name`/`file`/`line`. The task runs on the main actor in
   // this runtime; `name` and the call site are accepted for source
@@ -408,7 +445,7 @@ public extension View {
     line: Int = #line,
     @_inheritActorContext _ action: sending @escaping @isolated(any) () async -> Void
   ) -> some View {
-    modifier(_taskModifier(priority: priority, _mainActorTask(action)))
+    _modified(_taskModifier(priority: priority, _mainActorTask(action)))
   }
   // The ID participates in SwiftUI task cancellation/restart. The restart
   // decision is value-based (`StateStore` generation of the Equatable ID); the
@@ -422,74 +459,74 @@ public extension View {
     line: Int = #line,
     @_inheritActorContext _ action: sending @escaping @isolated(any) () async -> Void
   ) -> some View {
-    modifier(TaskModifier(priority: priority, action: _mainActorTask(action), value: id, description: _swiftUIWebDescribe(id)))
+    _modified(TaskModifier(priority: priority, action: _mainActorTask(action), value: id, description: _swiftUIWebDescribe(id)))
   }
   nonisolated func animation<Value: Equatable>(_ animation: Animation?, value: Value) -> some View {
-    modifier(AnimationModifier(animation: animation, value: value))
+    _modified(AnimationModifier(animation: animation, value: value))
   }
   nonisolated func tabItem<Label: View>(@ViewBuilder _ label: @escaping () -> Label) -> some View {
-    modifier(TabItemModifier(label: label))
+    _modified(TabItemModifier(label: label))
   }
   nonisolated func tag<TagValue: Hashable>(_ value: TagValue) -> some View {
-    modifier(TagModifier(value: value))
+    _modified(TagModifier(value: value))
   }
   nonisolated func badge(_ value: Int) -> some View {
-    modifier(_badgeModifier(value))
+    _modified(_badgeModifier(value))
   }
   /// SwiftUI's label badge: `nil` removes the badge.
   nonisolated func badge(_ label: Text?) -> some View {
-    modifier(_badgeModifier(label))
+    _modified(_badgeModifier(label))
   }
   nonisolated func badge(_ key: LocalizedStringKey?) -> some View {
-    modifier(_badgeModifier(key.map { $0.resolved }))
+    _modified(_badgeModifier(key.map { $0.resolved }))
   }
   @_disfavoredOverload nonisolated func badge<S: StringProtocol>(_ label: S?) -> some View {
-    modifier(_badgeModifier(label.map { String($0) }))
+    _modified(_badgeModifier(label.map { String($0) }))
   }
   package nonisolated func customizationID(_ identifier: String) -> some View {
-    modifier(_customizationIDModifier(identifier))
+    _modified(_customizationIDModifier(identifier))
   }
   nonisolated func tabViewCustomization(_ customization: Binding<TabViewCustomization>?) -> some View {
-    modifier(_tabViewCustomizationModifier(customization))
+    _modified(_tabViewCustomizationModifier(customization))
   }
   nonisolated func tabViewStyle<S: TabViewStyle>(_ style: S) -> some View {
-    modifier(TabViewStyleModifier(style: style))
+    _modified(TabViewStyleModifier(style: style))
   }
   /// SwiftUIWeb extension: bounds how many visited tabs a `TabView` keeps built.
   package nonisolated func tabViewMountPolicy(_ policy: TabViewMountPolicy) -> some View {
-    modifier(_tabViewMountPolicyModifier(policy))
+    _modified(_tabViewMountPolicyModifier(policy))
   }
 
   /// `onDismiss` runs once after the sheet is dismissed by any means: the
   /// binding becoming false, `dismiss()`, Escape or a backdrop click.
-  nonisolated func sheet<Sheet: View>(isPresented: Binding<Bool>, onDismiss: (() -> Void)? = nil, @ViewBuilder content: @escaping () -> Sheet) -> some View { modifier(SheetModifier(isPresented: isPresented, onDismiss: _mainActor(onDismiss), content: content)) }
-  nonisolated func fullScreenCover<Cover: View>(isPresented: Binding<Bool>, onDismiss: (() -> Void)? = nil, @ViewBuilder content: @escaping () -> Cover) -> some View { modifier(FullScreenCoverModifier(isPresented: isPresented, onDismiss: _mainActor(onDismiss), content: content)) }
-  nonisolated func popover<Popover: View>(isPresented: Binding<Bool>, @ViewBuilder content: @escaping () -> Popover) -> some View { modifier(PopoverModifier(isPresented: isPresented, content: content)) }
+  nonisolated func sheet<Sheet: View>(isPresented: Binding<Bool>, onDismiss: (() -> Void)? = nil, @ViewBuilder content: @escaping () -> Sheet) -> some View { _modified(SheetModifier(isPresented: isPresented, onDismiss: _mainActor(onDismiss), content: content)) }
+  nonisolated func fullScreenCover<Cover: View>(isPresented: Binding<Bool>, onDismiss: (() -> Void)? = nil, @ViewBuilder content: @escaping () -> Cover) -> some View { _modified(FullScreenCoverModifier(isPresented: isPresented, onDismiss: _mainActor(onDismiss), content: content)) }
+  nonisolated func popover<Popover: View>(isPresented: Binding<Bool>, @ViewBuilder content: @escaping () -> Popover) -> some View { _modified(PopoverModifier(isPresented: isPresented, content: content)) }
   @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
   nonisolated func sheet<Item: Identifiable, Sheet: View>(item: Binding<Item?>, onDismiss: (() -> Void)? = nil, @ViewBuilder content: @escaping (Item) -> Sheet) -> some View {
-    modifier(ItemSheetModifier(item: item, onDismiss: _mainActor(onDismiss), content: content))
+    _modified(ItemSheetModifier(item: item, onDismiss: _mainActor(onDismiss), content: content))
   }
   @available(macOS 10.15, iOS 14.0, tvOS 14.0, watchOS 7.0, *)
   nonisolated func fullScreenCover<Item: Identifiable, Cover: View>(item: Binding<Item?>, onDismiss: (() -> Void)? = nil, @ViewBuilder content: @escaping (Item) -> Cover) -> some View {
-    modifier(ItemFullScreenCoverModifier(item: item, onDismiss: _mainActor(onDismiss), content: content))
+    _modified(ItemFullScreenCoverModifier(item: item, onDismiss: _mainActor(onDismiss), content: content))
   }
   @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
   nonisolated func popover<Item: Identifiable, Popover: View>(item: Binding<Item?>, @ViewBuilder content: @escaping (Item) -> Popover) -> some View {
-    modifier(ItemPopoverModifier(item: item, onDismiss: nil, content: content))
+    _modified(ItemPopoverModifier(item: item, onDismiss: nil, content: content))
   }
-  nonisolated func toolbar<Content: View>(@ViewBuilder content: @escaping () -> Content) -> some View { modifier(ToolbarModifier(content: content)) }
+  nonisolated func toolbar<Content: View>(@ViewBuilder content: @escaping () -> Content) -> some View { _modified(ToolbarModifier(content: content)) }
   nonisolated func preferredColorScheme(_ scheme: ColorScheme?) -> some View {
-    modifier(_preferredColorSchemeModifier(scheme))
+    _modified(_preferredColorSchemeModifier(scheme))
   }
   /// A `nil` prompt shows the platform's "Search" placeholder.
   nonisolated func searchable(text: Binding<String>, placement: SearchFieldPlacement = .automatic, prompt: Text? = nil) -> some View {
-    modifier(_searchableModifier(text: text, placement: placement, prompt: prompt?.value ?? "Search"))
+    _modified(_searchableModifier(text: text, placement: placement, prompt: prompt?.value ?? "Search"))
   }
   nonisolated func searchable(text: Binding<String>, placement: SearchFieldPlacement = .automatic, prompt: LocalizedStringKey) -> some View {
-    modifier(_searchableModifier(text: text, placement: placement, prompt: prompt.resolved))
+    _modified(_searchableModifier(text: text, placement: placement, prompt: prompt.resolved))
   }
   @_disfavoredOverload nonisolated func searchable<S: StringProtocol>(text: Binding<String>, placement: SearchFieldPlacement = .automatic, prompt: S) -> some View {
-    modifier(_searchableModifier(text: text, placement: placement, prompt: String(prompt)))
+    _modified(_searchableModifier(text: text, placement: placement, prompt: String(prompt)))
   }
   /// `isPresented` reports whether the search field is active; the browser field is always shown.
   nonisolated func searchable(text: Binding<String>, isPresented: Binding<Bool>, placement: SearchFieldPlacement = .automatic, prompt: Text? = nil) -> some View {

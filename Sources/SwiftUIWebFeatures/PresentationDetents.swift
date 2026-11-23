@@ -49,13 +49,13 @@ package nonisolated struct PresentationDetentsModifier: ViewModifier {
 
 public extension View {
   nonisolated func presentationDetents(_ detents: Set<PresentationDetent>) -> some View {
-    modifier(PresentationDetentsModifier(detents: detents, selection: nil))
+    _modified(PresentationDetentsModifier(detents: detents, selection: nil))
   }
   nonisolated func presentationDetents(
     _ detents: Set<PresentationDetent>,
     selection: Binding<PresentationDetent>
   ) -> some View {
-    modifier(PresentationDetentsModifier(detents: detents, selection: selection))
+    _modified(PresentationDetentsModifier(detents: detents, selection: selection))
   }
 }
 

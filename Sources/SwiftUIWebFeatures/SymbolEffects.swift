@@ -138,7 +138,7 @@ public extension View {
     var attributes = options.attributes
     attributes["data-symbol-effect"] = effect._swiftUIWebSymbolEffectName
     attributes["data-symbol-effect-active"] = isActive ? "true" : "false"
-    return modifier(_SymbolEffectModifier(attributes: attributes))
+    return _modified(_SymbolEffectModifier(attributes: attributes))
   }
 
   /// A discrete symbol effect played whenever `value` changes. The value's hash travels with the effect, so the host sees
@@ -147,6 +147,6 @@ public extension View {
     var attributes = options.attributes
     attributes["data-symbol-effect"] = effect._swiftUIWebSymbolEffectName
     attributes["data-symbol-effect-trigger"] = String(value.hashValue)
-    return modifier(_SymbolEffectModifier(attributes: attributes))
+    return _modified(_SymbolEffectModifier(attributes: attributes))
   }
 }

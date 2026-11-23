@@ -7,7 +7,7 @@ public extension View {
     of transform: @escaping @Sendable (GeometryProxy) -> Value,
     action: @escaping (_ newValue: Value) -> Void
   ) -> some View {
-    modifier(GeometryChangeModifier(transform: transform, action: _mainActor(action)))
+    _modified(GeometryChangeModifier(transform: transform, action: _mainActor(action)))
   }
 
   /// Two-value form: `action(oldValue, newValue)`. The first call receives
@@ -17,7 +17,7 @@ public extension View {
     of transform: @escaping @Sendable (GeometryProxy) -> Value,
     action: @escaping (_ oldValue: Value, _ newValue: Value) -> Void
   ) -> some View {
-    modifier(GeometryChangeModifier(transform: transform, pairAction: _mainActor(action)))
+    _modified(GeometryChangeModifier(transform: transform, pairAction: _mainActor(action)))
   }
 }
 

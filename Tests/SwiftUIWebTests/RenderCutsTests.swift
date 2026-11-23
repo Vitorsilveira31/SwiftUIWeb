@@ -122,10 +122,12 @@ struct RenderCutsTests {
 
   @Test
   func aChainOfModifiersRendersWithAShallowRecursion() {
-    let plain = render(budget: 0) { ModifierChain(depth: 120) }
+    // 96 levels of seven erased boundaries each: the render without stages is the reference, and an unoptimized build
+    // spends about 10 KB of stack on each boundary, so a deeper chain leaves it no room on the main thread's 8 MB.
+    let plain = render(budget: 0) { ModifierChain(depth: 96) }
     #expect(plain.nodeJobs == 0)
     for budget in [2, 5, 12] {
-      let staged = render(budget: budget) { ModifierChain(depth: 120) }
+      let staged = render(budget: budget) { ModifierChain(depth: 96) }
       print("METRIC chain budget \(budget): stack \(staged.stackBytes) vs \(plain.stackBytes), jobs \(staged.nodeJobs), forced \(staged.forced), lines \(staged.tree.count)")
       #expect(staged.nodeJobs > 0, "budget \(budget)")
       #expect(staged.tree == plain.tree, "budget \(budget): the tree differs")

@@ -6,7 +6,7 @@ extension View {
 
   /// A border drawn with any shape style, as `.border(.quaternary)`.
   public nonisolated func border<S: ShapeStyle>(_ content: S, width: Double = 1) -> some View {
-    modifier(_borderModifier(Color(css: content._swiftUIWebCSSValue), width: width))
+    _modified(_borderModifier(Color(css: content._swiftUIWebCSSValue), width: width))
   }
 }
 
