@@ -82,7 +82,8 @@ does the project site's Worker (below).
   `encodeBody: "manual"` (otherwise the runtime would encode the bytes again), with the headers of a `HEAD` for the plain
   file (assets fetched through the binding carry the `_headers` rules; a Worker's own response does not). Upload the
   `.br` copies of those files with the bundle; leave out the `.br` of any file you rewrite after the build, such as
-  `index.html`. Copy `Tools/cloudflare-site` (`worker.js`, `cloudflare.config.ts`, `stage.mjs`) as a starting point.
+  `index.html`. Copy `Tools/cloudflare-site` (`worker.js`, `cloudflare.config.ts`, `stage.mjs`) as a starting point. The same
+  Worker can send a returning visitor a module's difference file (see [Update by difference](#update-by-difference)).
 - **nginx.** `gzip_static on;` sends the `.gz` copies. `brotli_static on;` sends the `.br` copies, but it comes from the
   [ngx_brotli](https://github.com/google/ngx_brotli) module, which stock nginx does not include. Both keep the file's own
   `Content-Type`.
@@ -112,6 +113,11 @@ SWIFTUIWEB_PREVIOUS_BUNDLES=/srv/previous/1.4:/srv/previous/1.3 ./swiftweb build
 The framework's own launcher (`Tools/run-browser.sh`, `make run`) reads the same variable on a release build, and
 `bun Tools/delta-compress-bundle.mjs --bundle <bundle> --previous <directory>`, from the framework's checkout, runs the
 step on a bundle that already exists.
+
+To take the earlier modules from the site that is live instead of keeping them, `bun Tools/fetch-live-modules.mjs <site
+URL> <directory>` reads the site's page and the scripts it names, downloads every content-hashed module it finds, and keeps
+the ones whose bytes match the hash in their name; it writes nothing and exits 0 when the site cannot be read, so it can run
+before every deploy. Name the directory in `SWIFTUIWEB_PREVIOUS_BUNDLES`.
 
 For each `app.<hash>.wasm` (and `app-rest.<hash>.wasm`) of the bundle and each earlier module with the same name and other
 bytes, the step writes `<module>.<64 hex digits>.dcb` next to the module, where the digits are the SHA-256 of the earlier
@@ -143,7 +149,17 @@ Never build a file name from the header's text: parse it, check that the result 
 use it. `Tools/dictionary-transport.mjs` holds these rules as pure functions (Web Crypto and typed arrays only), so a Worker
 can import it; `Tools/bun-server.ts` is the reference. A host that cannot choose its answer by request header (a static
 host that serves a file for a path) ignores the `.dcb` files and works as before: it only downloads more. Do not upload
-them there. `Tools/cloudflare-site` leaves them out of the staged assets.
+them there. `Tools/cloudflare-site` stages them, and its Worker is ready to serve them but answers by difference only
+for a request that carries its check header until `Tools/check-dictionary-host.mjs` passes on the host (its README).
+
+**Check a host.** Whether a CDN or proxy passes `Available-Dictionary` through and delivers a `Content-Encoding: dcb` body
+unchanged is a property of the host, not of the files. `bun Tools/check-dictionary-host.mjs <site URL> <directory of earlier
+modules> [--header "Name: value"]...` asks the live site for each module that has an earlier module of the same stem in the
+directory, without letting the client decode the body, and reports per module "difference served and correct" (the body
+decodes with the earlier module to bytes that match the hash in the module's name), "no difference served" (any other
+coding; the response's `Content-Encoding`, `Vary` and `Use-As-Dictionary` are printed) or "WRONG" (it says `dcb` and the
+body does not decode, or `Vary` does not list `Available-Dictionary`, or `Use-As-Dictionary` is missing). It also requests
+every module the ordinary way and checks its bytes against the name. It exits 1 when anything is WRONG.
 
 **Limits.**
 
@@ -193,7 +209,9 @@ Trim `Permissions-Policy` to what the app does not use.
 unknown paths with `index.html`, and serves `.wasm` with the right type. It reads the same `_headers` file as Netlify, in the
 assets directory, which can also give the hashed files their long cache. It compresses on the fly; to send the build's
 `.br` copies instead, put a small Worker in front of the assets (see [Serve the precompressed copies](#serve-the-precompressed-copies)).
-`Tools/cloudflare-site` deploys the project site this way and can serve as a reference.
+`Tools/cloudflare-site` deploys the project site with such a Worker and can serve as a reference. One setting differs
+there: the site writes a real `index.html` for every route when it is staged, so it uses `notFoundHandling: "404-page"`
+and an address that names no file gets a real 404 (`404.html`, which still starts the app).
 
 **nginx:**
 
