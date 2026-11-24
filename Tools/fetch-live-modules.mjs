@@ -64,7 +64,10 @@ export function resolveReference(reference, fileURL) {
 export function documentBase(html, pageURL) {
   // The value may be quoted with either mark or, as HTML allows, unquoted (up to a space or the end of the tag).
   // `href` is a whole attribute name: the space before it keeps `data-href` and the like out.
-  const match = /<base\s(?:[^>]*?\s)?href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i.exec(html);
+  // A `<base>` inside a comment is not markup. This reads tags, it is not a full HTML parser: a page it misreads only loses
+  // its earlier modules (the build then writes no difference files), it never breaks a deploy.
+  const markup = html.replace(/<!--[\s\S]*?(?:-->|$)/g, "");
+  const match = /<base\s(?:[^>]*?\s)?href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i.exec(markup);
   const href = match ? (match[1] ?? match[2] ?? match[3]) : undefined;
   return (href !== undefined && resolveReference(href, pageURL)) || pageURL;
 }
