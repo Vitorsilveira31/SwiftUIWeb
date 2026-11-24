@@ -48,7 +48,8 @@ const sample = ({ kind, axis, ms, untilStopped = false }) => new Promise((resolv
   const start = performance.now();
   // With `untilStopped` the sampler runs until the test sets `window.__stopLazySampling` (or `ms` passes, the cap), and
   // `window.__lazySamplingStarted` tells the test the first frame has been reached.
-  if (untilStopped) { window.__stopLazySampling = false; window.__lazySamplingStarted = true; }
+  // `window.__lazySamplingCapped` says the cap ended it first, so the test knows the samples do not reach its stop.
+  if (untilStopped) { window.__stopLazySampling = false; window.__lazySamplingCapped = false; window.__lazySamplingStarted = true; }
   const read = () => {
     const view = document.querySelector(`[data-testid="${kind}-end"]`)?.closest(".scroll-view");
     if (view) sizes.push(axis === "y" ? view.scrollHeight : view.scrollWidth);
@@ -58,6 +59,7 @@ const sample = ({ kind, axis, ms, untilStopped = false }) => new Promise((resolv
   const frame = () => {
     read();
     const running = untilStopped ? !window.__stopLazySampling && performance.now() - start < ms : performance.now() - start < ms;
+    if (untilStopped && !running && !window.__stopLazySampling) window.__lazySamplingCapped = true;
     if (running) requestAnimationFrame(frame);
     else {
       observer.disconnect();
@@ -159,6 +161,7 @@ async function main() {
         const grown = await settle(growing, GROW_START + GROW_STEP);
         await page.evaluate(() => { window.__stopLazySampling = true; });
         const sizes = await sampling;
+        assert.equal(await page.evaluate(() => window.__lazySamplingCapped), false, `${label} growing: sampling hit its 15 s cap before the grid settled, so a later drop would go unseen`);
         const drops = sizes.flatMap((size, at) => (at > 0 && size < sizes[at - 1] ? [`${sizes[at - 1]} -> ${size}`] : []));
         assert.deepEqual(drops, [], `${label} growing: the extent went down after cells were appended (${[...new Set(sizes)]})`);
         assert.ok(grown.shown < GROW_START + GROW_STEP, `${label} growing: the grid shows all ${grown.shown} cells; the test needs cells outside the window`);
