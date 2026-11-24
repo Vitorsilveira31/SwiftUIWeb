@@ -1511,10 +1511,17 @@ export class CssLayout {
     const adaptive = tracks.find(t => t.type === 'adaptive');
     // A LazyVGrid's adaptive minimum is never wider than the grid: one column as wide as the grid, as in SwiftUI, not one that
     // overflows it. A LazyHGrid keeps the plain minimum (a percentage of an indefinite height does not resolve).
-    if (adaptive) {
-      const floor = horizontal ? px(adaptive.min) : `min(${px(adaptive.min)},100%)`;
-      push(horizontal ? 'grid-template-rows' : 'grid-template-columns', `repeat(auto-fill,minmax(${floor},${adaptive.max === Infinity ? '1fr' : px(adaptive.max)}))`);
-    } else push(horizontal ? 'grid-template-rows' : 'grid-template-columns', cols.join(' '));
+    // The other items keep their tracks, in their order, and the first adaptive item repeats in the space they leave (Apple: "as many
+    // items as fit in the space left by the other items"): `90px repeat(auto-fill,minmax(120px,1fr))` is one fixed track and then
+    // as many adaptive ones as fit. CSS repeats one `auto-fill` per grid, so a second adaptive item is a single track.
+    const adaptiveTrack = t => `minmax(${px(t.min)},${t.max === Infinity ? '1fr' : px(t.max)})`;
+    const template = tracks.map((t, i) => {
+      if (t.type !== 'adaptive') return cols[i];
+      if (t !== adaptive) return adaptiveTrack(t);
+      const floor = horizontal ? px(t.min) : `min(${px(t.min)},100%)`;
+      return `repeat(auto-fill,minmax(${floor},${t.max === Infinity ? '1fr' : px(t.max)}))`;
+    });
+    push(horizontal ? 'grid-template-rows' : 'grid-template-columns', template.join(' '));
     push(horizontal ? 'grid-template-columns' : 'grid-template-rows', 'none');
     push('grid-auto-flow', horizontal ? 'column' : 'row');
     // The spacing after the first track is the gap between tracks (a per-track spacing is not expressible).
@@ -1705,6 +1712,11 @@ export class CssLayout {
         if (k === 'flexible' || k === 'opaque') { push(w, inset ? `calc(100% - ${px(inset)})` : '100%'); push(selfProp, 'stretch'); }
         // An aspect box capped by the height it is proposed is narrower than its cell: aligned in it, as the frame aligns it.
         else push(selfProp, n.cap != null && a === 'x' ? alignIn(place) : 'stretch');
+        // A LazyHGrid with adaptive rows counts its rows from its height (`repeat(auto-fill, ...)`). WebKit sizes the grid's
+        // width (and its auto columns) from an intrinsic pass that sees no height and counts one row, so every cell lands in
+        // one row's length (424 wide columns for four rows of 100 wide cells); a percentage height makes the height definite
+        // there, as the stretch makes it for Chromium. Where the parent's height is indefinite the percentage computes to auto.
+        if (k === 'grid' && a === 'y' && e.classList.contains('hgrid') && n.tracks.some(t => t.type === 'adaptive')) push(w, '100%');
       } else {
         push(selfProp, alignIn(place));
         if (s.hugMax != null) push(MAX[a], vpx(s.hugMax));
