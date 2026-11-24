@@ -25,7 +25,7 @@ const describe = error => String(error?.message || error);
 const logError = (environment, error) => environment.console?.error?.(`[SwiftUIWeb] ${safeErrorMessage(error)}`);
 // Only the framework's own failure codes (negative) cross the bridge: an SDK error's `code` (an HTTP 429, say) would read
 // as a BrowserIO event status (100 and up) and leave the call pending, so every other failure is -6.
-const failureCode = code => Number.isInteger(code) && code < 0 ? code : -6;
+export const failureCode = code => Number.isInteger(code) && code < 0 ? code : -6;
 const asText = value => value === undefined || value === null ? '' : typeof value === 'string' ? value : JSON.stringify(value);
 
 /**
@@ -159,6 +159,11 @@ export function createServiceHost(environment, { undefinedWaitMs = UNDEFINED_WAI
  * app moved to the main thread): calls and subscriptions go out through `post` as `service`, `service-observe` and
  * `service-unobserve` messages, and `receive` takes the page's `service-reply` and `service-event` answers (returning
  * true for those). A call still waiting when the runtime goes away is never answered: BrowserIO reports it cancelled.
+ *
+ * `call` and `observe` take `{ operation }`, the BrowserIO operation they serve, which the page echoes on its answers:
+ * a host that takes over after a move delivers the answer whose delivery failed to that operation
+ * (`BrowserIO.redeliverService`). With `{ settle }`, `call` returns nothing and `settle(ok, textOrError)` runs inside
+ * `receive`, so a failure to hand the answer to the app happens in the message that carried it.
  */
 export function createServiceForwarder(post) {
   let next = 1;
@@ -168,34 +173,40 @@ export function createServiceForwarder(post) {
   const replies = new Map();
   const receivers = new Map();
   const services = {
-    call(name, method, payload) {
+    call(name, method, payload, { operation, settle } = {}) {
       const request = next++;
+      const message = { t: 'service', runtime, request, operation, name, method, payload };
+      if (settle) { replies.set(request, settle); post(message); return undefined; }
       return new Promise((resolve, reject) => {
-        replies.set(request, { resolve, reject });
-        post({ t: 'service', runtime, request, name, method, payload });
+        replies.set(request, (ok, value) => (ok ? resolve(value) : reject(value)));
+        post(message);
       });
     },
-    observe(name, event, receive) {
+    observe(name, event, receive, { operation } = {}) {
       const subscription = next++;
       receivers.set(subscription, receive);
-      post({ t: 'service-observe', runtime, subscription, name, event });
+      post({ t: 'service-observe', runtime, subscription, operation, name, event });
       return () => { if (receivers.delete(subscription)) post({ t: 'service-unobserve', runtime, subscription }); };
     },
   };
   function receive(data) {
     if ((data.t === 'service-reply' || data.t === 'service-event') && data.runtime !== runtime) return true;
     if (data.t === 'service-reply') {
-      const pending = replies.get(data.request);
-      if (!pending) return true;
+      const settle = replies.get(data.request);
+      if (!settle) return true;
       replies.delete(data.request);
-      if (data.ok) pending.resolve(String(data.text ?? ''));
-      else pending.reject(new ServiceError(failureCode(data.code), String(data.message ?? 'Page service failed')));
+      settle(data.ok === true, serviceAnswer(data));
       return true;
     }
     if (data.t === 'service-event') { receivers.get(data.subscription)?.(String(data.text ?? '')); return true; }
     return false;
   }
   return { services, receive };
+}
+
+/** A `service-reply`'s value: its text when it succeeded, otherwise the failure as a ServiceError. */
+export function serviceAnswer(data) {
+  return data.ok === true ? String(data.text ?? '') : new ServiceError(failureCode(data.code), String(data.message ?? 'Page service failed'));
 }
 
 /**
@@ -212,19 +223,19 @@ export function createServiceResponder(environment, send, options) {
   let generation = 0;
   function receive(data) {
     if (data.t === 'service') {
-      const { request, runtime } = data;
-      if (!host) { send({ t: 'service-reply', runtime, request, ok: false, code: -7, message: 'Page services are unavailable' }); return true; }
+      const { request, runtime, operation } = data;
+      if (!host) { send({ t: 'service-reply', runtime, request, operation, ok: false, code: -7, message: 'Page services are unavailable' }); return true; }
       const asked = generation;
       host.call(data.name, data.method, data.payload).then(
-        text => { if (asked === generation) send({ t: 'service-reply', runtime, request, ok: true, text }); },
-        error => { if (asked === generation) send({ t: 'service-reply', runtime, request, ok: false, code: error instanceof ServiceError ? failureCode(error.code) : -6, message: describe(error) }); });
+        text => { if (asked === generation) send({ t: 'service-reply', runtime, request, operation, ok: true, text }); },
+        error => { if (asked === generation) send({ t: 'service-reply', runtime, request, operation, ok: false, code: error instanceof ServiceError ? failureCode(error.code) : -6, message: describe(error) }); });
       return true;
     }
     if (data.t === 'service-observe') {
       if (!host || ended) return true;
-      const { subscription, runtime } = data;
+      const { subscription, runtime, operation } = data;
       subscriptions.get(subscription)?.();
-      subscriptions.set(subscription, host.observe(data.name, data.event, text => send({ t: 'service-event', runtime, subscription, text })));
+      subscriptions.set(subscription, host.observe(data.name, data.event, text => send({ t: 'service-event', runtime, subscription, operation, text })));
       return true;
     }
     if (data.t === 'service-unobserve') {

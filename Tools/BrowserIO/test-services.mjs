@@ -171,6 +171,40 @@ let tests = 0;
   tests++;
 }
 
+{ // A forwarded call settles inside the receive that carries its answer, so a trap there reaches the host's handling of
+  // that message; the page echoes the BrowserIO operation on answers and events (the replay after a move uses it).
+  const page = {};
+  const sent = [];
+  const responder = createServiceResponder(page, message => sent.push(message));
+  page.SwiftUIWebServices.define('echo', context => { page.emitEcho = context.emit; return { ping: () => 'pong' }; });
+  const forwarder = createServiceForwarder(message => responder.receive(message));
+  let receiving = false, settledInside = null;
+  assert.equal(forwarder.services.call('echo', 'ping', '', { operation: 7, settle: (ok, text) => { settledInside = receiving && ok && text === 'pong'; } }), undefined);
+  forwarder.services.observe('echo', 'tick', () => {}, { operation: 8 });
+  await settle();
+  page.emitEcho('tick', 'one');
+  const reply = sent.find(message => message.t === 'service-reply');
+  const event = sent.find(message => message.t === 'service-event');
+  assert.equal(reply.operation, 7);
+  assert.equal(event.operation, 8);
+  receiving = true; forwarder.receive(reply); receiving = false;
+  assert.equal(settledInside, true, 'settled synchronously, inside receive');
+  tests++;
+}
+
+{ // With the page's own services, a failure to hand the answer to Swift (a trap) goes to onError: it is not the call's.
+  const errors = [];
+  const environment = {};
+  const trapping = { exports: { memory, browser_io_alloc: alloc, browser_io_deliver() { throw new RangeError('Maximum call stack size exceeded'); } } };
+  const host = createBrowserIO({ getInstance: () => trapping, environment, baseURL: 'https://example.test', onError: error => errors.push(error) });
+  environment.SwiftUIWebServices.define('echo', () => ({ ping: () => 'pong' }));
+  start(host, BrowserIOOperation.service, new Writer().text('echo').text('ping').text('').bytes(), () => {});
+  await settle();
+  assert.equal(errors.length, 1);
+  assert.match(String(errors[0]?.message), /call stack/);
+  tests++;
+}
+
 { // After a move, a reply for the old runtime never reaches the new one, whose request numbers start again at 1.
   const page = {};
   const later = [];

@@ -371,10 +371,19 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
     drainTimer = setInterval(scheduleTaskDrain, 250);
     // The replay asks again for what the Worker already sent; those requests fail here rather than going out twice.
     browserIO.refuseReplayed(state.sent ?? []);
+    // A page service's answer or event that trapped while it went into the app on the Worker reaches the app here: this
+    // thread's forwarder drops the Worker's messages (another runtime), as it must for every other one. A reply answers the
+    // replay's request for that call when the Worker made it after the snapshot; otherwise its operation (or the event's
+    // observation) is restored by `resume` and receives it then.
+    const failing = state.failing;
+    const serviceFailing = failing?.t === 'service-reply' || failing?.t === 'service-event';
+    browserIO.answerReplayed(serviceFailing ? failing : null);
     for (const message of state.log) await handle(message);
-    if (state.failing) await handle(state.failing);
+    if (failing && !serviceFailing) await handle(failing);
     browserIO.refuseReplayed([]);
+    browserIO.answerReplayed(null);
     browserIO.resume(state.inflight);
+    if (serviceFailing) { try { browserIO.redeliverService(failing); } catch (error) { failed(error, failing); } }
     // Whatever the failed pass would have published (or the tasks it left) goes out now.
     publishIfChanged();
     scheduleTaskDrain();

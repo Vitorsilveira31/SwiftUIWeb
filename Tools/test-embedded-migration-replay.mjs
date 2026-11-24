@@ -88,6 +88,8 @@ function standIn(imports, onWorker) {
       if (code === BrowserIOEvent.serviceEvent) { bytes()[SCHEMA.eventSeen] = 1; armed = true; }
       // A service's reply resumes Swift the same way, and the drain it wakes overflows.
       if (id === serviceCall && code === 0) { bytes()[SCHEMA.replySeen] = 1; armed = true; }
+      // Or the delivery itself runs out of stack on the Worker, after it changed memory.
+      if (onWorker && scenario.receiveOverflows && (code === BrowserIOEvent.serviceEvent || (id === serviceCall && code === 0))) throw overflow();
     },
     browser_io_free: () => {},
     embedded_browser_start() {},
@@ -220,6 +222,74 @@ for (const [name, options, expected] of cases) {
     await main.adopt(MODULE, migrate.state);
     await settle();
     assert.equal(new Uint8Array(standIns.at(-1).memory.buffer)[SCHEMA.replySeen], 1, `${name}: the main thread starts with the reply's change`);
+    await main.handle({ t: "dispose" });
+    console.log(`ok   ${name}`);
+  } catch (error) {
+    failures++;
+    console.log(`FAIL ${error.message}`);
+    await worker.handle({ t: "dispose" });
+  }
+}
+
+// The delivery of a page service's event into the app runs out of stack on the Worker. The move replays that event on the
+// main thread, to its restored observation (BrowserIO.redeliverService): the main thread's forwarder drops the Worker's
+// messages, so a plain replay would lose it.
+{
+  const name = "service event: one whose delivery overflows reaches the main thread";
+  scenario = { method: "GET", trigger: true, overflows: true, receiveOverflows: true, viewport: ({ observe }) => observe("push", "message") };
+  requests = []; completions.length = 0; instances = 0; standIns.length = 0;
+  const workerOut = [], mainOut = [];
+  const worker = createHostCore({ post: message => workerOut.push(message), scope, canMigrate: true });
+  await worker.handle(init);
+  await settle();
+  await worker.handle({ t: "call", n: "viewport", a: [] });
+  await settle();
+  const observeMessage = workerOut.find(message => message.t === "service-observe");
+  try {
+    assert.ok(observeMessage, `${name}: the worker asks the page to observe`);
+    await worker.handle({ t: "service-event", runtime: observeMessage.runtime, subscription: observeMessage.subscription, operation: observeMessage.operation, text: "chapter" });
+    await settle();
+    const migrate = workerOut.find(message => message.t === "migrate");
+    assert.ok(migrate, `${name}: the overflow moved the app`);
+    const main = createHostCore({ post: message => mainOut.push(message), scope, canMigrate: false });
+    await main.adopt(MODULE, migrate.state);
+    await settle();
+    assert.equal(new Uint8Array(standIns.at(-1).memory.buffer)[SCHEMA.eventSeen], 1, `${name}: the main thread received the event`);
+    assert.ok(mainOut.some(message => message.t === "service-observe"), `${name}: the main thread observes again`);
+    await main.handle({ t: "dispose" });
+    console.log(`ok   ${name}`);
+  } catch (error) {
+    failures++;
+    console.log(`FAIL ${error.message}`);
+    await worker.handle({ t: "dispose" });
+  }
+}
+
+// The delivery of a page service's reply into the app runs out of stack on the Worker. It must move the app (not vanish in
+// a promise), and the main thread must receive the reply, not a cancellation of the call.
+{
+  const name = "service reply: one whose delivery overflows moves the app and reaches the main thread";
+  scenario = { method: "GET", trigger: true, overflows: true, receiveOverflows: true, viewport: ({ callService }) => callService("ledger", "record") };
+  requests = []; completions.length = 0; instances = 0; standIns.length = 0;
+  const workerOut = [], mainOut = [];
+  const worker = createHostCore({ post: message => workerOut.push(message), scope, canMigrate: true });
+  await worker.handle(init);
+  await settle();
+  await worker.handle({ t: "call", n: "viewport", a: [] });
+  await settle();
+  const request = workerOut.find(message => message.t === "service");
+  try {
+    assert.ok(request, `${name}: the worker forwards the call to the page`);
+    await worker.handle({ t: "service-reply", runtime: request.runtime, request: request.request, operation: request.operation, ok: true, text: "ok" });
+    await settle();
+    const migrate = workerOut.find(message => message.t === "migrate");
+    assert.ok(migrate, `${name}: the overflow moved the app`);
+    const main = createHostCore({ post: message => mainOut.push(message), scope, canMigrate: false });
+    await main.adopt(MODULE, migrate.state);
+    await settle();
+    assert.equal(new Uint8Array(standIns.at(-1).memory.buffer)[SCHEMA.replySeen], 1, `${name}: the main thread received the reply`);
+    const onMain = completions.filter(completion => !completion.onWorker && completion.id === request.operation);
+    assert.deepEqual(onMain.map(completion => completion.code), [0], `${name}: once, as the answer`);
     await main.handle({ t: "dispose" });
     console.log(`ok   ${name}`);
   } catch (error) {
