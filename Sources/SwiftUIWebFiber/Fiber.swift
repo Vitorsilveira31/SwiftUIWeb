@@ -307,8 +307,8 @@ package final class Fiber {
   package var children: [Fiber]
   package let stateStore: StateStore
   /// The rows this lazy owner last materialized, with the collection revision and count they were rendered from and
-  /// the keys of the rows.
-  package var _lazyWindow: (revision: UInt64, lower: Int, upper: Int, count: Int, before: Double, keys: [_FiberKey])?
+  /// the keys of the rows, and the declared lane count the spacers were computed under.
+  package var _lazyWindow: (revision: UInt64, lower: Int, upper: Int, count: Int, before: Double, keys: [_FiberKey], declaredLanes: Int)?
   /// What the host laid out of this lazy owner, when it reported it: how many cells make a row (an adaptive grid's columns are
   /// not known here) and the average extent of a row along the scrolling axis. The better estimate for the cells it has not shown.
   /// `declaredLanes` is the declared lane count the measure was taken under: a fiber keeps its identity when its declared
@@ -2484,6 +2484,8 @@ package final class FiberTree {
       let measure = owner._lazyHostMeasure.flatMap { $0.declaredLanes == descriptor.laneCount ? $0 : nil }
       let lanes = measure?.lanes ?? max(1, descriptor.laneCount)
       let extent = measure?.rowExtent ?? descriptor.estimatedExtent
+      // Spacers computed under another declared lane count are sized for other rows: they are computed again, even for rows that keep their keys.
+      let relaned = window.declaredLanes != descriptor.laneCount
       let lower = min(window.lower, descriptor.count)
       var upper = min(descriptor.count, window.upper)
       if window.upper >= window.count, descriptor.count > window.count {
@@ -2495,9 +2497,10 @@ package final class FiberTree {
       }
       let keys = (lower..<upper).map(descriptor.keyAt)
       let sameRows = lower == window.lower && upper == window.upper && keys == window.keys
-      let before = lower == window.lower ? window.before : Double(lower / lanes) * extent
+      let before = lower == window.lower && !relaned ? window.before : Double(lower / lanes) * extent
       // Rows that keep their keys keep the spacer the host sized from what it measured; their content is rendered again below.
-      let after = sameRows ? spacerExtent(of: info.ownerIdentity, key: "__lazy_after", axis: descriptor.axis)
+      // Not when the lane count changed: the spacer was sized for the old columns.
+      let after = sameRows && !relaned ? spacerExtent(of: info.ownerIdentity, key: "__lazy_after", axis: descriptor.axis)
         : Double((max(0, descriptor.count - upper) + lanes - 1) / lanes) * extent
       _materializeLazyCollection(ownerIdentity: info.ownerIdentity, indices: Array(lower..<upper), beforeExtent: before, afterExtent: after)
       refreshed = true
@@ -2621,7 +2624,7 @@ package final class FiberTree {
     // Recorded whether or not rows changed: a later publication compares this window (its revision, range and row keys)
     // with the collection's current one to find rows rendered from data that has since changed.
     let lower = seen.min().map { Int($0) } ?? 0, upper = seen.max().map { Int($0) + 1 } ?? 0
-    owner._lazyWindow = (descriptor.revision, lower, upper, descriptor.count, beforeExtent, (lower..<upper).map(descriptor.keyAt))
+    owner._lazyWindow = (descriptor.revision, lower, upper, descriptor.count, beforeExtent, (lower..<upper).map(descriptor.keyAt), descriptor.laneCount)
     stateStore._endSubtreeRenderPass(provenLeafSources: provenLeafSources)
     children.append(makeLazySpacer(
       axis: descriptor.axis,

@@ -175,6 +175,38 @@ struct LazyWindowRefreshTests {
     #expect(!html.contains("Cell 8"), "the window grew by two rows of the old two columns")
   }
 
+  /// A grid of twenty cells whose declared columns grow from two to four when a button is pressed, with the same keys throughout.
+  private struct Spaced: View {
+    @State private var wide = false
+    var body: some View {
+      VStack {
+        Button("wide") { wide = true }
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: wide ? 4 : 2)) {
+          ForEach(0..<20, id: \.self) { Text("Cell \($0)") }
+        }
+      }
+    }
+  }
+
+  /// A window whose rows keep their keys while the grid declares another number of columns keeps its rows, but its spacers are
+  /// computed for the new columns: the spacers it had were sized for the old ones.
+  @Test
+  func aWindowRecomputesItsSpacersWhenTheLaneCountChanges() {
+    let tree = FiberTree(Spaced(), deferLazyCollections: true)
+    let owner = tree._lazyCollections()[0].ownerIdentity
+    _ = tree._materializeLazyCollection(ownerIdentity: owner, indices: Array(4..<8), beforeExtent: 100, afterExtent: 500)
+    tree.dispatch(event: "click")
+    _ = tree.renderNode
+    let estimate = tree._lazyCollections()[0].descriptor.estimatedExtent
+    #expect(tree._refreshStaleLazyWindows(growTo: { _, _ in 0 }))
+    let fiber = tree.fiber(at: owner)
+    let before = fiber?.children.first?.renderNode.attributes["data-size-h"].flatMap { Double($0) }
+    let after = fiber?.children.last?.renderNode.attributes["data-size-h"].flatMap { Double($0) }
+    // Four columns: the four rows before the window are one row of the estimate; the twelve after it are three rows.
+    #expect(before == estimate, "the spacer before the window was sized for two columns")
+    #expect(after == 3 * estimate, "the spacer after the window was sized for two columns")
+  }
+
   /// A window materialized from the collection's current revision is left alone, so nothing is refreshed.
   @Test
   func aWindowOfTheCurrentRevisionIsNotRefreshed() {

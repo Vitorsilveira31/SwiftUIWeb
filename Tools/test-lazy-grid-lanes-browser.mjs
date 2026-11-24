@@ -43,9 +43,12 @@ const measureGrid = ({ kind, axis, cells, cell, gap }) => {
 
 /** In the page: the scroll extent of the view of `kind` at every animation frame for `ms` milliseconds, and after every task that changed
  * the document (a commit that is corrected before the next frame is still a page that was the wrong size for the task's end). */
-const sample = ({ kind, axis, ms }) => new Promise((resolve) => {
+const sample = ({ kind, axis, ms, untilStopped = false }) => new Promise((resolve) => {
   const sizes = [];
   const start = performance.now();
+  // With `untilStopped` the sampler runs until the test sets `window.__stopLazySampling` (or `ms` passes, the cap), and
+  // `window.__lazySamplingStarted` tells the test the first frame has been reached.
+  if (untilStopped) { window.__stopLazySampling = false; window.__lazySamplingStarted = true; }
   const read = () => {
     const view = document.querySelector(`[data-testid="${kind}-end"]`)?.closest(".scroll-view");
     if (view) sizes.push(axis === "y" ? view.scrollHeight : view.scrollWidth);
@@ -54,7 +57,13 @@ const sample = ({ kind, axis, ms }) => new Promise((resolve) => {
   observer.observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
   const frame = () => {
     read();
-    if (performance.now() - start < ms) requestAnimationFrame(frame); else { observer.disconnect(); resolve(sizes); }
+    const running = untilStopped ? !window.__stopLazySampling && performance.now() - start < ms : performance.now() - start < ms;
+    if (running) requestAnimationFrame(frame);
+    else {
+      observer.disconnect();
+      if (untilStopped) { window.__lazySamplingStarted = false; window.__stopLazySampling = false; }
+      resolve(sizes);
+    }
   };
   requestAnimationFrame(frame);
 });
@@ -143,12 +152,15 @@ async function main() {
         const growing = { kind: "growing", axis: "y" };
         await page.getByRole("tab", { name: "Growing" }).click();
         await settle(growing, GROW_START);
-        const sampling = page.evaluate(sample, { ...growing, ms: 1500 });
+        // Sampling starts before the append and stops only once the grid has settled at its new size (capped at 15 s).
+        const sampling = page.evaluate(sample, { ...growing, ms: 15000, untilStopped: true });
+        await page.waitForFunction(() => window.__lazySamplingStarted === true);
         await page.locator('[data-testid="growing-append"]').click();
+        const grown = await settle(growing, GROW_START + GROW_STEP);
+        await page.evaluate(() => { window.__stopLazySampling = true; });
         const sizes = await sampling;
         const drops = sizes.flatMap((size, at) => (at > 0 && size < sizes[at - 1] ? [`${sizes[at - 1]} -> ${size}`] : []));
         assert.deepEqual(drops, [], `${label} growing: the extent went down after cells were appended (${[...new Set(sizes)]})`);
-        const grown = await settle(growing, GROW_START + GROW_STEP);
         assert.ok(grown.shown < GROW_START + GROW_STEP, `${label} growing: the grid shows all ${grown.shown} cells; the test needs cells outside the window`);
         const steps = sizes.filter((size, at) => at === 0 || size !== sizes[at - 1]);
         console.log(`[${label}] growing: ${GROW_START} cells, then ${GROW_START + GROW_STEP}: never shorter (${steps.join(" -> ")}), ${grown.extent} long`);
