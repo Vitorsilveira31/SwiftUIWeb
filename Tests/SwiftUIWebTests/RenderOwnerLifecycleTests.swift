@@ -72,6 +72,34 @@ final class RenderOwnerLifecycleTests {
     _expectNil(registry._render(token))
   }
 
+  /// Every modifier on a view is an owner that returns the view's node, so the chain from a screen's body to the owner
+  /// its fiber holds is as long as the modifiers stacked above it. An app root with its environment, tasks and change
+  /// handlers puts more than sixteen there; a change the screen read must still reach the outermost owner, or no fiber
+  /// renders it again (a web guest's birth date screen kept Continue disabled).
+  @Test
+  func testOutermostOwnerFollowsAChainLongerThanSixteenModifiers() {
+    let registry = _RenderOwnerRegistry()
+    var context = _RenderContext()
+    context._renderOwnerRegistry = registry
+    let tokens = (0 ..< 24).map { _ in registry._register(context: context) { _ in .empty() } }
+    for (inner, outer) in zip(tokens, tokens.dropFirst()) { registry._recordOuterOwner(inner, outer) }
+    _expectEqual(registry._outermostOwner(of: tokens[0]), tokens[23])
+    _expectEqual(registry._outermostOwner(of: tokens[23]), tokens[23])
+  }
+
+  @Test
+  func testOutermostOwnerEndsOnACycle() {
+    let registry = _RenderOwnerRegistry()
+    var context = _RenderContext()
+    context._renderOwnerRegistry = registry
+    let first = registry._register(context: context) { _ in .empty() }
+    let second = registry._register(context: context) { _ in .empty() }
+    registry._recordOuterOwner(first, second)
+    registry._recordOuterOwner(second, first)
+    let outermost = registry._outermostOwner(of: first)
+    _expectTrue(outermost == first || outermost == second)
+  }
+
   @Test
   func testTreeDisposalReleasesModelCapturedByOwnerRenderers() {
     weak var releasedMarker: OwnerLifetimeMarker?
