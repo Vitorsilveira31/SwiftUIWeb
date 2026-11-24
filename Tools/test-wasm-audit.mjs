@@ -114,6 +114,7 @@ test("a whole run writes the JSON and Markdown reports and the size gate", () =>
   const html = '<script src="https://cdn.example/a.js"></script>';
   writeFileSync(join(bundle, "sub/index.html"), html);
   writeFileSync(join(bundle, "notes.md"), "not a runtime asset");
+  writeFileSync(join(bundle, `app.0123abcd.wasm.${"a".repeat(64)}.dcb`), "a difference file is not a runtime asset");
   writeFileSync(join(bundle, ".hidden.js"), "ignored");
   const output = join(directory, "out/report.json");
   const run = (...args) => spawnSync("bun", [AUDIT, bundle, "--output", output, ...args], { encoding: "utf8" });

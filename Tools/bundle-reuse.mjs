@@ -26,6 +26,7 @@ import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { listModules } from "./delta-compress-bundle.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const STAMP = ".bundle-inputs";
@@ -69,6 +70,14 @@ export function inputsKey(example, env = process.env, root = ROOT) {
   }
   const swift = spawnSync(env.SWIFTUIWEB_SWIFT || "swift", ["--version"], { encoding: "utf8" });
   hash.update(`swift ${swift.stdout ?? ""}${swift.stderr ?? ""}\n`);
+  // The earlier modules of SWIFTUIWEB_PREVIOUS_BUNDLES (their directories are in the variable above) decide the difference
+  // files the build writes (Tools/delta-compress-bundle.mjs), so their bytes are inputs too.
+  for (const directory of String(env.SWIFTUIWEB_PREVIOUS_BUNDLES ?? "").split(":").filter(Boolean)) {
+    for (const module of listModules(directory)) {
+      hash.update(`previous ${module}\n`);
+      hash.update(readFileSync(join(resolve(directory), module)));
+    }
+  }
   for (const path of inputFiles(root)) {
     let bytes;
     try {

@@ -47,6 +47,19 @@ const tests = [
     assert.notEqual(inputsKey("showcase", { ...ENV, WASM_OPT_ONE_CALLER_INLINE_MAX_SIZE: "40" }, root), before);
     assert.equal(inputsKey("showcase", { ...ENV, SWIFTUIWEB_BROWSER_ENGINE: "webkit" }, root), before);
   }],
+  ["the earlier modules of SWIFTUIWEB_PREVIOUS_BUNDLES are inputs: their bytes change the key, other files of that directory do not", (root) => {
+    const earlier = join(root, "earlier");
+    mkdirSync(earlier, { recursive: true });
+    writeFileSync(join(earlier, "app.11111111.wasm"), "one");
+    const env = { ...ENV, SWIFTUIWEB_PREVIOUS_BUNDLES: earlier };
+    const before = inputsKey("showcase", env, root);
+    assert.notEqual(before, inputsKey("showcase", ENV, root), "naming a directory is a build setting");
+    writeFileSync(join(earlier, "index.html"), "<html>");
+    writeFileSync(join(earlier, "app.11111111.wasm.br"), "br");
+    assert.equal(inputsKey("showcase", env, root), before, "only its modules count");
+    writeFileSync(join(earlier, "app.11111111.wasm"), "two");
+    assert.notEqual(inputsKey("showcase", env, root), before, "an earlier module with other bytes is another build");
+  }],
   ["a stamped bundle is reused until it or its inputs change", (root) => {
     const bundle = join(root, ".build/browser/ShowcaseApp");
     mkdirSync(bundle, { recursive: true });

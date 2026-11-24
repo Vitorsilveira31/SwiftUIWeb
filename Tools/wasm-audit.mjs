@@ -469,7 +469,7 @@ function attribute(module, rows) {
 // --- bundle ----------------------------------------------------------------------------------------------------------
 
 const NOT_RUNTIME_SUFFIXES = [".d.ts", ".wasm.size.json", ".wasm.data.json", ".wasm.report.json"];
-const NOT_RUNTIME_EXTENSIONS = [".a", ".o", ".obj", ".swift", ".rs", ".c", ".cpp", ".h", ".hpp", ".swiftmodule", ".swiftdoc", ".swiftsourceinfo", ".toml", ".lock", ".log", ".map", ".md", ".ts"];
+const NOT_RUNTIME_EXTENSIONS = [".dcb", ".a", ".o", ".obj", ".swift", ".rs", ".c", ".cpp", ".h", ".hpp", ".swiftmodule", ".swiftdoc", ".swiftsourceinfo", ".toml", ".lock", ".log", ".map", ".md", ".ts"];
 
 const runtimeAsset = (path) => {
   const name = basename(path);

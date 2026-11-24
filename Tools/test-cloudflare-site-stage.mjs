@@ -21,6 +21,7 @@ describe("Cloudflare site staging", () => {
       "app.0123abcd.wasm": "wasm",
       "app.0123abcd.wasm.br": "br",
       "app.0123abcd.wasm.gz": "gz",
+      [`app.0123abcd.wasm.${"a".repeat(64)}.dcb`]: "a difference file, which the hosted site does not serve",
       "index.0123abcd.js": "js",
       "index.0123abcd.js.br": "br",
       "index.0123abcd.js.gz": "gz",

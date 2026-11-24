@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "../..");
 const RECIPES = join(ROOT, "Examples/ShowcaseSite/Features/Components/Recipes");
-const LEFT_OUT = /^\.|\.(br|gz|log)$/;
+const LEFT_OUT = /^\.|\.(br|gz|log|dcb)$/;
 // The copies worker.js serves: the files it runs for (runWorkerFirst in cloudflare.config.ts).
 const SERVED_COPY = /\.(wasm|js|css)\.br$/;
 const DEFAULT_ORIGIN = "https://swiftuiweb.vitorsilveira31.workers.dev";

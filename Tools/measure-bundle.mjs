@@ -58,7 +58,7 @@ export function inventory(bundle, { output = null, brotliQuality = 11 } = {}) {
     const suffix = suffixOf(name);
     if (
       isSymlink(path) || path === reportPath || relativePath.split("/").some((part) => part.startsWith(".")) || name === "release-size.json" ||
-      [".map", ".a", ".o", ".rlib", ".gz", ".br"].includes(suffix) || [".size.json", ".data.json", ".objects.json"].some((ending) => name.endsWith(ending))
+      [".map", ".a", ".o", ".rlib", ".gz", ".br", ".dcb"].includes(suffix) || [".size.json", ".data.json", ".objects.json"].some((ending) => name.endsWith(ending))
     ) {
       ignored.push(relativePath);
       continue;
