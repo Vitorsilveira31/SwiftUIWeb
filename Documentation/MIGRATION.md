@@ -9,6 +9,18 @@ before/after comparison.
 
 ## Unreleased
 
+### Lazy grid layout fixes (visual change)
+
+- **A fixed item beside an adaptive one keeps its track.** `LazyVGrid(columns: [GridItem(.fixed(90)), GridItem(.adaptive(minimum: 120))])`
+  laid out only the adaptive repetitions and dropped the 90 point column (7 tracks in a 1000 wide grid). It now lays out the
+  fixed track and then as many adaptive tracks as fit in the width it leaves, as SwiftUI does (8 tracks). The template is
+  `90px repeat(auto-fill, minmax(...))`; grids with only one kind of item are unchanged. A second adaptive item
+  is a single track (it was dropped).
+- **A `LazyHGrid` with adaptive rows is laid out in WebKit as in Chromium.** WebKit sized the grid's width from a pass that
+  counted one row, so four rows of 100 wide cells gave 424 wide columns and a grid 3.4 times too long (11008 against 3232,
+  with a scroll extent that changed while scrolling). The grid now has a percentage height (`height: 100%`, definite where
+  its parent's height is), which both engines resolve to the same rows. Chromium is unchanged.
+
 ### Security fixes that change behaviour
 
 - `SecItemCopyMatching`, `SecItemUpdate` and `SecItemDelete` return `errSecParam` for a query without `kSecClass`, as
