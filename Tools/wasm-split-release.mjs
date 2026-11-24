@@ -6,6 +6,13 @@
 // (`app-rest.wasm`) downloads right after it, in the background. Tools/wasm-split-loader.js loads the second module:
 // a call that needs a function of it before it arrived waits for it, it does not fail.
 //
+//   0. Where the placeholders go. Binaryen puts them in a table of their own when the module has reference types, and then
+//      every moved function whose address the module's table holds gets a forwarding stub that stays on its calls. The
+//      toolchain's modules list reference-types in their target_features section only because the compiler enables it; when
+//      they validate without it, the split runs on a copy without that section (and with the section's other features
+//      enabled by flag), so the placeholders sit in the module's own table and the second module's element segments fill
+//      them. A module that needs reference types, lists a feature this script has no flag for, or has code that writes its
+//      table (a write could replace a placeholder) keeps the two-table layout.
 //   1. Binaryen's `wasm-split --instrument` writes a copy of app.wasm that records which functions run.
 //   2. A copy of the bundle with that module runs in headless Chromium, in the Worker as a page runs it by default,
 //      until its first screen is up: the app is mounted and has stopped committing (400 ms without a commit), at every
@@ -95,6 +102,105 @@ function binaryenVersion() {
   return (result.stdout || result.stderr || "unknown").trim();
 }
 
+// Binaryen's flag for each feature name the toolchain writes in the target_features section. Binaryen's reader enables every
+// feature of that section after the command-line flags, so a split without reference types needs the section gone and
+// every other feature enabled here (--mvp-features turns the defaults off, reference types among them).
+export const FEATURE_FLAGS = {
+  "mutable-globals": "--enable-mutable-globals",
+  "nontrapping-fptoint": "--enable-nontrapping-float-to-int",
+  "sign-ext": "--enable-sign-ext",
+  "bulk-memory": "--enable-bulk-memory",
+  "bulk-memory-opt": "--enable-bulk-memory-opt",
+  "multivalue": "--enable-multivalue",
+  "call-indirect-overlong": "--enable-call-indirect-overlong",
+  "simd128": "--enable-simd",
+  "tail-call": "--enable-tail-call",
+  "extended-const": "--enable-extended-const",
+  "exception-handling": "--enable-exception-handling",
+  "atomics": "--enable-threads",
+  "multimemory": "--enable-multimemory",
+  "relaxed-simd": "--enable-relaxed-simd",
+};
+const REFERENCE_TYPES = "reference-types";
+
+/**
+ * The module's target_features custom section: where it sits (`start` is the section id byte, `end` the byte after its
+ * payload) and the features it enables. Null for bytes that are not a module or have no such section.
+ */
+export function readTargetFeatures(bytes) {
+  if (bytes.length < 8 || bytes[0] !== 0 || bytes[1] !== 0x61 || bytes[2] !== 0x73 || bytes[3] !== 0x6d) return null;
+  let at = 8;
+  const leb = () => { let value = 0, shift = 0, byte; do { if (at >= bytes.length) throw new RangeError("truncated module"); byte = bytes[at++]; value += (byte & 0x7f) * 2 ** shift; shift += 7; } while (byte & 0x80); return value; };
+  const text = (length) => { const name = new TextDecoder().decode(bytes.subarray(at, at + length)); at += length; return name; };
+  try {
+    while (at < bytes.length) {
+      const start = at, id = bytes[at++], size = leb(), end = at + size;
+      if (end > bytes.length) return null;
+      if (id === 0 && text(leb()) === "target_features") {
+        const features = [];
+        for (let count = leb(); count > 0; count--) {
+          const prefix = String.fromCharCode(bytes[at++]);
+          features.push({ prefix, name: text(leb()) });
+        }
+        // Only an enabled feature ('+', or '=' for one the module requires) counts: '-' lists one it avoids.
+        return { start, end, features: features.filter(({ prefix }) => prefix !== "-").map(({ name }) => name) };
+      }
+      at = end;
+    }
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error;
+  }
+  return null;
+}
+
+/** The module without its target_features section; every other byte is as it was. Bytes without the section are returned as they are. */
+export function withoutTargetFeatures(bytes) {
+  const section = readTargetFeatures(bytes);
+  if (!section) return bytes;
+  const copy = new Uint8Array(bytes.length - (section.end - section.start));
+  copy.set(bytes.subarray(0, section.start), 0);
+  copy.set(bytes.subarray(section.end), section.start);
+  return copy;
+}
+
+/**
+ * Whether a module can be split into its own table, judged from its features alone: `{ flags }` (what to pass to Binaryen
+ * for the copy without the section) or `{ reason }` for the two-table layout. Whether the module validates without
+ * reference types, and whether its code leaves its table alone, is checked apart, by Binaryen (`whyNotOwnTable`).
+ */
+export function planLayout(bytes) {
+  const section = readTargetFeatures(bytes);
+  if (!section) return { reason: "the module has no target_features section" };
+  if (!section.features.includes(REFERENCE_TYPES)) return { reason: "the module does not list reference types, so Binaryen keeps its default features" };
+  const others = section.features.filter((name) => name !== REFERENCE_TYPES);
+  const unknown = others.filter((name) => !Object.hasOwn(FEATURE_FLAGS, name));
+  if (unknown.length) return { reason: `no Binaryen flag is known for the feature ${unknown.join(", ")}` };
+  return { flags: ["--mvp-features", ...others.map((name) => FEATURE_FLAGS[name])] };
+}
+
+// The instructions that write a table, as `wasm-opt --metrics` names them once case and punctuation are dropped.
+// `table.set` and `table.fill` need reference types, so validation refuses them first; they are listed all the same.
+const TABLE_WRITES = { tablecopy: "table.copy", tableinit: "table.init", tableset: "table.set", tablefill: "table.fill" };
+
+/**
+ * Why a module cannot take the split's placeholders into its own table under exactly these flags (reference types off);
+ * null when it can. Two things rule it out. Binaryen does not accept the module without reference types. Or the module's
+ * code writes its function table: `table.copy` and `table.init` need bulk memory only, so validation lets them through,
+ * and a placeholder sits in a slot of that table. A call the split routes through the slot would follow such a write,
+ * where the unsplit module's direct call does not. One `wasm-opt` run answers both: it validates the module, and
+ * `--metrics` counts each kind of instruction.
+ */
+export function whyNotOwnTable(path, flags) {
+  const result = spawnSync("wasm-opt", [path, ...flags, "--metrics"], { encoding: "utf8" });
+  if (result.error?.code === "ENOENT") throw new Error("wasm-opt (Binaryen) is not installed: brew install binaryen (or sudo apt-get install binaryen)");
+  if (result.status !== 0) return `the module does not validate without reference types (${(result.stderr || result.stdout || "").split("\n").find((line) => line.trim()) ?? "wasm-opt failed"})`;
+  const counts = new Map([...(result.stdout ?? "").matchAll(/^\s*(\S+)\s*:\s*(\d+)\s*$/gm)].map(([, name, count]) => [name.toLowerCase().replace(/[._-]/g, ""), Number(count)]));
+  // Without the counts nothing says the table is left alone, so the layout that does not depend on it is kept.
+  if (!counts.has("[funcs]")) return "wasm-opt --metrics printed no counts, so a write to the module's table cannot be ruled out";
+  const writes = Object.keys(TABLE_WRITES).filter((name) => counts.get(name) > 0).map((name) => TABLE_WRITES[name]);
+  return writes.length ? `the module's code writes its function table (${writes.join(", ")}), where the placeholders would sit` : null;
+}
+
 /** The cache key of a split: every input the profile run and the split depend on. */
 export function cacheKey(bundle, { route, viewports }) {
   const hash = createHash("sha256");
@@ -103,7 +209,10 @@ export function cacheKey(bundle, { route, viewports }) {
   for (const name of PAGE_FILES) if (existsSync(join(bundle, name))) add(name, readFileSync(join(bundle, name)));
   add("script", readFileSync(SPLIT_SOURCE));
   add("binaryen", binaryenVersion());
-  add("settings", JSON.stringify({ route, viewports, namespaces: [PLACEHOLDER_NAMESPACE, PRIMARY_NAMESPACE] }));
+  // The layout follows from the module's bytes and Binaryen's version, both hashed above; its flags are hashed too, so a
+  // change in how they are chosen cannot match an entry made under another layout.
+  const plan = planLayout(readFileSync(join(bundle, PRIMARY)));
+  add("settings", JSON.stringify({ route, viewports, namespaces: [PLACEHOLDER_NAMESPACE, PRIMARY_NAMESPACE], layout: plan.flags ?? null }));
   return hash.digest("hex").slice(0, 32);
 }
 
@@ -111,7 +220,7 @@ export function cacheKey(bundle, { route, viewports }) {
 function pruneCache(cacheDir) {
   const entries = readdirSync(cacheDir).filter((name) => name.endsWith(".rest.wasm")).map((name) => name.slice(0, -".rest.wasm".length));
   const byAge = entries.map((key) => ({ key, time: statSync(join(cacheDir, `${key}.rest.wasm`)).mtimeMs })).sort((a, b) => b.time - a.time);
-  for (const { key } of byAge.slice(8)) for (const suffix of [".app.wasm", ".rest.wasm", ".prof"]) rmSync(join(cacheDir, key + suffix), { force: true });
+  for (const { key } of byAge.slice(8)) for (const suffix of [".app.wasm", ".rest.wasm", ".prof", ".layout"]) rmSync(join(cacheDir, key + suffix), { force: true });
 }
 
 function run(command, args) {
@@ -236,8 +345,11 @@ const sizes = (input, primary, secondary) => ({
   first: { raw: statSync(primary).size, br: brotliSize(primary) },
   rest: { raw: statSync(secondary).size, br: brotliSize(secondary) },
 });
-const report = ({ before, first, rest }, log, how = "") =>
-  log(`wasm split${how}: ${PRIMARY} ${kb(first.raw)} (${kb(first.br)} br) before the first screen, ${SECONDARY} ${kb(rest.raw)} (${kb(rest.br)} br) after it; unsplit ${kb(before.raw)} (${kb(before.br)} br)`);
+const report = ({ before, first, rest, layout }, log, how = "") =>
+  log(`wasm split${how}: ${PRIMARY} ${kb(first.raw)} (${kb(first.br)} br) before the first screen, ${SECONDARY} ${kb(rest.raw)} (${kb(rest.br)} br) after it; unsplit ${kb(before.raw)} (${kb(before.br)} br)${layout ? `; ${layout}` : ""}`);
+
+const SINGLE_TABLE = "placeholders in the module's own table";
+const twoTables = (reason) => `two-table layout (${reason})`;
 
 export async function splitBundle(bundle, { route = "/", viewports = parseViewports("1280x800,390x844"), logDir = null, verify = true, cacheDir = null, log = console.log } = {}) {
   const input = join(bundle, PRIMARY);
@@ -245,9 +357,10 @@ export async function splitBundle(bundle, { route = "/", viewports = parseViewpo
   if (existsSync(join(bundle, SECONDARY))) throw new Error(`${bundle} is split already`);
   // A build whose inputs did not change takes the split an earlier build made, and runs no browser.
   const key = cacheDir ? cacheKey(bundle, { route, viewports }) : null;
-  const cached = key ? { primary: join(cacheDir, `${key}.app.wasm`), secondary: join(cacheDir, `${key}.rest.wasm`), profile: join(cacheDir, `${key}.prof`) } : null;
+  const cached = key ? { primary: join(cacheDir, `${key}.app.wasm`), secondary: join(cacheDir, `${key}.rest.wasm`), profile: join(cacheDir, `${key}.prof`), layout: join(cacheDir, `${key}.layout`) } : null;
   if (cached && existsSync(cached.primary) && existsSync(cached.secondary)) {
-    const measured = sizes(input, cached.primary, cached.secondary);
+    const layout = existsSync(cached.layout) ? readFileSync(cached.layout, "utf8") : null;
+    const measured = { ...sizes(input, cached.primary, cached.secondary), layout };
     cpSync(cached.primary, input);
     cpSync(cached.secondary, join(bundle, SECONDARY));
     const now = new Date();
@@ -259,9 +372,20 @@ export async function splitBundle(bundle, { route = "/", viewports = parseViewpo
   const { launch, serveBundle } = await import("./browser-test-support.mjs");
   const work = mkdtempSync(join(tmpdir(), "swiftuiweb-wasm-split-"));
   try {
+    // 0. The layout, decided before profiling. The copy that is instrumented is the copy that is split, with the same flags:
+    // the profile carries the checksum of the module it was made for.
+    let source = input, flags = [], why = null;
+    const plan = planLayout(readFileSync(input));
+    if (plan.flags) {
+      const stripped = join(work, "without-reference-types.wasm");
+      writeFileSync(stripped, withoutTargetFeatures(readFileSync(input)));
+      why = whyNotOwnTable(stripped, plan.flags);
+      if (!why) { source = stripped; flags = plan.flags; }
+    } else why = plan.reason;
+    const layout = source === input ? twoTables(why) : SINGLE_TABLE;
     // 1. The instrumented module, in a copy of the bundle whose scripts keep its instance reachable.
     const profiled = servableCopy(bundle, join(work, "profiled"));
-    run("wasm-split", ["--instrument", input, "-o", join(profiled, PRIMARY)]);
+    run("wasm-split", ["--instrument", source, "-o", join(profiled, PRIMARY), ...flags]);
     for (const script of ["render-worker.js", "index.js"]) {
       const path = join(profiled, script);
       if (existsSync(path)) writeFileSync(path, PROFILE_HOOK + readFileSync(path, "utf8"));
@@ -287,15 +411,15 @@ export async function splitBundle(bundle, { route = "/", viewports = parseViewpo
       if (profiles.length === 1) cpSync(profiles[0], profile);
       else run("wasm-split", ["--merge-profiles", ...profiles, "-o", profile]);
       const primary = join(work, PRIMARY), secondary = join(work, SECONDARY);
-      run("wasm-split", ["--split", input, "--profile", profile, "-o1", primary, "-o2", secondary,
-        "--placeholder-namespace", PLACEHOLDER_NAMESPACE, "--import-namespace", PRIMARY_NAMESPACE, "--strip-debug"]);
+      run("wasm-split", ["--split", source, "--profile", profile, "-o1", primary, "-o2", secondary,
+        "--placeholder-namespace", PLACEHOLDER_NAMESPACE, "--import-namespace", PRIMARY_NAMESPACE, "--strip-debug", ...flags]);
       if (logDir) {
         mkdirSync(logDir, { recursive: true });
         cpSync(profile, join(logDir, "first-screen.prof"));
       }
       const moved = ownMutableGlobals(readFileSync(secondary));
       if (moved > 0) throw new Error(`wasm-split moved ${moved} mutable global(s) into ${SECONDARY}; a move from the Worker to the main thread would start them over, so this module cannot be split`);
-      const measured = sizes(input, primary, secondary);
+      const measured = { ...sizes(input, primary, secondary), layout };
       // 4. The split bundle still starts. It is checked in a copy, so the bundle itself only ever holds a split that passed.
       if (verify) {
         const checked = servableCopy(bundle, join(work, "split"));
@@ -315,7 +439,8 @@ export async function splitBundle(bundle, { route = "/", viewports = parseViewpo
       cpSync(secondary, join(bundle, SECONDARY));
       if (cached) {
         mkdirSync(cacheDir, { recursive: true });
-        for (const [from, to] of [[profile, cached.profile], [primary, cached.primary], [secondary, cached.secondary]]) {
+        writeFileSync(join(work, "layout.txt"), layout);
+        for (const [from, to] of [[join(work, "layout.txt"), cached.layout], [profile, cached.profile], [primary, cached.primary], [secondary, cached.secondary]]) {
           cpSync(from, `${to}.${process.pid}`);
           // The rest goes last: a split is in the cache once its second module is.
           cpSync(`${to}.${process.pid}`, to);
