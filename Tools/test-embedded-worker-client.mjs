@@ -318,8 +318,8 @@ await bootFailure(w => w.onmessage({ data: { t: "error", message: "Embedded brow
   mark = posted.length;
   api.embedded_browser_viewport(990, 800, 0, 0);
   api.embedded_browser_viewport(980, 800, 0, 0);
-  api.embedded_browser_lazy_window(0, 0, 10, 0, 100);
-  api.embedded_browser_lazy_window(0, 5, 10, 50, 50);
+  api.embedded_browser_lazy_window(0, 0, 10, 0, 100, 4, 30);
+  api.embedded_browser_lazy_window(0, 5, 10, 50, 50, 4, 30);
   named(7, "geometry", "1");
   named(7, "geometry", "2");
   api.embedded_browser_batch_begin();
@@ -335,7 +335,7 @@ await bootFailure(w => w.onmessage({ data: { t: "error", message: "Embedded brow
   assert.deepEqual(sent(mark), [], "the worker has not run the acknowledgement yet");
   coalescingWorker.onmessage({ data: { t: "ack", calls: 2 } });
   assert.deepEqual(sent(mark), [
-    "batch_begin", "viewport:980,800,0,0", "lazy_window:0,5,10,50,50", "dispatch_named:7:geometry2",
+    "batch_begin", "viewport:980,800,0,0", "lazy_window:0,5,10,50,50,4,30", "dispatch_named:7:geometry2",
     "dispatch_named:8:layoutproposal300,", "dispatch_named:6:scrollGeometry0,4", "batch_end"
   ], "once it caught up the newest value of each goes out, all in one batch");
 

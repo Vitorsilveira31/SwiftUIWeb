@@ -309,6 +309,9 @@ package final class Fiber {
   /// The rows this lazy owner last materialized, with the collection revision and count they were rendered from and
   /// the keys of the rows.
   package var _lazyWindow: (revision: UInt64, lower: Int, upper: Int, count: Int, before: Double, keys: [_FiberKey])?
+  /// What the host laid out of this lazy owner, when it reported it: how many cells make a row (an adaptive grid's columns are
+  /// not known here) and the average extent of a row along the scrolling axis. The better estimate for the cells it has not shown.
+  package var _lazyHostMeasure: (lanes: Int, rowExtent: Double)?
 
   /// Epoch of the last change to this fiber or anything below it. A browser
   /// host that publishes the tree compares it with the last epoch the DOM
@@ -2463,24 +2466,25 @@ package final class FiberTree {
   /// Re-renders rows materialized under an older revision of their collection against the current one, clamped to its
   /// count, so a publication never shows rows of the previous data (a filtered list that keeps the rows that no longer
   /// match until the host asks for the window). When the old window reached the end of the old data and the collection
-  /// grew, the window extends to `growTo` rows (lanes times rows) so the new rows appear in the same publication.
+  /// grew, the window extends to `growTo` rows (lanes times rows) so the new rows appear in the same publication. `growTo`
+  /// receives the extent of a row: the one the host measured when it reported one, the collection's estimate otherwise.
   /// A window whose range and row keys are unchanged is rendered again as well: the collection was evaluated again
   /// because something its rows read changed (a selection, a favorite), and the host's next window request would find its
   /// rows "materialized from the current data" and keep them. Rows that compare their inputs and found them unchanged
   /// are reused, and what reconciles to the same nodes publishes nothing. Returns whether any collection was refreshed.
-  @discardableResult package func _refreshStaleLazyWindows(growTo freshRows: (_LazyCollectionDescriptor) -> Int) -> Bool {
+  @discardableResult package func _refreshStaleLazyWindows(growTo freshRows: (_LazyCollectionDescriptor, Double) -> Int) -> Bool {
     var refreshed = false
     for info in _lazyCollections() {
       guard let owner = fiber(at: info.ownerIdentity), let window = owner._lazyWindow else { continue }
       let descriptor = info.descriptor
       guard window.revision != descriptor.revision else { continue }
-      let lanes = max(1, descriptor.laneCount)
-      let extent = descriptor.estimatedExtent
+      let lanes = owner._lazyHostMeasure?.lanes ?? max(1, descriptor.laneCount)
+      let extent = owner._lazyHostMeasure?.rowExtent ?? descriptor.estimatedExtent
       let lower = min(window.lower, descriptor.count)
       var upper = min(descriptor.count, window.upper)
       if window.upper >= window.count, descriptor.count > window.count {
         // The host's row count comes from outside: an overflowing product or sum clamps to the collection's count.
-        let (grownRows, rowsOverflow) = freshRows(descriptor).multipliedReportingOverflow(by: lanes)
+        let (grownRows, rowsOverflow) = freshRows(descriptor, extent).multipliedReportingOverflow(by: lanes)
         let (grownUpper, upperOverflow) = lower.addingReportingOverflow(grownRows)
         let target = rowsOverflow || upperOverflow ? descriptor.count : grownUpper
         upper = min(descriptor.count, max(upper, target))

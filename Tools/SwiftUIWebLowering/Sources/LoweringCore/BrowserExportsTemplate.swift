@@ -81,7 +81,7 @@ enum BrowserExportsTemplate {
 @MainActor public func swiftuiwebEmbeddedBrowserLazyEstimatedExtent(_ collection: UInt32) -> Double { BrowserAppLauncher.embeddedBrowserLazyEstimatedExtent(collection) }
 
 @_cdecl("embedded_browser_lazy_window")
-@MainActor public func swiftuiwebEmbeddedBrowserLazyWindow(_ collection: UInt32, _ start: UInt32, _ count: UInt32, _ before: Double, _ after: Double) { BrowserAppLauncher.embeddedBrowserLazyWindow(collection, start: start, count: count, before: before, after: after) }
+@MainActor public func swiftuiwebEmbeddedBrowserLazyWindow(_ collection: UInt32, _ start: UInt32, _ count: UInt32, _ before: Double, _ after: Double, _ lanes: UInt32, _ row: Double) { BrowserAppLauncher.embeddedBrowserLazyWindow(collection, start: start, count: count, before: before, after: after, lanes: lanes, row: row) }
 
 @_cdecl("embedded_browser_webmount_reconcile")
 @MainActor public func swiftuiwebEmbeddedBrowserWebMountReconcile() { BrowserAppLauncher.embeddedBrowserWebMountReconcile() }
