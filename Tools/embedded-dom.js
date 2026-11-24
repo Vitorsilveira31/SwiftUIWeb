@@ -2097,6 +2097,17 @@ export function mountEmbeddedBrowser(instance, options = {}) {
     }
   }
 
+  // How many cells make one row of a lazy grid: the tracks the browser laid out across the scrolling axis. Swift knows only the
+  // columns it declared, and an adaptive column (`GridItem(.adaptive(minimum:))`) is one of them however many fit, so a cell
+  // measured as a row made the spacer for the rows outside the window several times too tall. `declared` stands when the
+  // container is not a grid.
+  function lazyLaneCount(container, horizontal, declared) {
+    const style = getComputedStyle(container);
+    if (style.display !== 'grid') return declared;
+    const tracks = (horizontal ? style.gridTemplateRows : style.gridTemplateColumns).split(/\s+/).filter(track => /^[\d.]/.test(track)).length;
+    return tracks > 0 ? tracks : declared;
+  }
+
   function syncLazyCollections() {
     if (typeof api.lazy_window !== 'function' || typeof api.lazy_collection_count !== 'function' || !markerSeen('lazy')) return;
     lazyEpoch = visibilityEpoch;
@@ -2110,11 +2121,11 @@ export function mountEmbeddedBrowser(instance, options = {}) {
       let state=lazyStates.get(index);
       // The axis Swift windows the collection on (its container may be a plain stack inside the lazy one).
       const horizontal=container.getAttribute('data-keep-lazy-axis')==='horizontal';
-      const lanes=Math.max(1,Number(container.getAttribute('data-keep-lazy-lanes'))||1);
+      const declared=Math.max(1,Number(container.getAttribute('data-keep-lazy-lanes'))||1);
       const host=container.closest('.scroll-view') || document.scrollingElement || document.documentElement;
-      if (!state || state.host!==host || state.container!==container || state.lanes!==lanes || state.horizontal!==horizontal) {
+      if (!state || state.host!==host || state.container!==container || state.declared!==declared || state.horizontal!==horizontal) {
         state?.controller?.abort();
-        const controller=new window.AbortController(); state={host,container,controller,lanes,horizontal,start:-1,count:-1,total:-1,before:-1,after:-1,measuredTotal:0,rowExtents:new RowExtents(),rows:null,lastOffset:undefined,direction:1,pending:false,measureNeeded:true,gap:0}; lazyStates.set(index,state);
+        const controller=new window.AbortController(); state={host,container,controller,declared,lanes:declared,horizontal,start:-1,count:-1,total:-1,before:-1,after:-1,measuredTotal:0,rowExtents:new RowExtents(),rows:null,lastOffset:undefined,direction:1,pending:false,measureNeeded:true,gap:0}; lazyStates.set(index,state);
         // Cells are measured only after something could have resized them: a commit, a window
         // resize, or the container changing size (an image that loaded). A scroll alone moves
         // them, so it reuses the extents already measured.
@@ -2142,6 +2153,9 @@ export function mountEmbeddedBrowser(instance, options = {}) {
             // average of the measured ones (the framework estimate only until the first
             // measurement). Spacers then add up to the real content height, so scrolling does
             // not change the document height when rows enter or leave the window.
+            // The rows are measured again when the grid gains or loses a column (the window resized).
+            const lanes=lazyLaneCount(container,horizontal,declared);
+            if (lanes!==state.lanes) { state.lanes=lanes; state.rowExtents.clear(); state.rows=null; state.measureNeeded=true; }
             const rowsTotal=Math.ceil(total/lanes), rowExtents=state.rowExtents;
             if (total<state.measuredTotal) { rowExtents.clear(); state.rows=null; state.measureNeeded=true; } state.measuredTotal=total;
             if (state.measureNeeded) {
@@ -2187,10 +2201,13 @@ export function mountEmbeddedBrowser(instance, options = {}) {
             let after=offsetOf(rowsTotal)-offsetOf(endRow);
             const start=Math.min(total,startRow*lanes), end=Math.min(total,endRow*lanes), count=Math.max(0,end-start);
             before=Math.round(before); after=Math.round(after);
-            if (start===state.start && count===state.count && total===state.total && revision===state.revision && before===state.before && after===state.after) return;
-            state.start=start; state.count=count; state.total=total; state.revision=revision; state.before=before; state.after=after;
+            // What the page laid out, which Swift sizes the cells it has not shown by until the next window: the cells in a row and a
+            // row's average extent (0 before any row is measured).
+            const row=rowExtents.size?Math.round(average):0;
+            if (start===state.start && count===state.count && total===state.total && revision===state.revision && before===state.before && after===state.after && row===state.row && lanes===state.reportedLanes) return;
+            state.start=start; state.count=count; state.total=total; state.revision=revision; state.before=before; state.after=after; state.row=row; state.reportedLanes=lanes;
             if (performanceDiagnostics) (window.__dispatchLog ||= []).push('lazy_window:'+index+':'+start+':'+count);
-            api.lazy_window(index,start,count,before,after); schedule();
+            api.lazy_window(index,start,count,before,after,lanes,row); schedule();
           }
         };
         const onScroll=()=>{ run(); };
