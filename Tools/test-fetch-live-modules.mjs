@@ -106,13 +106,16 @@ describe("fetch-live-modules", () => {
   });
 
   test("the page's <base href> is the base its references resolve against, as in a browser", async () => {
-    const origin = serve({
-      "/en/purpose": `<html><base href="/"><link rel="preload" href="./${appName}"></html>`,
-      [`/${appName}`]: appBytes,
-    });
-    const outcome = await fetchLiveModules(`${origin}/en/purpose`, scratch());
-    expect(outcome.dropped).toEqual([]);
-    expect(outcome.kept.map((item) => item.path)).toEqual([appName]);
+    // Quoted with either mark, or unquoted, as HTML allows.
+    for (const base of [`<base href="/">`, `<base href='/'>`, `<base href=/>`, `<base target=_self href=/ >`]) {
+      const origin = serve({
+        "/en/purpose": `<html>${base}<link rel="preload" href="./${appName}"></html>`,
+        [`/${appName}`]: appBytes,
+      });
+      const outcome = await fetchLiveModules(`${origin}/en/purpose`, scratch());
+      expect(outcome.dropped).toEqual([]);
+      expect(outcome.kept.map((item) => item.path)).toEqual([appName]);
+    }
   });
 
   test("a module named in a script is resolved against the script's address, and kept under its path from the origin root", async () => {

@@ -62,7 +62,9 @@ export function resolveReference(reference, fileURL) {
  * the page's address, or the address when there is none.
  */
 export function documentBase(html, pageURL) {
-  const href = /<base\s[^>]*?\bhref\s*=\s*(["'])(.*?)\1/i.exec(html)?.[2];
+  // The value may be quoted with either mark or, as HTML allows, unquoted (up to a space or the end of the tag).
+  const match = /<base\s[^>]*?\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i.exec(html);
+  const href = match ? (match[1] ?? match[2] ?? match[3]) : undefined;
   return (href !== undefined && resolveReference(href, pageURL)) || pageURL;
 }
 
