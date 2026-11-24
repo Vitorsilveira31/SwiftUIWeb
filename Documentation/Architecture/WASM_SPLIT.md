@@ -35,16 +35,38 @@ build → strip + wasm-opt → … → scope-resize-transitions → wasm-split �
    memory only, and that global would start over (a Swift module's only mutable global is its stack pointer, which stays in
    `app.wasm`).
 
+Which table holds the placeholders depends on the module's features. When it has reference types, Binaryen adds a second
+table for them, and every moved function whose address the module's own table holds gets a trampoline in `app.wasm` (a
+function that only does `call_indirect` through the new table) that stays on every call to it for the life of the page.
+Without reference types it reuses the module's own table and writes no trampoline. The toolchain lists `reference-types` in the
+`target_features` section of its modules because the compiler enables it, not because the code uses it, and Binaryen's reader
+enables every feature of that section after the command-line flags. So the step reads that section first and, when the module
+validates without the feature, splits a copy of the module without the section (every other byte as it is), with
+`--mvp-features` and an `--enable-…` flag for each other feature the section lists (`FEATURE_FLAGS` in
+`Tools/wasm-split-release.mjs` maps the names). The same copy and flags serve `--instrument` and `--split`, because the profile
+carries the checksum of the module it was made for. The module is not rewritten through `wasm-opt`.
+
+The two-table layout is kept, and the build's `wasm split:` line says so with the reason, when the module has no
+`target_features` section or does not list reference types, lists a feature that has no flag in that table, does not
+validate without reference types, or has code that writes its function table. `table.copy` and `table.init` need bulk
+memory only, so validation alone lets them through; a placeholder sits in a slot of that table, and a call the split routed
+through the slot would follow such a write, where the unsplit module's direct call does not. One `wasm-opt` run before the
+profile run checks both: it validates the copy and counts its instructions (`--metrics`). That layout costs the trampolines in
+`app.wasm`, a table of its own and an extra indirection on calls to moved functions. The single-table layout costs
+`app-rest.wasm` the element segments that fill the placeholders' slots, which the two-table layout does not need to the
+same degree. The split of a module is cached with its layout, and the flags are part of the cache key.
+
 The profile belongs to the exact binary, so it is taken again on each build (a few seconds). It is kept in the build logs
 (`.build/browser-logs/<Product>/first-screen.prof`).
 
 ## 2. How it loads
 
-Binaryen leaves, in `app.wasm`, an import for each function it moved (namespace `p.deferred`, named by the function's slot
-in a table that wasm-split adds for them next to the indirect function table, since the release module has reference
-types), and calls a moved function through its table slot. `app-rest.wasm` imports the first module's
-memory, table, globals and the functions it calls (namespace `primary`), and its element segment writes the real functions into
-those slots when it is instantiated. `Tools/wasm-split-loader.js` provides the placeholders and instantiates the second module;
+Binaryen leaves, in `app.wasm`, a placeholder import for each table slot of a function it moved (namespace `p.deferred`,
+named by the slot), and a call to a moved function goes through its slot. By default those slots are the moved functions'
+own slots in the module's indirect function table: the placeholder sits where the function was, and a direct call from the
+first module to a moved function becomes an indirect call through the function's slot.
+`app-rest.wasm` imports the first module's memory, table, globals and the functions it calls (namespace `primary`), and its
+element segments write the real functions into those slots when it is instantiated. `Tools/wasm-split-loader.js` provides the placeholders and instantiates the second module;
 a module without placeholder imports is not split, and nothing of it runs.
 
 - **In the Worker** (the default runtime): the module starts with the placeholders. Once the first screen is published, the
@@ -71,20 +93,23 @@ is a same-origin fetch and compiles under the `'wasm-unsafe-eval'` the page alre
 
 ## 3. Measured
 
-Measured on 2026-11-16 (main at dbc7cb8f) on an Apple-silicon Mac shared with other work, Chromium, brotli sizes
-(quality 11). Sizes are deterministic; the timings are medians of interleaved runs (the split and the unsplit bundle
-alternate, each in a fresh browser), with the 99 percent bootstrap interval and signed-rank test of
-`Tools/perf-ab-stats.mjs`.
+The module sizes were measured on 2026-11-23, with the placeholders in the module's own table (brotli, quality 11); they are
+deterministic. The Board's cold load and the timings below were measured on 2026-11-16 (main at dbc7cb8f), with the
+placeholders in a table of their own, on an Apple-silicon Mac shared with other work, in Chromium: the timings are medians of
+interleaved runs (the split and the unsplit bundle alternate, each in a fresh browser), with the 99 percent bootstrap interval
+and signed-rank test of `Tools/perf-ab-stats.mjs`.
 
 | Module sizes (brotli) | Unsplit `app.wasm` | `app.wasm` (first screen) | `app-rest.wasm` | Total |
 |---|---|---|---|---|
-| Board | 378.8 KB | 226.5 KB (−40%) | 187.3 KB | 413.8 KB (+9%) |
-| Showcase | 895.8 KB | 344.3 KB (−62%) | 641.5 KB | 985.8 KB (+10%) |
-| Project site | 751.3 KB | 493.0 KB (−34%) | 340.5 KB | 833.5 KB (+11%) |
+| Board | 235.1 KB | 152.2 KB (−35%) | 106.2 KB | 258.3 KB (+10%) |
+| Showcase | 699.2 KB | 241.1 KB (−66%) | 522.0 KB | 763.1 KB (+9%) |
+| Project site | 550.3 KB | 379.1 KB (−31%) | 230.4 KB | 609.5 KB (+11%) |
 
-The total grows by the placeholders (one import per moved function), the exports the second module needs, the calls of the
-first module to a moved function, which go through a table, and the two halves being compressed apart (about 15 KB of the
-Board's 35 KB).
+The total grows by the placeholders (one import for each table slot of a moved function), the exports the second module needs,
+the element segments of the second module that fill the placeholders' slots, the calls of the first module to a moved function,
+which go through a table, and the two halves being compressed apart. Where the placeholders sit moves bytes between the two
+modules: on a large application the first module is 404,603 B with them in the module's own table and 430,450 B with a table
+of their own (19 trampolines against 10,907), and the second module 1,119,675 B against 1,104,299 B.
 
 Board, cold load (Worker, the default):
 
@@ -119,6 +144,9 @@ not the download competing with the first screen. Every interaction of `Tools/co
 - What the first screen did not run waits for `app-rest.wasm` when it is first needed: on the Board, the search's filter is
   in it, so a key typed under Slow 4G at the moment the board shows waits about a second for the download to finish. A call
   waits on the Worker; the page itself (the field's text, scrolling) does not.
-- The total is larger than one module (the moved functions' exports and placeholders, and two compressed streams).
+- The total is larger than one module (the moved functions' exports and placeholders, the second module's element segments,
+  and two compressed streams).
+- A module that needs reference types, lists a feature `FEATURE_FLAGS` does not know, or has code that writes its function
+  table keeps the two-table layout and the trampolines it brings.
 - A call that waits for `app-rest.wasm` while the background download is still on its way makes a second request for it;
   Chromium serves that one from the first (its `transferSize` is 0 on the Board), so no byte comes twice there.

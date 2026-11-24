@@ -729,9 +729,9 @@ private let _embeddedHoverLearningDelay = 0.25
   if _embeddedMaterializeFreshLazyCollections(tree) { _ = tree.renderNode }
   // Rows materialized before the data changed are rendered again here, so the first publication after the change shows
   // the current rows instead of the previous data's until the host asks for the window.
-  if tree._refreshStaleLazyWindows(growTo: { descriptor in
+  if tree._refreshStaleLazyWindows(growTo: { descriptor, extent in
     guard descriptor.axis == .vertical, _embeddedViewportHeight > 0 else { return 0 }
-    return _embeddedViewportRows(height: _embeddedViewportHeight, extent: max(1, descriptor.estimatedExtent))
+    return _embeddedViewportRows(height: _embeddedViewportHeight, extent: max(1, extent))
   }) { _ = tree.renderNode }
   for (index, info) in tree._lazyCollections().enumerated() {
     _embeddedBrowserLazyIDs[info.containerIdentity] = (index, max(1, info.descriptor.laneCount), info.descriptor.revision, info.descriptor.axis)
@@ -1342,9 +1342,11 @@ public extension BrowserAppLauncher {
     guard let tree = _embeddedBrowserTree else { return 44 }; let infos = tree._lazyCollections(); let index = Int(collection)
     guard infos.indices.contains(index) else { return 44 }; return infos[index].descriptor.estimatedExtent
   }
-  static func embeddedBrowserLazyWindow(_ collection: UInt32, start: UInt32, count: UInt32, before: Double, after: Double) {
+  /// `lanes` and `row` are what the page laid out: the cells in a row and a row's average extent (0 before it measured any).
+  static func embeddedBrowserLazyWindow(_ collection: UInt32, start: UInt32, count: UInt32, before: Double, after: Double, lanes: UInt32, row: Double) {
     guard let tree = _embeddedBrowserTree else { return }; let infos = tree._lazyCollections(); let ci = Int(collection)
     guard infos.indices.contains(ci) else { return }; let info = infos[ci], lower = min(Int(start), info.descriptor.count), upper = min(info.descriptor.count, lower + Int(count))
+    tree.fiber(at: info.ownerIdentity)?._lazyHostMeasure = lanes > 0 && row.isFinite && row > 0 ? (lanes: Int(lanes), rowExtent: row, declaredLanes: info.descriptor.laneCount) : nil
     _ = tree._materializeLazyCollection(ownerIdentity: info.ownerIdentity, indices: Array(lower..<upper), beforeExtent: max(0, before), afterExtent: max(0, after))
     // The host asks for the window again after every commit that touches the collection. When the rows it
     // materializes are the ones already published, nothing in the tree changed in this epoch; publishing anyway

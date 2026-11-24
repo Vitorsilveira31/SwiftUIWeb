@@ -136,7 +136,7 @@ struct StructuralArenaSyncTests {
     let before = reachableIDs(tree)
     tree.dispatch(event: "click")
     _ = tree.renderNode
-    #expect(tree._refreshStaleLazyWindows(growTo: { _ in 0 }))
+    #expect(tree._refreshStaleLazyWindows(growTo: { _, _ in 0 }))
     #expect(!tree.renderNode.htmlDescription.contains("Alpha"))
     expectRemovedNodesRetired(before, in: tree)
     expectArenaMatchesTree(tree)

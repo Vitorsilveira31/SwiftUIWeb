@@ -54,6 +54,17 @@ struct LazyCellStateRootView: View {
         .padding()
       }
       .tabItem { Label("Cells", systemImage: "square.grid.2x2") }.tag(1)
+      // One lazy grid of many equal cells for each kind of grid: the fixtures of `Tools/test-lazy-grid-lanes-browser.mjs`.
+      VerticalGridFixture(kind: "adaptive", columns: [GridItem(.adaptive(minimum: 140), spacing: 8)])
+        .tabItem { Label("Adaptive", systemImage: "house") }.tag(2)
+      VerticalGridFixture(kind: "mixed", columns: [GridItem(.fixed(90), spacing: 8), GridItem(.adaptive(minimum: 120), spacing: 8)])
+        .tabItem { Label("Mixed", systemImage: "house") }.tag(3)
+      VerticalGridFixture(kind: "flexible", columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3))
+        .tabItem { Label("Flexible", systemImage: "house") }.tag(4)
+      HorizontalGridFixture(kind: "across")
+        .tabItem { Label("Across", systemImage: "house") }.tag(5)
+      GrowingGridFixture(kind: "growing")
+        .tabItem { Label("Growing", systemImage: "house") }.tag(6)
     }
     .task { tab = 1 }
   }

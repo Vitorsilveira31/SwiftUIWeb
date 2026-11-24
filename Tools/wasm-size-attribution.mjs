@@ -202,7 +202,9 @@ export function addressTaken(wasmBytes) {
 // ---- Forwarding stubs of a split ----------------------------------------------------------------------------------
 
 // A forwarding stub: no locals, then only local.get, i32.const, call_indirect or return_call_indirect and end, with at
-// least one indirect call. wasm-split writes one for each moved function whose address is taken.
+// least one indirect call. With the placeholders in a table of their own (a module that has reference types),
+// wasm-split writes one for each moved function whose address the module's table holds; with them in the module's own
+// table (Tools/wasm-split-release.mjs), it writes none, apart from functions that already looked like one.
 function isForwardingStub(code, start, end) {
   let [groups, j] = leb(code, start);
   if (groups !== 0) return false;
@@ -342,7 +344,7 @@ export function printReport(report, top, out = (line) => console.log(line)) {
   }
   const a = report.addressTaken;
   out(`\naddress-taken functions (element section): ${comma(a.count)} of ${comma(report.functions)}, ${comma(a.bytes)} code bytes`);
-  if (a.notRun !== undefined) out(`  ${comma(a.notRun)} did not run on the first screen: each needs a placeholder import and a forwarding stub in a split`);
+  if (a.notRun !== undefined) out(`  ${comma(a.notRun)} did not run on the first screen: in a split each needs a placeholder import for every table slot it has, and a forwarding stub as well when the placeholders have a table of their own`);
   if (report.split) {
     const s = report.split;
     out(`\nsplit primary: forwarding stubs ${comma(s.stubs.count)} functions, ${comma(s.stubs.raw)} B raw, ${comma(s.stubs.brotli)} B brotli alone`);
