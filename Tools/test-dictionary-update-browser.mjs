@@ -23,7 +23,9 @@ import { deltaCompressBundle } from "./delta-compress-bundle.mjs";
 import { engineName, freePort, launch, runSuite, serveBundle } from "./browser-test-support.mjs";
 
 const DATA_BYTES = 300 * 1024;
-const PROBE = 1234;
+// The bytes the two versions differ in, and one of them to read back: it tells version 1's data from version 2's.
+const CHANGED = { from: 20_000, to: 20_200 };
+const PROBE = 20_100;
 const WAYS = ["page fetch + instantiateStreaming", "Worker fetch + compileStreaming", "Worker XMLHttpRequest + new WebAssembly.Module"];
 
 const leb = (value) => {
@@ -147,7 +149,6 @@ async function update(browser, way, versions, waitMs) {
     await page.goto(`${server.base}/`);
     await page.waitForFunction(() => window.ready === true);
     const first = await page.evaluate((index) => window.loadModule(index), way);
-    assert.deepEqual(first, { version: 1, peek: first.peek }, "version 1 loads");
     // The browser keeps the dictionary after the response; give it time to write it.
     await sleep(waitMs);
     const before = seen.length;
@@ -159,7 +160,7 @@ async function update(browser, way, versions, waitMs) {
     const second = await page.evaluate((index) => window.loadModule(index), way);
     assert.deepEqual(errors, [], "no page error");
     const responses = (await Promise.all(seen.slice(before))).filter((entry) => entry.url.endsWith(versions[1].file));
-    return { second, responses };
+    return { first, second, responses };
   } finally {
     await context.close();
     await server.stop();
@@ -173,7 +174,8 @@ await runSuite(async () => {
   try {
     const data = randomData(DATA_BYTES);
     const next = Buffer.from(data);
-    for (let index = 20_000; index < 20_200; index++) next[index] ^= 0x5a;
+    for (let index = CHANGED.from; index < CHANGED.to; index++) next[index] ^= 0x5a;
+    assert.notEqual(data[PROBE], next[PROBE], "the byte read back differs between the versions");
     const versions = [writeBundle(work, "v1", fixtureModule(1, data)), writeBundle(work, "v2", fixtureModule(2, next))];
     const { decisions } = await deltaCompressBundle(versions[1].directory, [versions[0].directory]);
     assert.equal(decisions.length, 1);
@@ -191,6 +193,8 @@ await runSuite(async () => {
         waited = waitMs;
         if (engine !== "chromium" || result.responses.some((entry) => entry.requestHeaders["available-dictionary"])) break;
       }
+      assert.equal(result.first.version, 1, `${WAYS[way]}: version 1 loads first`);
+      assert.equal(result.first.peek, data[PROBE], `${WAYS[way]}: version 1 has its own data`);
       assert.equal(result.second.version, 2, `${WAYS[way]}: the module is version 2`);
       assert.equal(result.second.peek, next[PROBE], `${WAYS[way]}: the module's data is version 2's`);
       assert.ok(result.responses.length >= 1, `${WAYS[way]}: the module was requested`);
