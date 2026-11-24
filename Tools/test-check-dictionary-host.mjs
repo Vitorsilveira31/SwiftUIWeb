@@ -186,13 +186,26 @@ describe("check-dictionary-host", () => {
     expect(lines.some((line) => line.includes("skipped"))).toBe(true);
   });
 
-  test("a host that says dcb and sends other bytes is WRONG, and the exit code is 1", async () => {
-    const origin = liar((path, wanted, request, headers) => new Response(dcbBody(wanted, brotliCompressSync(Buffer.from("not the module"))), { headers: { ...headers, "Content-Encoding": "dcb" } }));
+  test("a host that says dcb and sends bytes that are not a Brotli stream is WRONG, and the exit code is 1", async () => {
+    const origin = liar((path, wanted, request, headers) => new Response(dcbBody(wanted, new Uint8Array(64).fill(0xff)), { headers: { ...headers, "Content-Encoding": "dcb" } }));
     const { results, exitCode } = await checkHost(origin, earlier);
     expect(exitCode).toBe(1);
     const wrong = differenceResults(results).filter((result) => result.status === "wrong");
     expect(wrong.map((result) => result.module).sort()).toEqual([names.newApp, names.newRest].sort());
     expect(wrong[0].detail).toContain("does not decode");
+  });
+
+  test("a host that says dcb and sends a stream that decodes to another file is WRONG", async () => {
+    // Compressed against the earlier module, so it decodes; what it decodes to is not the module.
+    const origin = liar((path, wanted, request, headers) => {
+      const earlierBytes = path.includes(names.newRest) ? oldRest : oldApp;
+      return new Response(dcbBody(wanted, brotliCompressSync(Buffer.from("not the module"), { dictionary: earlierBytes })), { headers: { ...headers, "Content-Encoding": "dcb" } });
+    });
+    const { results, exitCode } = await checkHost(origin, earlier);
+    expect(exitCode).toBe(1);
+    const wrong = differenceResults(results).filter((result) => result.status === "wrong");
+    expect(wrong.length).toBe(2);
+    for (const result of wrong) expect(result.detail).toContain("the decoded bytes hash to");
   });
 
   test("a dcb body that names another dictionary is WRONG", async () => {
