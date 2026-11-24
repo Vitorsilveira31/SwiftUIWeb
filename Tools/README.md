@@ -47,6 +47,7 @@ flowchart TB
 | `release-reachability.js`, `embedded-capabilities.mjs`, `embedded-preflight.mjs` | Work out which optional features an app reaches and check the toolchain before building. |
 | `compile-assets.mjs`, `compile-strings.mjs`, `build-styles.mjs`, `inject-app-head.mjs` | Prepare asset catalogs, strings, styles and the page head. |
 | `precompress-bundle.mjs`, `hash-release-bundle.mjs`, `measure-bundle.mjs` | Compress, fingerprint and measure the release bundle. |
+| `delta-compress-bundle.mjs`, `dictionary-transport.mjs` | Write the files that update a visitor's cached wasm module by sending only the difference (`SWIFTUIWEB_PREVIOUS_BUNDLES`), and the rules a host follows to serve them. |
 | `wasm-split-release.mjs`, `wasm-split-loader.js` | Split a release app.wasm by what the first screen runs, and load the rest behind it (the release default; `SWIFTUIWEB_WASM_SPLIT=0` turns it off). |
 | `bun-server.ts`, `dev-watch.mjs`, `live-reload.mjs` | The local server and the watch/reload loop. |
 

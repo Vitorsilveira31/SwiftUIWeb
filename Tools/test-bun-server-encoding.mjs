@@ -99,7 +99,8 @@ describe("bun-server encodings and caching", () => {
     assert.equal(response.headers["content-encoding"], "br");
     assert.equal(response.headers["content-type"], "application/wasm");
     assert.equal(response.headers["cache-control"], "public, max-age=31536000, immutable");
-    assert.equal(response.headers["vary"], "Accept-Encoding");
+    // A content-hashed module also varies by the dictionary the request names (Tools/test-bun-server-dictionary.mjs).
+    assert.equal(response.headers["vary"], "Accept-Encoding, Available-Dictionary");
     assert.equal(Number(response.headers["content-length"]), response.body.length);
     assert.deepEqual(brotliDecompressSync(response.body), wasmBytes);
   });

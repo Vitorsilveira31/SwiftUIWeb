@@ -21,6 +21,7 @@ The bundle is written to `.build/browser/<Product>` (the command prints the path
 | `index.<hash>.js`, `render-worker.<hash>.js`, `runtime-shared.<hash>.js`, `runtime-deferred.<hash>.js`, `feature-loader.<hash>.js` | The JavaScript host that runs the WebAssembly in a Web Worker and applies its updates to the DOM (`runtime-shared` holds the modules the page and the worker both use; `runtime-deferred` the page hosts the first screen does not run, loaded right after it) |
 | `styles.<hash>.css` | The framework's stylesheet, with your `Resources/app.css` |
 | `*.br`, `*.gz` | Brotli (quality 11) and gzip (level 9) copies of every text and `.wasm` file of at least 1 KB, for the host to send as they are: see [Serve the precompressed copies](#serve-the-precompressed-copies) |
+| `*.dcb` | Only with `SWIFTUIWEB_PREVIOUS_BUNDLES`: the difference between a module and an earlier one, for returning visitors: see [Update by difference](#update-by-difference). Hosts that cannot choose by request header leave them out |
 
 Every file except `index.html` has a content hash in its name, so it can be cached forever. Build logs are kept next to
 the bundles, in `.build/browser-logs/<Product>`, and are not part of what you upload.
@@ -89,6 +90,80 @@ does the project site's Worker (below).
 - **Other hosts and CDNs.** Check whether the host can send an uploaded precompressed file with `Content-Encoding` (some
   call it "precompressed" or "static compression"). If it can only compress on the fly, upload the plain files and let it
   compress; the app works either way, it only downloads more.
+
+### Update by difference
+
+A visitor who comes back after a deploy has the previous `app.<hash>.wasm` in the browser's cache, and the new one is
+mostly the same bytes. With HTTP Compression Dictionary Transport ([RFC 9842](https://www.rfc-editor.org/rfc/rfc9842))
+the host sends only what changed: the earlier module is the dictionary, and the browser decodes the answer before
+`fetch`, `XMLHttpRequest` and `WebAssembly.compileStreaming` see it, so the page and the app change nothing. It is for
+apps that deploy often and have returning visitors, on a host that can choose its answer by request header. Measured on
+2026-11-23 on the Board example's release build, between two builds that differ by a small source change, in Chromium
+against `Tools/bun-server.ts`: the two modules take 27,822 bytes on the wire instead of 264,532 (their `.br` copies).
+
+**Build.** Keep the modules of the build that is live, then name them when you build the next one. The variable takes
+directories separated by `:` (absolute paths): an earlier bundle, or a folder with only its `.wasm` files.
+
+```sh
+cp -R .build/browser/<Product> /srv/previous/1.4          # before the next build replaces it
+SWIFTUIWEB_PREVIOUS_BUNDLES=/srv/previous/1.4:/srv/previous/1.3 ./swiftweb build
+```
+
+The framework's own launcher (`Tools/run-browser.sh`, `make run`) reads the same variable on a release build, and
+`bun Tools/delta-compress-bundle.mjs --bundle <bundle> --previous <directory>`, from the framework's checkout, runs the
+step on a bundle that already exists.
+
+For each `app.<hash>.wasm` (and `app-rest.<hash>.wasm`) of the bundle and each earlier module with the same name and other
+bytes, the step writes `<module>.<64 hex digits>.dcb` next to the module, where the digits are the SHA-256 of the earlier
+module. A file is kept only when it is at least 10 % smaller than the module's `.br` copy; the step prints one line per
+decision and deletes the files an earlier run left. Name as many earlier builds as visitors may still have, one file each.
+It runs after the precompressed copies, with Bun's own Brotli: no extra program is needed.
+
+**What the host does.** For a request whose path is a content-hashed module (`<stem>.<8 hex>.wasm`):
+
+- Every response for it, whole or difference, carries `Use-As-Dictionary: match="/<directory>/<stem>.*.wasm"` (the path with
+  the hash replaced by `*`, so `app.*.wasm` does not match `app-rest.<hash>.wasm`) and `Vary: Accept-Encoding,
+  Available-Dictionary`. The pattern has to be one a URL pattern reads literally, so a module under a directory named with
+  anything but letters, digits, `_`, `~` and `-` gets no `Use-As-Dictionary`.
+- A request that carries `Available-Dictionary: :<base64 of 32 bytes>:` and lists `dcb` in `Accept-Encoding` is answered
+  with the difference file for that hash when there is one, with `Content-Encoding: dcb`, the module's `Content-Type` and the
+  module's other headers (the year-long cache). The body is the file's bytes unchanged: `ff 44 43 42`, the 32 bytes of the
+  hash, and the Brotli stream.
+
+```text
+hash = hex(base64decode(request["Available-Dictionary"]))       # only 64 hex digits [0-9a-f] may continue
+if module(path) and hash and accepts(request["Accept-Encoding"], "dcb") and exists(path + "." + hash + ".dcb"):
+    send(path + "." + hash + ".dcb", Content-Encoding: dcb)
+else:
+    send as before (the .br or .gz copy, or the plain file)
+add Use-As-Dictionary and Vary: Accept-Encoding, Available-Dictionary
+```
+
+Never build a file name from the header's text: parse it, check that the result is 64 lowercase hex digits, and only then
+use it. `Tools/dictionary-transport.mjs` holds these rules as pure functions (Web Crypto and typed arrays only), so a Worker
+can import it; `Tools/bun-server.ts` is the reference. A host that cannot choose its answer by request header (a static
+host that serves a file for a path) ignores the `.dcb` files and works as before: it only downloads more. Do not upload
+them there. `Tools/cloudflare-site` leaves them out of the staged assets.
+
+**Limits.**
+
+- The dictionary has to be in the visitor's cache: only a returning visitor whose cache still holds an earlier module you
+  named gets a difference. A first visit, a cleared cache and a version older than the ones you named get the whole file.
+- It needs a secure context (HTTPS, or `localhost`) and the same origin for the earlier and the new module.
+- The browser stores the dictionary a moment after the response arrives, so a visitor who reloads at once may still get
+  the whole file.
+- The step compresses with a 16 MB window, the largest the `dcb` coding allows. It was measured on the Board's modules
+  (under 0.5 MB each), and the `brotli` program with the same settings on a module of more than 6 MB (on 2026-11-23, a
+  one-line change: 1 KB instead of 1.41 MB). A module that does not fit that window together with its earlier version is
+  not measured.
+- A change that moves most of the code (a compiler upgrade, a new optimization setting) leaves little in common; the step
+  drops the file when it is not at least 10 % smaller, and the visitor gets the `.br` copy.
+
+**Support.** The repository's test (`make dictionary-update-browser-test`) checks it in Chromium: the page's `fetch` with
+`WebAssembly.instantiateStreaming`, a Worker's `fetch` with `WebAssembly.compileStreaming` and a Worker's synchronous
+`XMLHttpRequest` with `new WebAssembly.Module` each receive a working new module through a `dcb` response of about the
+difference file's size. A browser that does not send `Available-Dictionary` (WebKit, in the same test) gets the whole file,
+the Brotli copy as before.
 
 ## 3. Host examples
 

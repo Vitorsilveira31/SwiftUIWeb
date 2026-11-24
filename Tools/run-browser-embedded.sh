@@ -643,6 +643,24 @@ fi
 # Precompressed copies (`.br`, `.gz`) of the final bytes, after the CSP is sealed; Tools/bun-server.ts sends them to
 # clients that accept the coding (Tools/precompress-bundle.mjs).
 [[ "$configuration" != release ]] || bun "$ROOT/Tools/precompress-bundle.mjs" "$final"
+# Updates by difference (opt-in, release): SWIFTUIWEB_PREVIOUS_BUNDLES lists directories (separated by `:`, absolute paths) that hold
+# the modules of earlier builds, an earlier bundle or just its `.wasm` files. Beside each module this writes the file that updates a
+# visitor's cached earlier module by sending only the difference (Tools/delta-compress-bundle.mjs, Documentation/DEPLOYMENT.md).
+# After the precompressed copies, which the files are measured against, and before the bundle is stamped for reuse. The option is part of
+# the reuse key (Tools/bundle-reuse.mjs), so a reused bundle is never returned for another list of earlier builds.
+if [[ -n "${SWIFTUIWEB_PREVIOUS_BUNDLES:-}" ]]; then
+  if [[ "$configuration" != release ]]; then
+    echo "SWIFTUIWEB_PREVIOUS_BUNDLES is ignored: it needs CONFIGURATION=release" >&2
+  else
+    delta_args=(--bundle "$final")
+    IFS=: read -r -a previous_bundles <<< "$SWIFTUIWEB_PREVIOUS_BUNDLES"
+    for previous_bundle in "${previous_bundles[@]}"; do
+      [[ -z "$previous_bundle" ]] || delta_args+=(--previous "$previous_bundle")
+    done
+    # A value of separators only names no directory.
+    [[ ${#delta_args[@]} -le 2 ]] || bun "$ROOT/Tools/delta-compress-bundle.mjs" "${delta_args[@]}"
+  fi
+fi
 [[ -z "$reuse_key" ]] || bun "$ROOT/Tools/bundle-reuse.mjs" stamp "$final" "$reuse_key"
 echo "Bundle ready: $final"
 [[ "${BUILD_ONLY:-0}" == 1 ]] && exit 0

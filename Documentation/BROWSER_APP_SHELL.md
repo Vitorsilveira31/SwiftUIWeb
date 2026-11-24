@@ -297,6 +297,19 @@ CONFIGURATION=release make run site                                  # split; SW
 The step needs Binaryen (`wasm-split`, `wasm-opt`) and headless Chromium (`bunx --bun playwright install chromium`);
 `bun Tools/wasm-split-release.mjs --check` says whether this machine has them.
 
+## Update by difference
+
+A release build can write, beside each wasm module, the file that updates a visitor's cached earlier module by sending only the
+difference (HTTP Compression Dictionary Transport). The host answers with it when the request names that earlier module. What
+the host does, the limits and the support: [DEPLOYMENT.md](DEPLOYMENT.md#update-by-difference).
+
+| Variable | Meaning |
+|---|---|
+| `SWIFTUIWEB_PREVIOUS_BUNDLES` | Directories separated by `:` (absolute paths) that hold the modules of earlier builds: an earlier bundle, or just its `.wasm` files. Release only; absent: no difference files. Part of the bundle-reuse key, with the bytes of those modules. |
+
+`bun Tools/delta-compress-bundle.mjs --bundle <bundle> --previous <directory> [--previous <directory> ...]` runs the step on a
+bundle that exists. It needs no program beyond Bun.
+
 ## TabView `.sidebarAdaptable` shell
 
 ```swift

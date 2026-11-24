@@ -154,6 +154,16 @@ if (import.meta.main) {
       assert.equal(result.total_local_assets.raw, Object.values(files).reduce((sum, file) => sum + file.bytes.raw, 0));
     }));
 
+  await test("the inventory leaves out difference files: a visitor downloads one of them instead of the module, not in addition", () =>
+    withTemporary((directory) => {
+      const hash = "a".repeat(64);
+      writeFileSync(join(directory, "app.0123abcd.wasm"), EMPTY_WASM);
+      writeFileSync(join(directory, `app.0123abcd.wasm.${hash}.dcb`), Buffer.alloc(4096, 1));
+      const { result } = inventory(directory);
+      assert.deepEqual(result.files.map((file) => file.path), ["app.0123abcd.wasm"]);
+      assert.equal(result.total_local_assets.raw, 8);
+    }));
+
   await test("the inventory report matches the golden, byte for byte (brotli included)", () =>
     withTemporary((directory) => {
       const bundle = join(directory, "bundle");

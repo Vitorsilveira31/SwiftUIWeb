@@ -1,7 +1,8 @@
-import {resolve,relative,isAbsolute,basename} from 'node:path';
+import {resolve,relative,isAbsolute,basename,dirname,join} from 'node:path';
 import {realpath} from 'node:fs/promises';
 import {resolveRequest,mime,isLoopbackHost} from './dev-server-policy.mjs';
 import {createLiveReload} from './live-reload.mjs';
+import {isDictionaryModule,useAsDictionary,parseAvailableDictionary,acceptsDcb,differenceName,VARY} from './dictionary-transport.mjs';
 const root=await realpath(resolve(process.argv[2]||'.'));
 const port=Number(process.env.PORT||process.argv[3]||8080);
 if(!Number.isInteger(port)||port<1||port>65535)throw Error('PORT must be an integer from 1 to 65535');
@@ -68,6 +69,18 @@ async function negotiatedCoding(header,actual,root){
   }
   return null;
 }
+// The difference file that updates `actual` (a content-hashed module) from the module the request names in
+// `Available-Dictionary`, when the request accepts `dcb`, the file exists and it stays in the root. The name is built from the
+// parsed hash (64 hex digits), never from the header. Tools/dictionary-transport.mjs, Tools/delta-compress-bundle.mjs.
+async function differenceFile(request,actual,root){
+  const hash=parseAvailableDictionary(request.headers.get('Available-Dictionary'));
+  if(!hash||!acceptsDcb(request.headers.get('Accept-Encoding')))return null;
+  const sibling=join(dirname(actual),differenceName(basename(actual),hash));
+  if(!(await Bun.file(sibling).exists()))return null;
+  const real=await realpath(sibling),rel=relative(root,real);
+  if(rel.startsWith('..')||isAbsolute(rel))return null;
+  return {file:Bun.file(real),label:'dcb-'+hash.slice(0,16)};
+}
 // A strong validator for one representation: its size and modification time, tagged by the coding it is sent with.
 function entityTag(body,coding){
   return `"${body.size.toString(16)}-${Math.trunc(body.lastModified).toString(16)}${coding?'-'+coding:''}"`;
@@ -112,10 +125,16 @@ Bun.serve({port,hostname:'127.0.0.1',async fetch(request,server){
     // ships precompressed siblings (`app.3f9a1c2e.wasm.br` and `.gz`, Tools/precompress-bundle.mjs). A hashed name never
     // changes its bytes, so it is cached for a year. Everything else (index.html above all) is revalidated by its ETag.
     const hashed=path===policy.file&&HASHED_NAME.test(basename(path));
-    const coding=await negotiatedCoding(request.headers.get('Accept-Encoding'),actual,root);
-    const body=coding?Bun.file(actual+coding.suffix):file;
-    const etag=entityTag(body,coding?.name);
-    const cacheHeaders={'Cache-Control':hashed?'public, max-age=31536000, immutable':'no-cache','ETag':etag,'Vary':'Accept-Encoding'};
+    // A content-hashed wasm module names itself as a dictionary for the next version, and a visitor who still has an earlier
+    // version gets the difference file (`Content-Encoding: dcb`) when the release build wrote one for it.
+    const participates=hashed&&isDictionaryModule(basename(actual));
+    const difference=participates?await differenceFile(request,actual,root):null;
+    const coding=difference?{name:'dcb'}:await negotiatedCoding(request.headers.get('Accept-Encoding'),actual,root);
+    const body=difference?difference.file:coding?Bun.file(actual+coding.suffix):file;
+    const etag=entityTag(body,difference?difference.label:coding?.name);
+    const cacheHeaders={'Cache-Control':hashed?'public, max-age=31536000, immutable':'no-cache','ETag':etag,'Vary':participates?VARY:'Accept-Encoding'};
+    const dictionary=participates?useAsDictionary(new URL(request.url).pathname):null;
+    if(dictionary)cacheHeaders['Use-As-Dictionary']=dictionary;
     if(notModified(request.headers.get('If-None-Match'),etag))return new Response(null,{status:304,headers:cacheHeaders});
     const headers={...cacheHeaders,'Content-Type':type,'Content-Length':String(body.size),'X-Content-Type-Options':'nosniff'};
     if(coding)headers['Content-Encoding']=coding.name;

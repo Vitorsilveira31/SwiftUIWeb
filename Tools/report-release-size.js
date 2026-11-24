@@ -49,8 +49,8 @@ const lazyNames = new Set(manifest.runtime?.lazy || []);
 const files = walk(bundle).filter((file) => {
   const relative = path.relative(bundle, file).replaceAll(path.sep, "/");
   return !["release-manifest.json", "release-size.json"].includes(relative) &&
-    // Precompressed copies (Tools/precompress-bundle.mjs) are the encoded form of a file already counted.
-    !/\.(?:br|gz)$/.test(relative) &&
+    // Precompressed copies (Tools/precompress-bundle.mjs) and difference files (Tools/delta-compress-bundle.mjs) are the encoded form of a file already counted.
+    !/\.(?:br|gz|dcb)$/.test(relative) &&
     !relative.endsWith(".wasm.size.json") &&
     !relative.endsWith(".wasm.objects.json") &&
     // Debug benchmark scripts/pages are not production transfer resources.
