@@ -10,9 +10,11 @@
 //   difference served and correct   `Content-Encoding: dcb`, the 36-byte header names the earlier module, `Vary` lists
 //                                   `Available-Dictionary`, `Use-As-Dictionary` is there, and the body decoded with the earlier
 //                                   module gives bytes whose SHA-256 starts with the 8 hex digits of the module's name
-//   no difference served            any other coding: the response's `Content-Encoding`, `Vary` and `Use-As-Dictionary` are
-//                                   printed (the host may simply not answer by difference, which works and downloads more)
-//   WRONG                           it says `dcb` but the body does not decode to the module, or a header is missing
+//   no difference served            not `dcb`, and the body, decoded by its own coding (`br`, `gzip` or none), hashes to the
+//                                   module's name: the response's `Content-Encoding`, `Vary` and `Use-As-Dictionary` are printed
+//                                   (the host may simply not answer by difference, which works and downloads more)
+//   WRONG                           it says `dcb` but the body does not decode to the module, or a header is missing; or it
+//                                   says another coding (named), or its bytes are not the module
 //
 // Each live module is also requested the ordinary way (`Accept-Encoding: br`), and the bytes the client decodes must match
 // the hash in the name, so a host that breaks the plain path is caught too. A module with no earlier counterpart is reported
@@ -26,6 +28,7 @@
 // Run the tests with: bun test ./Tools/test-check-dictionary-host.mjs
 import { join, resolve } from "node:path";
 import { readFileSync } from "node:fs";
+import { brotliDecompressSync, gunzipSync } from "node:zlib";
 import { decodeDifference, listModules } from "./delta-compress-bundle.mjs";
 import { availableDictionaryValue, moduleParts, sha256Hex } from "./dictionary-transport.mjs";
 import { discoverModules, isWebURL, MAX_MODULE_BYTES, readLimited } from "./fetch-live-modules.mjs";
@@ -57,6 +60,14 @@ export function parseArguments(argv) {
 
 const varyNames = (value) => (value ?? "").split(",").map((name) => name.trim().toLowerCase());
 const shown = (headers, name) => `${name}: ${headers.get(name) ?? "(none)"}`;
+
+/** The bytes a client reads from `body` under the lowercase `coding`. Throws for a coding this check does not decode. */
+export function decodeBody(body, coding) {
+  if (coding === "" || coding === "identity") return body;
+  if (coding === "br") return brotliDecompressSync(body);
+  if (coding === "gzip") return gunzipSync(body);
+  throw new Error(`the coding ${coding} is not one this check decodes`);
+}
 
 /** The ordinary request for a module: what the client decodes must hash to the name. Returns `{ ok, detail }`. */
 export async function checkPlain(get, url, parts) {
@@ -96,10 +107,25 @@ export async function checkDifference(get, url, parts, previousBytes, extraHeade
   }
   const coding = (response.headers.get("Content-Encoding") ?? "").trim().toLowerCase();
   const summary = [shown(response.headers, "Content-Encoding"), shown(response.headers, "Vary"), shown(response.headers, "Use-As-Dictionary")].join("; ");
-  if (coding !== "dcb") return { status: "none", detail: summary };
+  if (coding !== "dcb") {
+    // Not a difference: the module must come through the answer's own coding, or the host has not answered by difference.
+    let decoded;
+    try {
+      decoded = decodeBody(body, coding);
+    } catch (error) {
+      return { status: "wrong", detail: `${summary}; ${error.message}` };
+    }
+    const hash = await sha256Hex(decoded);
+    return hash.startsWith(parts.hash)
+      ? { status: "none", detail: summary }
+      : { status: "wrong", detail: `${summary}; the decoded bytes hash to ${hash.slice(0, 8)}, not ${parts.hash}` };
+  }
 
   const problems = [];
-  if (!varyNames(response.headers.get("Vary")).includes("available-dictionary")) problems.push(`Vary does not list Available-Dictionary (${shown(response.headers, "Vary")})`);
+  const vary = varyNames(response.headers.get("Vary"));
+  for (const name of ["Accept-Encoding", "Available-Dictionary"]) {
+    if (!vary.includes(name.toLowerCase())) problems.push(`Vary does not list ${name} (${shown(response.headers, "Vary")})`);
+  }
   if (!response.headers.get("Use-As-Dictionary")) problems.push("Use-As-Dictionary is missing");
   const length = response.headers.get("Content-Length");
   if (length !== null && Number(length) !== body.length) problems.push(`Content-Length says ${length}, the body has ${body.length} bytes`);
@@ -123,14 +149,14 @@ export async function checkHost(siteURL, directory, { headers = [], ...options }
   const results = [];
   const site = await discoverModules(siteURL, options);
   if (site.message) return { results, message: `${site.message}: nothing checked`, exitCode: 1 };
-  const { base, references, get } = site;
+  const { references, get } = site;
   if (references.size === 0) return { results, message: `${siteURL} names no content-hashed module: nothing checked`, exitCode: 1 };
 
   const root = resolve(directory);
   const earlier = listModules(root).map((path) => ({ path, parts: moduleParts(path) }));
-  for (const path of references.keys()) {
+  for (const [path, href] of references) {
     const parts = moduleParts(path);
-    const url = new URL(path, base);
+    const url = new URL(href);
     const plain = await checkPlain(get, url, parts);
     results.push({ module: path, from: null, status: plain.ok ? "plain-ok" : "plain-wrong", detail: plain.detail });
 

@@ -48,9 +48,22 @@ export function scriptReferences(text) {
   return unique(text.match(SCRIPT_REFERENCE) ?? []);
 }
 
-/** The path of the module under the output directory: the reference without `./` or a leading `/`. */
-export function relativeModulePath(reference) {
-  return reference.replace(/^\.\//, "").replace(/^\//, "");
+/** The absolute URL `reference` names in the file at `fileURL` (as a browser resolves it), or null when it is not a URL. */
+export function resolveReference(reference, fileURL) {
+  try {
+    return new URL(reference, fileURL);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The base URL the page's references resolve against, as a browser uses it: the page's first `<base href>` resolved against
+ * the page's address, or the address when there is none.
+ */
+export function documentBase(html, pageURL) {
+  const href = /<base\s[^>]*?\bhref\s*=\s*(["'])(.*?)\1/i.exec(html)?.[2];
+  return (href !== undefined && resolveReference(href, pageURL)) || pageURL;
 }
 
 /** Reads at most `limit` bytes of the response body and cancels the rest. */
@@ -94,8 +107,9 @@ function moduleFiles(directory) {
 
 /**
  * Reads the page at `siteURL` and the scripts it leads to, and returns the modules they name:
- * `{ base, references, get, sameOrigin }` (`references` maps the path of each module, relative to the site, to the text as
- * written), or `{ message }` when the page cannot be read. `get(url)` is the request function with its timeout.
+ * `{ base, references, get }` (`references` maps the path of each module, relative to the site's origin root, to its absolute
+ * URL, resolved against the file that names it), or `{ message }` when the page cannot be read. `get(url)` is the request
+ * function with its timeout.
  */
 export async function discoverModules(siteURL, { fetch: request = globalThis.fetch, timeoutMs = REQUEST_TIMEOUT_MS, maxFiles = MAX_FILES, maxTextBytes = MAX_TEXT_BYTES } = {}) {
   const get = (url, init = {}) => request(url, { redirect: "follow", signal: AbortSignal.timeout(timeoutMs), ...init });
@@ -115,26 +129,26 @@ export async function discoverModules(siteURL, { fetch: request = globalThis.fet
   const base = new URL(page.url || siteURL);
   const sameOrigin = (url) => url.origin === base.origin && (url.protocol === "http:" || url.protocol === "https:");
 
-  // Breadth first: the page, then the scripts it names, then the scripts those name, up to the cap on files.
+  // Breadth first: the page, then the scripts it names, then the scripts those name, up to the cap on files. A reference is
+  // resolved against the base of the file that names it (the page's base element, or the page's final URL; a script's
+  // response URL), as a browser does.
   const references = new Map();
   const scripts = new Set();
   const queue = [];
-  const note = (text) => {
-    for (const reference of moduleReferences(text)) references.set(relativeModulePath(reference), reference);
+  const note = (text, fileURL) => {
+    for (const reference of moduleReferences(text)) {
+      const url = resolveReference(reference, fileURL);
+      if (url && sameOrigin(url)) references.set(url.pathname.slice(1), url.href);
+    }
     for (const reference of scriptReferences(text)) {
-      let url;
-      try {
-        url = new URL(reference, base);
-      } catch {
-        continue;
-      }
-      if (sameOrigin(url) && !scripts.has(url.href)) {
+      const url = resolveReference(reference, fileURL);
+      if (url && sameOrigin(url) && !scripts.has(url.href)) {
         scripts.add(url.href);
         queue.push(url.href);
       }
     }
   };
-  note(pageText);
+  note(pageText, documentBase(pageText, base));
   let read = 1;
   while (queue.length > 0 && read < maxFiles) {
     const url = queue.shift();
@@ -145,13 +159,13 @@ export async function discoverModules(siteURL, { fetch: request = globalThis.fet
         await response.body?.cancel();
         continue;
       }
-      note(new TextDecoder().decode(await readLimited(response, maxTextBytes)));
+      note(new TextDecoder().decode(await readLimited(response, maxTextBytes)), new URL(response.url || url));
     } catch {
       // A script that cannot be read only hides the names inside it.
     }
   }
 
-  return { base, references, get, sameOrigin };
+  return { base, references, get };
 }
 
 /**
@@ -167,22 +181,17 @@ export async function fetchLiveModules(siteURL, directory, options = {}) {
     result.message = `${site.message}: no module fetched`;
     return result;
   }
-  const { base, references, get, sameOrigin } = site;
+  const { references, get } = site;
 
   // The directory holds what is live now: the files of an earlier run go before the new ones are written.
   const root = resolve(directory);
   for (const path of moduleFiles(root)) rmSync(join(root, path), { force: true });
 
-  for (const [path] of references) {
+  for (const [path, href] of references) {
     if (result.kept.length + result.dropped.length >= maxFiles) break;
     const parts = moduleParts(path);
     try {
-      const url = new URL(path, base);
-      if (!sameOrigin(url)) {
-        result.dropped.push({ path, reason: "not on the site's origin" });
-        continue;
-      }
-      const response = await get(url);
+      const response = await get(new URL(href));
       if (!response.ok) {
         await response.body?.cancel();
         result.dropped.push({ path, reason: `answered ${response.status}` });

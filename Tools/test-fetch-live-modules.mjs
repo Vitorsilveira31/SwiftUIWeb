@@ -93,6 +93,42 @@ describe("fetch-live-modules", () => {
     expect(existsSync(join(directory, appName))).toBe(true);
   });
 
+  test("a root-relative module is requested at the site's origin, though the page's address has a path", async () => {
+    const origin = serve({
+      "/en/purpose": `<html><link rel="preload" href="/${appName}"></html>`,
+      [`/${appName}`]: appBytes,
+    });
+    const directory = scratch();
+    const outcome = await fetchLiveModules(`${origin}/en/purpose`, directory);
+    expect(outcome.dropped).toEqual([]);
+    expect(outcome.kept.map((item) => item.path)).toEqual([appName]);
+    expect(readFileSync(join(directory, appName))).toEqual(Buffer.from(appBytes));
+  });
+
+  test("the page's <base href> is the base its references resolve against, as in a browser", async () => {
+    const origin = serve({
+      "/en/purpose": `<html><base href="/"><link rel="preload" href="./${appName}"></html>`,
+      [`/${appName}`]: appBytes,
+    });
+    const outcome = await fetchLiveModules(`${origin}/en/purpose`, scratch());
+    expect(outcome.dropped).toEqual([]);
+    expect(outcome.kept.map((item) => item.path)).toEqual([appName]);
+  });
+
+  test("a module named in a script is resolved against the script's address, and kept under its path from the origin root", async () => {
+    const origin = serve({
+      "/": `<script src="/js/index.11111111.js"></script>`,
+      "/js/index.11111111.js": `import("./chunk.22222222.js")`,
+      "/js/chunk.22222222.js": `fetch("./${restName}")`,
+      [`/js/${restName}`]: restBytes,
+    });
+    const directory = scratch();
+    const outcome = await fetchLiveModules(origin, directory);
+    expect(outcome.dropped).toEqual([]);
+    expect(outcome.kept.map((item) => item.path)).toEqual([`js/${restName}`]);
+    expect(readFileSync(join(directory, "js", restName))).toEqual(Buffer.from(restBytes));
+  });
+
   test("a page with no module gives a message, exit 0 and nothing written", async () => {
     const origin = serve({ "/": "<html>nothing here</html>" });
     const directory = join(scratch(), "live");

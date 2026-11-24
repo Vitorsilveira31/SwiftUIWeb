@@ -7,7 +7,7 @@ import net from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { brotliCompressSync } from "node:zlib";
+import { brotliCompressSync, gzipSync } from "node:zlib";
 import { checkHost, describeResult, main, parseArguments, parseHeaderLine } from "./check-dictionary-host.mjs";
 import { dcbBody, parseAvailableDictionary, sha256Hex, useAsDictionary, VARY } from "./dictionary-transport.mjs";
 import { deltaCompressBundle } from "./delta-compress-bundle.mjs";
@@ -245,6 +245,63 @@ describe("check-dictionary-host", () => {
     const { results, exitCode } = await checkHost(`http://127.0.0.1:${server.port}`, earlier);
     expect(exitCode).toBe(1);
     expect(results.filter((result) => result.status === "plain-wrong")).toHaveLength(3);
+  });
+
+  test("a page whose address has a path is checked with the modules at the site's root", async () => {
+    const rootPage = `<!doctype html><script>fetch("/${names.newApp}");fetch("/${names.newRest}");fetch("/${names.lonely}")</script>`;
+    const server = Bun.serve({
+      port: 0,
+      fetch(request) {
+        const path = new URL(request.url).pathname;
+        if (path === "/en/purpose") return new Response(rootPage, { headers: { "Content-Type": "text/html" } });
+        const content = files[path.slice(1)];
+        return content ? new Response(content) : new Response("not found", { status: 404 });
+      },
+    });
+    servers.push(server);
+    const { results, exitCode } = await checkHost(`http://127.0.0.1:${server.port}/en/purpose`, earlier);
+    expect(exitCode).toBe(0);
+    expect(results.filter((result) => result.status === "plain-ok")).toHaveLength(3);
+    expect(differenceResults(results).map((result) => [result.module, result.status])).toEqual([
+      [names.newApp, "none"],
+      [names.newRest, "none"],
+    ]);
+  });
+
+  test("an answer in br or gzip that decodes to the module is no difference served, with its coding", async () => {
+    for (const [coding, encode] of [["br", brotliCompressSync], ["gzip", gzipSync]]) {
+      const origin = liar((path, wanted, request, headers) => new Response(encode(files[path]), { headers: { ...headers, "Content-Encoding": coding } }));
+      const { results, exitCode } = await checkHost(origin, earlier);
+      expect(exitCode).toBe(0);
+      expect(differenceResults(results).map((result) => result.status)).toEqual(["none", "none"]);
+      expect(differenceResults(results)[0].detail).toContain(`Content-Encoding: ${coding}`);
+    }
+  });
+
+  test("an answer in br, gzip or an unknown coding whose bytes are not the module is WRONG, and the coding is named", async () => {
+    const other = Buffer.from("not the module");
+    const cases = [
+      ["br", brotliCompressSync(other)],
+      ["gzip", gzipSync(other)],
+      ["zstd", files[names.newApp]],
+    ];
+    for (const [coding, body] of cases) {
+      const origin = liar((path, wanted, request, headers) => (path === names.newApp ? new Response(body, { headers: { ...headers, "Content-Encoding": coding } }) : null));
+      const { results, exitCode } = await checkHost(origin, earlier);
+      expect(exitCode).toBe(1);
+      const wrong = byModule(results, names.newApp).find((result) => result.status === "wrong");
+      expect(wrong.detail).toContain(`Content-Encoding: ${coding}`);
+    }
+  });
+
+  test("a dcb answer whose Vary lacks Accept-Encoding is WRONG, naming it, even when the body is right", async () => {
+    const body = new Uint8Array(await (await fetch(`${reference}/${names.newApp}`, { headers: { "Accept-Encoding": "br, dcb", "Available-Dictionary": `:${Buffer.from(await sha256Hex(oldApp), "hex").toString("base64")}:` }, decompress: false })).arrayBuffer());
+    const origin = liar((path) => (path === names.newApp ? new Response(body, { headers: { "Content-Encoding": "dcb", "Content-Type": "application/wasm", Vary: "Available-Dictionary", "Use-As-Dictionary": useAsDictionary(`/${path}`) } }) : null));
+    const { results, exitCode } = await checkHost(origin, earlier);
+    expect(exitCode).toBe(1);
+    const wrong = byModule(results, names.newApp).find((result) => result.status === "wrong");
+    expect(wrong.detail).toContain("Vary does not list Accept-Encoding");
+    expect(wrong.detail).not.toContain("does not list Available-Dictionary");
   });
 
   test("an unreachable host or a page with no module checks nothing and exits 1", async () => {

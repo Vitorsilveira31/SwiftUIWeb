@@ -75,7 +75,10 @@ bun Tools/check-dictionary-host.mjs https://swiftuiweb.<account subdomain>.worke
 For each module it prints "difference served and correct", "no difference served" (with the response's `Content-Encoding`,
 `Vary` and `Use-As-Dictionary`) or "WRONG", and exits 1 on any WRONG. When every module with an earlier version is served
 correctly, turn the answers on: set `DICTIONARY_UPDATES` to `on` for the Worker (or change the default in `worker.js`) and
-deploy. If the host does not deliver `dcb` unchanged, leave it off: the site works as before.
+deploy. That deploy writes no difference from the version before it: its stage downloads the modules the live site serves
+now (the ones just checked) as the earlier modules, so the difference files it writes are from those. Returning visitors start
+getting differences from the first deploy after the switch is on that changes a module. If the host does not deliver `dcb`
+unchanged, leave it off: the site works as before.
 
 ## What the Worker answers
 
