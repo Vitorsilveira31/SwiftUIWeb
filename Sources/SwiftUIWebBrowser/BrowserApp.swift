@@ -1346,7 +1346,7 @@ public extension BrowserAppLauncher {
   static func embeddedBrowserLazyWindow(_ collection: UInt32, start: UInt32, count: UInt32, before: Double, after: Double, lanes: UInt32, row: Double) {
     guard let tree = _embeddedBrowserTree else { return }; let infos = tree._lazyCollections(); let ci = Int(collection)
     guard infos.indices.contains(ci) else { return }; let info = infos[ci], lower = min(Int(start), info.descriptor.count), upper = min(info.descriptor.count, lower + Int(count))
-    tree.fiber(at: info.ownerIdentity)?._lazyHostMeasure = lanes > 0 && row.isFinite && row > 0 ? (Int(lanes), row) : nil
+    tree.fiber(at: info.ownerIdentity)?._lazyHostMeasure = lanes > 0 && row.isFinite && row > 0 ? (lanes: Int(lanes), rowExtent: row, declaredLanes: info.descriptor.laneCount) : nil
     _ = tree._materializeLazyCollection(ownerIdentity: info.ownerIdentity, indices: Array(lower..<upper), beforeExtent: max(0, before), afterExtent: max(0, after))
     // The host asks for the window again after every commit that touches the collection. When the rows it
     // materializes are the ones already published, nothing in the tree changed in this epoch; publishing anyway

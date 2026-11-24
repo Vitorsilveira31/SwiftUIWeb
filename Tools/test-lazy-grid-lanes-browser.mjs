@@ -65,96 +65,102 @@ const scrollToEnd = ({ kind, axis }) => {
   if (axis === "y") view.scrollTop = view.scrollHeight; else view.scrollLeft = view.scrollWidth;
 };
 
-/** In the page: whether the cell `index` of `kind` ends inside its view. */
+/** In the page: whether the cell `index` of `kind` ends inside its view: its end lies between the view's start and its end. */
 const endsInside = ({ kind, axis, index }) => {
   const cell = document.querySelector(`[data-testid="${kind}-cell-${index}"]`);
   const view = cell?.closest(".scroll-view");
   if (!cell || !view) return null;
   const a = cell.getBoundingClientRect(), b = view.getBoundingClientRect();
-  return axis === "y" ? a.bottom <= b.bottom + 1 : a.right <= b.right + 1;
+  return axis === "y"
+    ? a.bottom >= b.top && a.bottom <= b.bottom + 1
+    : a.right >= b.left && a.right <= b.right + 1;
 };
 
 const spread = (sizes) => Math.max(...sizes) - Math.min(...sizes);
 
 async function main() {
   const server = await serveBundle({ bundle: BUNDLE, port: await freePort(), logName: null, required: ["index.html"] });
-  const browser = await launch();
   try {
-    for (const mode of ["", "?render-in-worker=0"]) {
-      const label = `${engineName()}${mode ? " main thread" : " worker"}`;
-      const context = await browser.newContext({ viewport: { width: 1000, height: 700 } });
-      const page = await context.newPage();
-      const problems = [];
-      page.on("pageerror", (error) => problems.push(String(error)));
-      await page.goto(`${server.base}/${mode}`);
-      // The app selects its second tab by itself right after it starts; the grids are on the tabs after it.
-      await page.waitForSelector('[data-testid="plain-own-add"]', { state: "visible", timeout: 60_000 });
+    const browser = await launch();
+    try {
+      for (const mode of ["", "?render-in-worker=0"]) {
+        const label = `${engineName()}${mode ? " main thread" : " worker"}`;
+        const context = await browser.newContext({ viewport: { width: 1000, height: 700 } });
+        const page = await context.newPage();
+        const problems = [];
+        page.on("pageerror", (error) => problems.push(String(error)));
+        await page.goto(`${server.base}/${mode}`);
+        // The app selects its second tab by itself right after it starts; the grids are on the tabs after it.
+        await page.waitForSelector('[data-testid="plain-own-add"]', { state: "visible", timeout: 60_000 });
 
-      // What is waited for: the page has measured the cells and sized the space around the window, which the extent reaches in a frame
-      // or two; the wait ends when it holds the rows' extent, and the assertion names what it was when it never did.
-      const settle = async (spec, cells) => {
-        const deadline = Date.now() + 10_000;
-        let found = null, before = null;
-        while (Date.now() < deadline) {
-          found = await page.evaluate(measureGrid, { ...spec, cells, cell: CELL, gap: GAP });
-          if (found && found.shown > 0 && Math.abs(found.extent - found.expected) <= 2) break;
-          // WebKit lays the columns of a horizontal grid with adaptive rows out 424 wide, not as wide as their cells (a track sizing
-          // difference of the grid, not of its windowing): there the extent is only waited for to hold still, and it is the
-          // number of tracks and what holds below that this test asserts.
-          if (spec.wideTracks && found && found.shown > 0 && found.extent === before) break;
-          before = found?.extent;
-          await page.waitForTimeout(spec.wideTracks ? 300 : 50);
-        }
-        assert.ok(found && found.shown > 0, `${label} ${spec.kind}: the grid shows no cells`);
-        assert.ok(spec.wideTracks || Math.abs(found.extent - found.expected) <= 2,
-          `${label} ${spec.kind}: the grid is ${found.extent} long, its ${cells} cells in ${found.tracks} tracks need ${found.expected}`);
-        return found;
-      };
+        // What is waited for: the page has measured the cells and sized the space around the window, which the extent reaches in a frame
+        // or two; the wait ends when it holds the rows' extent, and the assertion names what it was when it never did.
+        const settle = async (spec, cells) => {
+          const deadline = Date.now() + 10_000;
+          let found = null, before = null;
+          while (Date.now() < deadline) {
+            found = await page.evaluate(measureGrid, { ...spec, cells, cell: CELL, gap: GAP });
+            if (found && found.shown > 0 && Math.abs(found.extent - found.expected) <= 2) break;
+            // WebKit lays the columns of a horizontal grid with adaptive rows out 424 wide, not as wide as their cells (a track sizing
+            // difference of the grid, not of its windowing): there the extent is only waited for to hold still, and it is the
+            // number of tracks and what holds below that this test asserts.
+            if (spec.wideTracks && found && found.shown > 0 && found.extent === before) break;
+            before = found?.extent;
+            await page.waitForTimeout(spec.wideTracks ? 300 : 50);
+          }
+          assert.ok(found && found.shown > 0, `${label} ${spec.kind}: the grid shows no cells`);
+          assert.ok(spec.wideTracks || Math.abs(found.extent - found.expected) <= 2,
+            `${label} ${spec.kind}: the grid is ${found.extent} long, its ${cells} cells in ${found.tracks} tracks need ${found.expected}`);
+          return found;
+        };
 
-      for (const spec of KINDS) {
-        await page.getByRole("tab", { name: spec.tab }).click();
-        const found = await settle(spec, CELLS);
-        // A grid of one track would not tell a cell from a row.
-        assert.ok(found.tracks > 1, `${label} ${spec.kind}: the grid has ${found.tracks} track(s); the test needs several`);
-        if (spec.wideTracks) {
-          // The tracks are counted, and the cells are in the page; their extent is not asserted (see `settle`).
-          assert.equal(found.tracks, 4, `${label} ${spec.kind}: the grid has ${found.tracks} rows, the 300 tall view holds four`);
-          console.log(`[${label}] ${spec.kind}: ${found.tracks} tracks, ${found.extent} long (extent not asserted)`);
-          continue;
+        for (const spec of KINDS) {
+          await page.getByRole("tab", { name: spec.tab }).click();
+          const found = await settle(spec, CELLS);
+          // A grid of one track would not tell a cell from a row.
+          assert.ok(found.tracks > 1, `${label} ${spec.kind}: the grid has ${found.tracks} track(s); the test needs several`);
+          // Only the exact length is skipped for WebKit's wide tracks (see `settle`); the tracks, the stillness and the last cell are checked.
+          if (spec.wideTracks) assert.equal(found.tracks, 4, `${label} ${spec.kind}: the grid has ${found.tracks} rows, the 300 tall view holds four`);
+          // Once it holds that extent, nothing changes it: not time, and not a scroll to the end (the window moves to the last rows).
+          const idle = await page.evaluate(sample, { kind: spec.kind, axis: spec.axis, ms: 1000 });
+          assert.equal(spread(idle), 0, `${label} ${spec.kind}: the extent changed while the page was idle: ${[...new Set(idle)]}`);
+          const sampling = page.evaluate(sample, { kind: spec.kind, axis: spec.axis, ms: 1500 });
+          await page.evaluate(scrollToEnd, spec);
+          const scrolled = await sampling;
+          // WebKit's wide tracks of the horizontal grid change the extent while the view scrolls to its end (sizes 11087, 3319, 13031 in
+          // a run), and after the scroll the last cell is not inside the view (WebKit lays the columns out too wide, so the view's end
+          // is not the grid's end). Both are skipped for that case only; the stillness while idle and the tracks are still checked.
+          if (!spec.wideTracks) {
+            assert.equal(spread(scrolled), 0, `${label} ${spec.kind}: the extent changed while scrolling to the end: ${[...new Set(scrolled)]}`);
+            assert.equal(await page.evaluate(endsInside, { ...spec, index: CELLS - 1 }), true, `${label} ${spec.kind}: the last cell is not inside the view after scrolling to the end`);
+          }
+          console.log(`[${label}] ${spec.kind}: ${found.tracks} tracks, ${found.extent} long, held while idle and scrolled to the end`);
         }
-        // Once it holds that extent, nothing changes it: not time, and not a scroll to the end (the window moves to the last rows).
-        const idle = await page.evaluate(sample, { kind: spec.kind, axis: spec.axis, ms: 1000 });
-        assert.equal(spread(idle), 0, `${label} ${spec.kind}: the extent changed while the page was idle: ${[...new Set(idle)]}`);
-        const sampling = page.evaluate(sample, { kind: spec.kind, axis: spec.axis, ms: 1500 });
-        await page.evaluate(scrollToEnd, spec);
-        const scrolled = await sampling;
-        assert.equal(spread(scrolled), 0, `${label} ${spec.kind}: the extent changed while scrolling to the end: ${[...new Set(scrolled)]}`);
-        assert.equal(await page.evaluate(endsInside, { ...spec, index: CELLS - 1 }), true, `${label} ${spec.kind}: the last cell is not inside the view after scrolling to the end`);
-        console.log(`[${label}] ${spec.kind}: ${found.tracks} tracks, ${found.extent} long, held while idle and scrolled to the end`);
+
+        // A grid that grows: from the press to a second later the extent never goes down, and it ends at the rows' extent. What is
+        // compared is the first frames after the new cells arrive, which are laid out from Swift's estimate of the cells not shown
+        // until the page's window answers.
+        const growing = { kind: "growing", axis: "y" };
+        await page.getByRole("tab", { name: "Growing" }).click();
+        await settle(growing, GROW_START);
+        const sampling = page.evaluate(sample, { ...growing, ms: 1500 });
+        await page.locator('[data-testid="growing-append"]').click();
+        const sizes = await sampling;
+        const drops = sizes.flatMap((size, at) => (at > 0 && size < sizes[at - 1] ? [`${sizes[at - 1]} -> ${size}`] : []));
+        assert.deepEqual(drops, [], `${label} growing: the extent went down after cells were appended (${[...new Set(sizes)]})`);
+        const grown = await settle(growing, GROW_START + GROW_STEP);
+        assert.ok(grown.shown < GROW_START + GROW_STEP, `${label} growing: the grid shows all ${grown.shown} cells; the test needs cells outside the window`);
+        const steps = sizes.filter((size, at) => at === 0 || size !== sizes[at - 1]);
+        console.log(`[${label}] growing: ${GROW_START} cells, then ${GROW_START + GROW_STEP}: never shorter (${steps.join(" -> ")}), ${grown.extent} long`);
+
+        assert.deepEqual(problems, [], `${label}: page errors`);
+        await context.close();
       }
-
-      // A grid that grows: from the press to a second later the extent never goes down, and it ends at the rows' extent. What is
-      // compared is the first frames after the new cells arrive, which are laid out from Swift's estimate of the cells not shown
-      // until the page's window answers.
-      const growing = { kind: "growing", axis: "y" };
-      await page.getByRole("tab", { name: "Growing" }).click();
-      await settle(growing, GROW_START);
-      const sampling = page.evaluate(sample, { ...growing, ms: 1500 });
-      await page.locator('[data-testid="growing-append"]').click();
-      const sizes = await sampling;
-      const drops = sizes.flatMap((size, at) => (at > 0 && size < sizes[at - 1] ? [`${sizes[at - 1]} -> ${size}`] : []));
-      assert.deepEqual(drops, [], `${label} growing: the extent went down after cells were appended (${[...new Set(sizes)]})`);
-      const grown = await settle(growing, GROW_START + GROW_STEP);
-      assert.ok(grown.shown < GROW_START + GROW_STEP, `${label} growing: the grid shows all ${grown.shown} cells; the test needs cells outside the window`);
-      const steps = sizes.filter((size, at) => at === 0 || size !== sizes[at - 1]);
-      console.log(`[${label}] growing: ${GROW_START} cells, then ${GROW_START + GROW_STEP}: never shorter (${steps.join(" -> ")}), ${grown.extent} long`);
-
-      assert.deepEqual(problems, [], `${label}: page errors`);
-      await context.close();
+    } finally {
+      await browser.close();
     }
     console.log("Lazy grid lanes browser test passed.");
   } finally {
-    await browser.close();
     await server.stop();
   }
 }

@@ -33,6 +33,19 @@ struct LazyWindowRefreshTests {
     }
   }
 
+  /// A grid of two cells that grows to twenty, and whose declared columns grow from two to four when a button is pressed.
+  private struct Gridded: View {
+    @State private var wide = false
+    var body: some View {
+      VStack {
+        Button("wide") { wide = true }
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: wide ? 4 : 2)) {
+          ForEach(0..<(wide ? 20 : 2), id: \.self) { Text("Cell \($0)") }
+        }
+      }
+    }
+  }
+
   /// A list whose rows capture the parent's state: the same keys before and after the click.
   private struct Starring: View {
     @State private var starred = false
@@ -131,7 +144,7 @@ struct LazyWindowRefreshTests {
     let tree = FiberTree(Growing(before: 2, after: 20), deferLazyCollections: true)
     let owner = tree._lazyCollections()[0].ownerIdentity
     _ = tree._materializeLazyCollection(ownerIdentity: owner, indices: Array(0..<2), beforeExtent: 0, afterExtent: 0)
-    tree.fiber(at: owner)?._lazyHostMeasure = (lanes: 4, rowExtent: 30)
+    tree.fiber(at: owner)?._lazyHostMeasure = (lanes: 4, rowExtent: 30, declaredLanes: 1)
     tree.dispatch(event: "click")
     _ = tree.renderNode
     var extents: [Double] = []
@@ -139,6 +152,27 @@ struct LazyWindowRefreshTests {
     #expect(extents == [30])
     // The window grew by two rows of four cells, to eight; the twelve that follow are three rows of 30.
     #expect(tree.renderNode.htmlDescription.contains("height: 90.0px"))
+  }
+
+  /// A measure the host took under one declared lane count is not used once the grid declares another: the fiber keeps its
+  /// identity, so the old row extent and lane count would lay out the new columns. The estimate of the new columns and their
+  /// count are used instead.
+  @Test
+  func aMeasureTakenUnderAnOlderDeclaredCountIsNotUsedAfterItChanges() {
+    let tree = FiberTree(Gridded(), deferLazyCollections: true)
+    let owner = tree._lazyCollections()[0].ownerIdentity
+    _ = tree._materializeLazyCollection(ownerIdentity: owner, indices: Array(0..<2), beforeExtent: 0, afterExtent: 0)
+    tree.fiber(at: owner)?._lazyHostMeasure = (lanes: 2, rowExtent: 30, declaredLanes: 2)
+    tree.dispatch(event: "click")
+    _ = tree.renderNode
+    let estimate = tree._lazyCollections()[0].descriptor.estimatedExtent
+    var extents: [Double] = []
+    #expect(tree._refreshStaleLazyWindows(growTo: { _, extent in extents.append(extent); return 2 }))
+    #expect(extents == [estimate], "the old measure's row extent 30 was used for four new columns")
+    // Two rows of the four columns that were declared now: eight cells, not the four two columns would give.
+    let html = tree.renderNode.htmlDescription
+    #expect(html.contains("Cell 7"), "the window did not grow by two rows of four cells")
+    #expect(!html.contains("Cell 8"), "the window grew by two rows of the old two columns")
   }
 
   /// A window materialized from the collection's current revision is left alone, so nothing is refreshed.

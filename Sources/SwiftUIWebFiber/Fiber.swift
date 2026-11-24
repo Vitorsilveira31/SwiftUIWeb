@@ -311,7 +311,9 @@ package final class Fiber {
   package var _lazyWindow: (revision: UInt64, lower: Int, upper: Int, count: Int, before: Double, keys: [_FiberKey])?
   /// What the host laid out of this lazy owner, when it reported it: how many cells make a row (an adaptive grid's columns are
   /// not known here) and the average extent of a row along the scrolling axis. The better estimate for the cells it has not shown.
-  package var _lazyHostMeasure: (lanes: Int, rowExtent: Double)?
+  /// `declaredLanes` is the declared lane count the measure was taken under: a fiber keeps its identity when its declared
+  /// columns change, and a measure of the old columns is not used for the new layout.
+  package var _lazyHostMeasure: (lanes: Int, rowExtent: Double, declaredLanes: Int)?
 
   /// Epoch of the last change to this fiber or anything below it. A browser
   /// host that publishes the tree compares it with the last epoch the DOM
@@ -2478,8 +2480,10 @@ package final class FiberTree {
       guard let owner = fiber(at: info.ownerIdentity), let window = owner._lazyWindow else { continue }
       let descriptor = info.descriptor
       guard window.revision != descriptor.revision else { continue }
-      let lanes = owner._lazyHostMeasure?.lanes ?? max(1, descriptor.laneCount)
-      let extent = owner._lazyHostMeasure?.rowExtent ?? descriptor.estimatedExtent
+      // The host's measure is used only while the declared lane count it was taken under is still the current one.
+      let measure = owner._lazyHostMeasure.flatMap { $0.declaredLanes == descriptor.laneCount ? $0 : nil }
+      let lanes = measure?.lanes ?? max(1, descriptor.laneCount)
+      let extent = measure?.rowExtent ?? descriptor.estimatedExtent
       let lower = min(window.lower, descriptor.count)
       var upper = min(descriptor.count, window.upper)
       if window.upper >= window.count, descriptor.count > window.count {
