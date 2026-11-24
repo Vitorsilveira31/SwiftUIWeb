@@ -11,7 +11,8 @@
 //      toolchain's modules list reference-types in their target_features section only because the compiler enables it; when
 //      they validate without it, the split runs on a copy without that section (and with the section's other features
 //      enabled by flag), so the placeholders sit in the module's own table and the second module's element segments fill
-//      them. A module that needs reference types, or lists a feature this script has no flag for, keeps the two-table layout.
+//      them. A module that needs reference types, lists a feature this script has no flag for, or has code that writes its
+//      table (a write could replace a placeholder) keeps the two-table layout.
 //   1. Binaryen's `wasm-split --instrument` writes a copy of app.wasm that records which functions run.
 //   2. A copy of the bundle with that module runs in headless Chromium, in the Worker as a page runs it by default,
 //      until its first screen is up: the app is mounted and has stopped committing (400 ms without a commit), at every
@@ -165,7 +166,7 @@ export function withoutTargetFeatures(bytes) {
 /**
  * Whether a module can be split into its own table, judged from its features alone: `{ flags }` (what to pass to Binaryen
  * for the copy without the section) or `{ reason }` for the two-table layout. Whether the module validates without
- * reference types is checked apart, by Binaryen (`validatesWithout`).
+ * reference types, and whether its code leaves its table alone, is checked apart, by Binaryen (`whyNotOwnTable`).
  */
 export function planLayout(bytes) {
   const section = readTargetFeatures(bytes);
@@ -177,12 +178,27 @@ export function planLayout(bytes) {
   return { flags: ["--mvp-features", ...others.map((name) => FEATURE_FLAGS[name])] };
 }
 
-/** Whether Binaryen accepts the module under exactly these flags (reference types off). Null when it does, else why not. */
-export function validatesWithout(path, flags) {
-  const result = spawnSync("wasm-opt", [path, ...flags], { encoding: "utf8" });
+// The instructions that write a table, as `wasm-opt --metrics` names them once case and punctuation are dropped.
+// `table.set` and `table.fill` need reference types, so validation refuses them first; they are listed all the same.
+const TABLE_WRITES = { tablecopy: "table.copy", tableinit: "table.init", tableset: "table.set", tablefill: "table.fill" };
+
+/**
+ * Why a module cannot take the split's placeholders into its own table under exactly these flags (reference types off);
+ * null when it can. Two things rule it out. Binaryen does not accept the module without reference types. Or the module's
+ * code writes its function table: `table.copy` and `table.init` need bulk memory only, so validation lets them through,
+ * and a placeholder sits in a slot of that table. A call the split routes through the slot would follow such a write,
+ * where the unsplit module's direct call does not. One `wasm-opt` run answers both: it validates the module, and
+ * `--metrics` counts each kind of instruction.
+ */
+export function whyNotOwnTable(path, flags) {
+  const result = spawnSync("wasm-opt", [path, ...flags, "--metrics"], { encoding: "utf8" });
   if (result.error?.code === "ENOENT") throw new Error("wasm-opt (Binaryen) is not installed: brew install binaryen (or sudo apt-get install binaryen)");
-  if (result.status === 0) return null;
-  return `the module does not validate without reference types (${(result.stderr || result.stdout).split("\n").find((line) => line.trim()) ?? "wasm-opt failed"})`;
+  if (result.status !== 0) return `the module does not validate without reference types (${(result.stderr || result.stdout || "").split("\n").find((line) => line.trim()) ?? "wasm-opt failed"})`;
+  const counts = new Map([...(result.stdout ?? "").matchAll(/^\s*(\S+)\s*:\s*(\d+)\s*$/gm)].map(([, name, count]) => [name.toLowerCase().replace(/[._-]/g, ""), Number(count)]));
+  // Without the counts nothing says the table is left alone, so the layout that does not depend on it is kept.
+  if (!counts.has("[funcs]")) return "wasm-opt --metrics printed no counts, so a write to the module's table cannot be ruled out";
+  const writes = Object.keys(TABLE_WRITES).filter((name) => counts.get(name) > 0).map((name) => TABLE_WRITES[name]);
+  return writes.length ? `the module's code writes its function table (${writes.join(", ")}), where the placeholders would sit` : null;
 }
 
 /** The cache key of a split: every input the profile run and the split depend on. */
@@ -363,7 +379,7 @@ export async function splitBundle(bundle, { route = "/", viewports = parseViewpo
     if (plan.flags) {
       const stripped = join(work, "without-reference-types.wasm");
       writeFileSync(stripped, withoutTargetFeatures(readFileSync(input)));
-      why = validatesWithout(stripped, plan.flags);
+      why = whyNotOwnTable(stripped, plan.flags);
       if (!why) { source = stripped; flags = plan.flags; }
     } else why = plan.reason;
     const layout = source === input ? twoTables(why) : SINGLE_TABLE;

@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { cacheKey, FELL_BACK, FEATURE_FLAGS, planLayout, readTargetFeatures, splitBundle, validatesWithout, withoutTargetFeatures } from "./wasm-split-release.mjs";
+import { cacheKey, FELL_BACK, FEATURE_FLAGS, planLayout, readTargetFeatures, splitBundle, whyNotOwnTable, withoutTargetFeatures } from "./wasm-split-release.mjs";
 
 const SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), "wasm-split-release.mjs");
 const VIEWPORTS = [{ width: 1280, height: 800 }];
@@ -136,26 +136,33 @@ test("the layout is part of the cache key", () => {
 
 const hasBinaryen = ["wasm-as", "wasm-opt"].every((tool) => !spawnSync(tool, ["--version"]).error);
 
-test.skipIf(!hasBinaryen)("Binaryen validates a module without reference types, and refuses one that needs them", () => {
+test.skipIf(!hasBinaryen)("a module takes the placeholders into its own table unless it needs reference types or writes that table", () => {
   const directory = mkdtempSync(join(tmpdir(), "wasm-split-validate-test-"));
   const assemble = (name, wat) => {
     writeFileSync(join(directory, `${name}.wat`), wat);
     const plain = join(directory, `${name}-plain.wasm`), tagged = join(directory, `${name}.wasm`);
-    expect(spawnSync("wasm-as", [join(directory, `${name}.wat`), "--enable-reference-types", "-o", plain]).status).toBe(0);
+    expect(spawnSync("wasm-as", [join(directory, `${name}.wat`), "--enable-reference-types", "--enable-bulk-memory", "-o", plain]).status).toBe(0);
     expect(spawnSync("wasm-opt", [plain, "--enable-reference-types", "--enable-bulk-memory", "--emit-target-features", "-o", tagged]).status).toBe(0);
     return tagged;
   };
-  const table = assemble("table", `(module (memory 1) (table 2 funcref) (elem (i32.const 0) $a $a) (func $a (result i32) (i32.const 1)) (func (export "b") (result i32) (call_indirect (result i32) (i32.const 0))))`);
-  const needs = assemble("needs", `(module (func (export "f") (param externref) (result externref) (local.get 0)))`);
-  for (const [path, valid] of [[table, true], [needs, false]]) {
-    const bytes = new Uint8Array(readFileSync(path));
+  const table = `(memory 1) (table 4 funcref) (elem $e (i32.const 0) $a $a) (func $a (result i32) (i32.const 1)) (func (export "b") (result i32) (call_indirect (result i32) (i32.const 0)))`;
+  const cases = [
+    // A table that is only read: the layout applies.
+    ["table", `(module ${table})`, null],
+    ["needs", `(module (func (export "f") (param externref) (result externref) (local.get 0)))`, "does not validate without reference types"],
+    // `table.copy` and `table.init` validate with bulk memory alone, and either could replace a placeholder's slot.
+    ["copies", `(module ${table} (func (export "move") (table.copy (i32.const 2) (i32.const 0) (i32.const 1))))`, "writes its function table (table.copy)"],
+    ["inits", `(module ${table} (func (export "fill") (table.init $e (i32.const 2) (i32.const 0) (i32.const 0))))`, "writes its function table (table.init)"],
+  ];
+  for (const [name, wat, refusal] of cases) {
+    const bytes = new Uint8Array(readFileSync(assemble(name, wat)));
     const plan = planLayout(bytes);
     expect(plan.flags).toBeTruthy();
-    const stripped = join(directory, `${valid ? "table" : "needs"}-stripped.wasm`);
+    const stripped = join(directory, `${name}-stripped.wasm`);
     writeFileSync(stripped, withoutTargetFeatures(bytes));
-    const why = validatesWithout(stripped, plan.flags);
-    if (valid) expect(why).toBeNull();
-    else expect(why).toContain("does not validate without reference types");
+    const why = whyNotOwnTable(stripped, plan.flags);
+    if (refusal === null) expect(why).toBeNull();
+    else expect(why).toContain(refusal);
   }
   rmSync(directory, { recursive: true, force: true });
 });

@@ -47,8 +47,11 @@ validates without the feature, splits a copy of the module without the section (
 carries the checksum of the module it was made for. The module is not rewritten through `wasm-opt`.
 
 The two-table layout is kept, and the build's `wasm split:` line says so with the reason, when the module has no
-`target_features` section or does not list reference types, lists a feature that has no flag in that table, or does not
-validate without reference types (checked with `wasm-opt` before the profile run). It costs the trampolines in
+`target_features` section or does not list reference types, lists a feature that has no flag in that table, does not
+validate without reference types, or has code that writes its function table. `table.copy` and `table.init` need bulk
+memory only, so validation alone lets them through; a placeholder sits in a slot of that table, and a call the split routed
+through the slot would follow such a write, where the unsplit module's direct call does not. One `wasm-opt` run before the
+profile run checks both: it validates the copy and counts its instructions (`--metrics`). That layout costs the trampolines in
 `app.wasm`, a table of its own and an extra indirection on calls to moved functions. The single-table layout costs
 `app-rest.wasm` the element segments that fill the placeholders' slots, which the two-table layout does not need to the
 same degree. The split of a module is cached with its layout, and the flags are part of the cache key.
@@ -143,7 +146,7 @@ not the download competing with the first screen. Every interaction of `Tools/co
   waits on the Worker; the page itself (the field's text, scrolling) does not.
 - The total is larger than one module (the moved functions' exports and placeholders, the second module's element segments,
   and two compressed streams).
-- A module that needs reference types, or lists a feature `FEATURE_FLAGS` does not know, keeps the two-table layout and the
-  trampolines it brings.
+- A module that needs reference types, lists a feature `FEATURE_FLAGS` does not know, or has code that writes its function
+  table keeps the two-table layout and the trampolines it brings.
 - A call that waits for `app-rest.wasm` while the background download is still on its way makes a second request for it;
   Chromium serves that one from the first (its `transferSize` is 0 on the Board), so no byte comes twice there.
