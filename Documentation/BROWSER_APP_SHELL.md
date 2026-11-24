@@ -22,6 +22,21 @@ hook (`Tools/inject-app-head.mjs`):
 | `Resources/head.html` | HTML fragment inserted into `<head>` right after the framework `styles.css`. A `<title>` or `theme-color` `<meta>` in the fragment replaces the template default. |
 | `Resources/app.css` | Linked after the fragment. Unlayered application CSS always wins over the framework's layered framework styles, so it can override `--color-swu-*` tokens and the custom properties below. |
 
+### Browser files of libraries
+
+A library package can keep browser files of its own in its `Web/Resources/`: the script of the page service or DOM
+component its browser target drives, a JavaScript SDK it vendors. An application that depends on it through a local path
+(`.package(path: "../skip-sentry")`, followed transitively) ships them without keeping copies
+(`Tools/package-web-resources.mjs`):
+
+- Every file of the library's `Web/Resources/` is copied to the same place next to `index.html` (links followed, and they
+  must stay inside the library; names that start with `.` are skipped). The application's own resources are copied after,
+  so an application file of the same name replaces the library's.
+- The library's `head.html` goes into `<head>` before the application's fragment, after a comment naming the library.
+  Its scripts therefore run first (deferred scripts run in document order), and the application's fragment can still
+  declare the page's Content-Security-Policy or title.
+- A file two libraries both ship, or one that would replace a file of the framework's bundle, stops the build.
+
 ### Content-Security-Policy
 
 The page ships with a policy, written into `index.html` as the last build step (`Tools/seal-csp.mjs`, which hashes the

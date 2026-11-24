@@ -543,6 +543,10 @@ final="$BUNDLE_ROOT/$product"; rm -rf "$final"; mkdir -p "$(dirname "$final")"; 
 # The directory is SWIFTUIWEB_RESOURCES when set, else `Web/Resources` (next to
 # the browser target), else `Resources`. Symbolic links are followed, so a
 # file shared with another target (fonts) can live in one place.
+# The local packages the consumer depends on can ship browser files of their own in `Web/Resources/` (the script of a
+# page service, a JavaScript SDK): they are copied first, and their head.html fragments go before the application's
+# (Tools/package-web-resources.mjs), so an application never keeps copies of a library's files.
+[[ "$EXTERNAL_PACKAGE" != 1 ]] || bun "$ROOT/Tools/package-web-resources.mjs" "$PACKAGE_ROOT" "$final"
 if [[ "$EXTERNAL_PACKAGE" == 1 ]]; then
   resources_dir="${SWIFTUIWEB_RESOURCES:-}"
   if [[ -z "$resources_dir" ]]; then
@@ -572,6 +576,11 @@ if [[ "$EXTERNAL_PACKAGE" == 1 ]]; then
     rm -f "$resource_list"
     cp -RL "$resources_dir/." "$final/"
   fi
+fi
+if [[ -f "$final/.package-head.html" ]]; then
+  { cat "$final/.package-head.html"; [[ ! -f "$final/head.html" ]] || cat "$final/head.html"; } > "$final/.head.html.merged"
+  mv "$final/.head.html.merged" "$final/head.html"
+  rm -f "$final/.package-head.html"
 fi
 # Application document-head hook: Resources/head.html is inserted into
 # <head> after styles.css and Resources/app.css is linked after it, so web

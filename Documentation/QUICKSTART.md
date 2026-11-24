@@ -152,7 +152,9 @@ under `#if canImport(SwiftUIWebWeb)`.
 
 **Static files.** Files in `Resources/` (or `Web/Resources/`) are copied next to `index.html`. Two have a special role:
 `head.html` is inserted into the page's `<head>` (web fonts, `<meta>` tags), and `app.css` is loaded after the
-framework's stylesheet (colors, fonts, spacing through its tokens). See [the browser shell guide](BROWSER_APP_SHELL.md).
+framework's stylesheet (colors, fonts, spacing through its tokens). A local package dependency's own `Web/Resources/`
+(and its `head.html`) are included the same way, so a library ships its browser scripts itself. See
+[the browser shell guide](BROWSER_APP_SHELL.md).
 
 ## 4. Test it
 
