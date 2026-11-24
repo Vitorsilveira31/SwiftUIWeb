@@ -173,6 +173,8 @@ export function createServiceForwarder(post) {
   const replies = new Map();
   const receivers = new Map();
   const services = {
+    // Answers and events reach the app inside `receive`, in the message that carries them (BrowserIO relies on it).
+    forwarded: true,
     call(name, method, payload, { operation, settle } = {}) {
       const request = next++;
       const message = { t: 'service', runtime, request, operation, name, method, payload };

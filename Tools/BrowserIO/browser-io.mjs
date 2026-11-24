@@ -301,9 +301,12 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
   function observeService(id, packet) {
     const input = new Reader(packet); const name = input.text(); const event = input.text(); input.finish();
     if (!serviceHost) throw new IOError(-7, 'Page services are unavailable in this runtime');
-    const unsubscribe = serviceHost.observe(name, event, text => {
-      if (operations.has(id)) emit(id, BrowserIOEvent.serviceEvent, new Writer().text(text).bytes());
-    }, { operation: id });
+    const deliver = text => { if (operations.has(id)) emit(id, BrowserIOEvent.serviceEvent, new Writer().text(text).bytes()); };
+    // Through a forwarder an event goes into Swift inside the message that carried it, where the host handles a trap (it
+    // can move the app and replay that message). The page's own registry calls this from the SDK's `emit` and only logs
+    // what a listener throws, but a trap here is the runtime's failure: it goes to onError.
+    const receive = serviceHost.forwarded ? deliver : text => { try { deliver(text); } catch (error) { onError(error); } };
+    const unsubscribe = serviceHost.observe(name, event, receive, { operation: id });
     const op = operations.get(id);
     if (op) op.cleanup = unsubscribe; else unsubscribe();
   }

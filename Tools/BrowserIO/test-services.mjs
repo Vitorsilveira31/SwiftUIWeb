@@ -205,6 +205,22 @@ let tests = 0;
   tests++;
 }
 
+{ // With the page's own services, a trap while an event goes into Swift reaches onError, not only the console.
+  const errors = [], logged = [];
+  const environment = { console: { error: (...parts) => logged.push(parts.join(' ')) } };
+  const trapping = { exports: { memory, browser_io_alloc: alloc, browser_io_deliver() { throw new WebAssembly.RuntimeError('unreachable'); } } };
+  const host = createBrowserIO({ getInstance: () => trapping, environment, baseURL: 'https://example.test', onError: error => errors.push(error) });
+  let emit = null;
+  environment.SwiftUIWebServices.define('push', context => { emit = context.emit; return {}; });
+  start(host, BrowserIOOperation.serviceEvents, new Writer().text('push').text('message').bytes(), () => {});
+  await settle();
+  emit('message', 'hello');
+  assert.equal(errors.length, 1);
+  assert.match(String(errors[0]?.message), /unreachable/);
+  assert.deepEqual(logged, []);
+  tests++;
+}
+
 { // After a move, a reply for the old runtime never reaches the new one, whose request numbers start again at 1.
   const page = {};
   const later = [];
