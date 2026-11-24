@@ -10,12 +10,14 @@
 //    `SWIFTUIWEB_WASM_SPLIT=1 BUILD_ONLY=1 CONFIGURATION=release Tools/run-browser.sh board`), the app reaches its first
 //    screen in the Worker without waiting for app-rest.wasm, which arrives behind it; on the main thread
 //    (`?render-in-worker=0`, where both modules download side by side), and after a move from the Worker to the main thread (the performance diagnostics'
-//    forced overflow), it keeps working. WASM_SPLIT_ROUTE (default /) is the page it opens.
+//    forced overflow), it keeps working. WASM_SPLIT_ROUTE (default /) is the page it opens. The first module must declare
+//    one table and import its placeholders (the module's own table holds them, with no forwarding stubs);
+//    WASM_SPLIT_LAYOUT=two-tables expects the other layout, for a module that needs reference types.
 //
 // Needs Binaryen (wasm-as, wasm-split); without it part 1 is skipped with a message.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { launch, runSuite, serveBundle, serveStatic, ROOT } from "./browser-test-support.mjs";
@@ -122,7 +124,36 @@ async function synthetic(browser) {
   }
 }
 
+/** How many tables a module defines or imports: the count of its table section plus its table imports. */
+function tableCount(bytes) {
+  let at = 8;
+  const leb = () => { let value = 0, shift = 0, byte; do { byte = bytes[at++]; value += (byte & 0x7f) * 2 ** shift; shift += 7; } while (byte & 0x80); return value; };
+  let defined = 0;
+  while (at < bytes.length) {
+    const id = bytes[at++], size = leb(), end = at + size;
+    if (id === 4) { defined = leb(); break; }
+    at = end;
+  }
+  return defined + WebAssembly.Module.imports(new WebAssembly.Module(bytes)).filter((entry) => entry.kind === "table").length;
+}
+
+// The layout of the first module: the placeholders sit in the module's own table, which is then its only table. A module
+// that needs reference types (or lists a feature without a Binaryen flag) keeps a table of its own for them, and
+// WASM_SPLIT_LAYOUT=two-tables says the bundle is one of those.
+function checkLayout(bundle) {
+  const name = readdirSync(bundle).find((file) => /^app(\.[0-9a-f]{8})?\.wasm$/.test(file));
+  assert.ok(name, "the bundle has an app.wasm");
+  const bytes = new Uint8Array(readFileSync(join(bundle, name)));
+  const placeholders = WebAssembly.Module.imports(new WebAssembly.Module(bytes)).filter((entry) => entry.module.startsWith("p.") && entry.kind === "function").length;
+  assert.ok(placeholders > 0, `${name} imports the placeholders of the functions it moved`);
+  const tables = tableCount(bytes);
+  if (process.env.WASM_SPLIT_LAYOUT === "two-tables") assert.equal(tables, 2, `${name} has the two-table layout`);
+  else assert.equal(tables, 1, `${name} declares one table and imports its placeholders (the single-table layout)`);
+  console.log(`ok: ${name} has ${tables} table${tables === 1 ? "" : "s"} and ${placeholders} placeholder imports`);
+}
+
 async function splitBundle(browser, bundle) {
+  checkLayout(bundle);
   const route = process.env.WASM_SPLIT_ROUTE ?? "/";
   const server = await serveBundle({ bundle, logName: null });
   const marks = async (page) => {
