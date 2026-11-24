@@ -136,7 +136,7 @@ describe("worker.js before the difference path", () => {
 
 describe("worker.js update by difference", () => {
   test("with the switch off a module never gets dcb, but still names itself as a dictionary", async () => {
-    const response = await run(request(MODULE, { headers: askingForDifference, reader: "br, dcb, gzip" }));
+    const response = await run(request(MODULE, { headers: askingForDifference, reader: "br, dcb, gzip" }), { DICTIONARY_UPDATES: "off" });
     expect(await text(response)).toBe("brotli bytes");
     expect(response.headers.get("Content-Encoding")).toBe("br");
     expect(response.headers.get("Use-As-Dictionary")).toBe('match="/app.*.wasm"');
@@ -181,6 +181,12 @@ describe("worker.js update by difference", () => {
       expect(response.headers.get("Vary")).toBe("Accept-Encoding, Available-Dictionary");
     });
   }
+
+  test("with no DICTIONARY_UPDATES in env the default is on: a valid request gets the difference", async () => {
+    const response = await run(request(MODULE, { headers: askingForDifference, reader: "br, dcb" }));
+    expect(await text(response)).toBe("difference bytes");
+    expect(response.headers.get("Content-Encoding")).toBe("dcb");
+  });
 
   test("the check header only counts as 1; the switch accepts only on", async () => {
     const headers = { ...askingForDifference, "SwiftUIWeb-Dictionary-Check": "0" };

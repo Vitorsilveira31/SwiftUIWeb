@@ -52,14 +52,15 @@ curl -sI https://swiftuiweb.<account subdomain>.workers.dev/en/components/slider
 ## Update by difference
 
 A returning visitor can be sent only the difference between the module in the browser's cache and the new one
-(`Documentation/DEPLOYMENT.md`, "Update by difference"). The Worker is ready for it and the answers are off until the host is
-checked: whether Cloudflare's network passes `Available-Dictionary` to the Worker and delivers a `Content-Encoding: dcb`
-body byte for byte has to be seen on the live host.
+(`Documentation/DEPLOYMENT.md`, "Update by difference"). The Worker answers with it. Whether Cloudflare's network passes `Available-Dictionary` to the Worker and delivers a
+`Content-Encoding: dcb` body byte for byte was checked on the live host, and it passed on 2026-11-24. So this Worker
+answers by difference.
 
 - The switch is `DICTIONARY_UPDATES` (a Worker variable, with the default `DEFAULT_DICTIONARY_UPDATES` at the top of
-  `worker.js`, `"off"`). With `"on"`, a request for a module that has a valid `Available-Dictionary`, accepts `dcb` (by
-  `request.cf.clientAcceptEncoding`) and has a difference file for that hash is answered with the file's bytes, length and
-  ETag, `Content-Encoding: dcb`, and the plain file's other headers. Any other request gets the brotli copy as before.
+  `worker.js`, `"on"`). Set the variable to `"off"` to turn the answers off without a code change. While it is on, a request
+  for a module that has a valid `Available-Dictionary`, accepts `dcb` (by `request.cf.clientAcceptEncoding`) and has a
+  difference file for that hash is answered with the file's bytes, length and ETag, `Content-Encoding: dcb`, and the plain
+  file's other headers. Any other request gets the brotli copy as before.
 - Whatever the switch says, a request that carries `SwiftUIWeb-Dictionary-Check: 1` is answered by difference. Browsers never
   send that header, so the host can be checked while visitors still get the brotli copy.
 - Every module answer carries `Use-As-Dictionary` and `Vary: Accept-Encoding, Available-Dictionary` whatever the switch says.
@@ -73,14 +74,11 @@ bun Tools/check-dictionary-host.mjs https://swiftuiweb.<account subdomain>.worke
 ```
 
 For each module it prints "difference served and correct", "no difference served" (with the response's `Content-Encoding`,
-`Vary` and `Use-As-Dictionary`) or "WRONG", and exits 1 on any WRONG. When every module with an earlier version is served
-correctly, turn the answers on: set `DICTIONARY_UPDATES` to `on` for the Worker (or change the default in `worker.js`) and
-deploy. That deploy writes no difference from the version before it: its stage downloads the modules the live site serves
-now (the ones just checked) as the earlier modules, so the difference files it writes are from those. Returning visitors start
-getting differences from the first deploy after the switch is on that changes a module, for each module whose difference
-file the build kept (it keeps one only when it is at least 10 % smaller than the module's `.br` copy). Turning the switch
-on this way costs that one deploy's differences and keeps the steps plain. If the host does not deliver `dcb`
-unchanged, leave it off: the site works as before.
+`Vary` and `Use-As-Dictionary`) or "WRONG", and exits 1 on any WRONG. The check passed for this site on 2026-11-24, which is
+why the switch is on by default. Other projects copying this Worker start with the switch off or on as they choose: the
+default in `worker.js` is `"on"`, so a copy that wants it off sets the default to `"off"` or the variable to `"off"`. Run the
+check on any other host before relying on the answers there. If the host does not deliver `dcb` unchanged, set the switch
+to `"off"`: the site works as before, with the brotli copy.
 
 ## What the Worker answers
 
