@@ -511,11 +511,14 @@ func _describedRenderer(_ render: @escaping @MainActor (_RenderContext) -> _Rend
     while result.insert(current).inserted, let inner = innerOwners[current], outerOwners[inner] == current { current = inner }
   }
 
-  /// The outermost owner that returned the same node as `token`, or `token`.
+  /// The outermost owner that returned the same node as `token`, or `token`. Every modifier layer around a view's body
+  /// can be an owner that returns that same node, so the chain is as long as the stack of modifiers on it and its
+  /// ancestors: no fixed number of hops covers it. Only a cycle could make the walk longer than the links there are.
   @_spi(Renderer) public func _outermostOwner(of token: UInt64) -> UInt64 {
     var current = token
     var hops = 0
-    while let outer = outerOwners[current], outer != current, hops < 16 {
+    let links = outerOwners.count
+    while let outer = outerOwners[current], outer != current, hops < links {
       current = outer
       hops += 1
     }
