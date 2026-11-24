@@ -58,7 +58,7 @@ watch:
 	bun Tools/dev-watch.mjs --package-root "$(CURDIR)" --product "$(or $(PRODUCT),ShowcaseSite)" --configuration "$(CONFIGURATION)"
 
 tools-test:
-	bun Tools/run-scripts.mjs "test ./Tools/test-compile-assets.mjs ./Tools/test-compile-strings.mjs ./Tools/test-inject-app-head.mjs ./Tools/test-seal-csp.mjs ./Tools/test-first-paint.mjs ./Tools/test-hash-release-bundle.mjs ./Tools/test-precompress-bundle.mjs ./Tools/test-bun-server-encoding.mjs ./Tools/test-bun-server-dictionary.mjs ./Tools/test-dictionary-transport.mjs ./Tools/test-delta-compress-bundle.mjs ./Tools/test-bun-server-api-proxy.mjs ./Tools/test-local-package-dependencies.mjs ./Tools/test-package-web-resources.mjs ./Tools/test-framework-url-dependency.mjs ./Tools/test-staging-layout.mjs ./Tools/test-patch-browser-index.mjs ./Tools/test-embedded-capabilities.mjs ./Tools/test-embedded-preflight.mjs ./Tools/test-strip-wasm.mjs ./Tools/test-wasm-split-release.mjs ./Tools/test-swiftuiweb-tools.mjs ./Tools/test-wasm-audit.mjs ./Tools/test-perf-ab-stats.mjs ./Tools/test-cloudflare-site-stage.mjs" "test ./Tools/test-text-format.mjs" "test ./Tools/test-unicode-data.mjs" "test ./Tools/test-audit-showcase-catalog.mjs" "Tools/audit-showcase-catalog.mjs" "test ./Tools/test-compare-react.mjs ./Tools/test-compare-react-orders.mjs ./Tools/test-publish-react-comparison.mjs" "test ./Tools/test-mock-jsonplaceholder.mjs" "Tools/publish-react-comparison.mjs --check" "Tools/test-audits.mjs" "Tools/test-cloudflare-site-prerender.mjs" "Tools/audit-no-python.mjs" "Tools/test-audit-no-python.mjs" "Tools/audit-private-terms.mjs" "Tools/test-audit-private-terms.mjs" "Tools/test-bundle-reuse.mjs" "Tools/test-run-test-groups.mjs" "Tools/test-run-scripts.mjs" "Tools/test-swiftui-api-parity.mjs" "Tools/swiftuiweb-tools.mjs browser-io-protocol --check" "Tools/swiftuiweb-tools.mjs binary-atoms --check"
+	bun Tools/run-scripts.mjs "test ./Tools/test-compile-assets.mjs ./Tools/test-compile-strings.mjs ./Tools/test-inject-app-head.mjs ./Tools/test-seal-csp.mjs ./Tools/test-first-paint.mjs ./Tools/test-hash-release-bundle.mjs ./Tools/test-precompress-bundle.mjs ./Tools/test-bun-server-encoding.mjs ./Tools/test-bun-server-dictionary.mjs ./Tools/test-dictionary-transport.mjs ./Tools/test-delta-compress-bundle.mjs ./Tools/test-bun-server-api-proxy.mjs ./Tools/test-local-package-dependencies.mjs ./Tools/test-package-web-resources.mjs ./Tools/test-framework-url-dependency.mjs ./Tools/test-staging-layout.mjs ./Tools/test-patch-browser-index.mjs ./Tools/test-embedded-capabilities.mjs ./Tools/test-embedded-preflight.mjs ./Tools/test-strip-wasm.mjs ./Tools/test-wasm-split-release.mjs ./Tools/test-swiftuiweb-tools.mjs ./Tools/test-wasm-audit.mjs ./Tools/test-perf-ab-stats.mjs ./Tools/test-cloudflare-site-stage.mjs ./Tools/test-cloudflare-site-worker.mjs ./Tools/test-fetch-live-modules.mjs ./Tools/test-check-dictionary-host.mjs" "test ./Tools/test-text-format.mjs" "test ./Tools/test-unicode-data.mjs" "test ./Tools/test-audit-showcase-catalog.mjs" "Tools/audit-showcase-catalog.mjs" "test ./Tools/test-compare-react.mjs ./Tools/test-compare-react-orders.mjs ./Tools/test-publish-react-comparison.mjs" "test ./Tools/test-mock-jsonplaceholder.mjs" "Tools/publish-react-comparison.mjs --check" "Tools/test-audits.mjs" "Tools/test-cloudflare-site-prerender.mjs" "Tools/audit-no-python.mjs" "Tools/test-audit-no-python.mjs" "Tools/audit-private-terms.mjs" "Tools/test-audit-private-terms.mjs" "Tools/test-bundle-reuse.mjs" "Tools/test-run-test-groups.mjs" "Tools/test-run-scripts.mjs" "Tools/test-swiftui-api-parity.mjs" "Tools/swiftuiweb-tools.mjs browser-io-protocol --check" "Tools/swiftuiweb-tools.mjs binary-atoms --check"
 	bun build --no-bundle --target=bun Tools/BrowserIO/browser-io.mjs > /dev/null
 
 test-layout:
@@ -281,8 +281,8 @@ help:
 	@echo "  make wasm-split-browser-test   app.wasm split by the first screen (SWIFTUIWEB_WASM_SPLIT=1): the rest loads behind it, a call that needs it waits (Chromium and WebKit)"
 	@echo "  make dictionary-update-browser-test   a module updated by its difference (SWIFTUIWEB_PREVIOUS_BUNDLES): the page, a Worker and a synchronous request get the new version (Chromium dcb, WebKit whole file)"
 	@echo "  make first-paint-measure BUNDLE=<dir> [NETWORK=fast|slow] [CPU=1|4]  FCP, LCP, mount time and layout shift of a release bundle"
-	@echo "  make cloudflare-site-check     Build the project site and validate its Cloudflare Worker without uploading"
-	@echo "  make cloudflare-site-deploy    Build the project site and deploy it to Cloudflare (cf auth login, or CLOUDFLARE_API_TOKEN)"
+	@echo "  make cloudflare-site-check     Build the project site (with the live site's modules as earlier ones: reaches the network) and validate its Cloudflare Worker without uploading"
+	@echo "  make cloudflare-site-deploy    Build the project site the same way and deploy it to Cloudflare (cf auth login, or CLOUDFLARE_API_TOKEN)"
 	@echo "  make identity-test              Run semantic Fiber identity regressions"
 	@echo "  make identity-fuzz-test        Run deterministic identity fuzzing"
 	@echo "  make identity-browser-test     Run real Embedded DOM/focus/presentation identity checks"
@@ -724,9 +724,16 @@ showcase-site-test:
 # The project site on Cloudflare (Tools/cloudflare-site): a Worker that serves the ShowcaseSite release bundle as static
 # assets. The deploy signs in with `cf auth login` on a workstation, or CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID
 # in CI (.github/workflows/deploy-site.yml). The Cloudflare CLI needs Node.js 22.18 or later.
+# The stage first downloads the modules the live site serves (Tools/fetch-live-modules.mjs, from SITE_ORIGIN or the project's
+# own address) into .build/cloudflare-site-previous, and builds with them as SWIFTUIWEB_PREVIOUS_BUNDLES, so the build writes
+# the difference files that stage.mjs uploads. The fetch reaches the network and never fails the stage: a site that cannot
+# be read leaves the directory as it was and the build writes no difference files.
 .PHONY: cloudflare-site-stage cloudflare-site-check cloudflare-site-deploy
+SITE_PREVIOUS = $(CURDIR)/.build/cloudflare-site-previous
 cloudflare-site-stage:
-	BUILD_ONLY=1 CONFIGURATION=release Tools/run-browser.sh site
+	mkdir -p $(SITE_PREVIOUS)
+	bun Tools/fetch-live-modules.mjs "$$(bun Tools/cloudflare-site/stage.mjs --origin)" $(SITE_PREVIOUS)
+	SWIFTUIWEB_PREVIOUS_BUNDLES=$(SITE_PREVIOUS) BUILD_ONLY=1 CONFIGURATION=release Tools/run-browser.sh site
 	bun Tools/cloudflare-site/stage.mjs .build/browser/ShowcaseSite
 	cd Tools/cloudflare-site && bun install --frozen-lockfile
 cloudflare-site-check: cloudflare-site-stage
