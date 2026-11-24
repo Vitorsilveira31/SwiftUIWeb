@@ -107,7 +107,7 @@ describe("fetch-live-modules", () => {
 
   test("the page's <base href> is the base its references resolve against, as in a browser", async () => {
     // Quoted with either mark, or unquoted, as HTML allows.
-    for (const base of [`<base href="/">`, `<base href='/'>`, `<base href=/>`, `<base target=_self href=/ >`]) {
+    for (const base of [`<base href="/">`, `<base href='/'>`, `<base href=/>`, `<base target=_self href=/ >`, `<base data-href=/unused/ href="/">`]) {
       const origin = serve({
         "/en/purpose": `<html>${base}<link rel="preload" href="./${appName}"></html>`,
         [`/${appName}`]: appBytes,

@@ -63,7 +63,8 @@ export function resolveReference(reference, fileURL) {
  */
 export function documentBase(html, pageURL) {
   // The value may be quoted with either mark or, as HTML allows, unquoted (up to a space or the end of the tag).
-  const match = /<base\s[^>]*?\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i.exec(html);
+  // `href` is a whole attribute name: the space before it keeps `data-href` and the like out.
+  const match = /<base\s(?:[^>]*?\s)?href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i.exec(html);
   const href = match ? (match[1] ?? match[2] ?? match[3]) : undefined;
   return (href !== undefined && resolveReference(href, pageURL)) || pageURL;
 }

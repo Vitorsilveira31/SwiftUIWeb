@@ -77,7 +77,9 @@ For each module it prints "difference served and correct", "no difference served
 correctly, turn the answers on: set `DICTIONARY_UPDATES` to `on` for the Worker (or change the default in `worker.js`) and
 deploy. That deploy writes no difference from the version before it: its stage downloads the modules the live site serves
 now (the ones just checked) as the earlier modules, so the difference files it writes are from those. Returning visitors start
-getting differences from the first deploy after the switch is on that changes a module. If the host does not deliver `dcb`
+getting differences from the first deploy after the switch is on that changes a module, for each module whose difference
+file the build kept (it keeps one only when it is at least 10 % smaller than the module's `.br` copy). Turning the switch
+on this way costs that one deploy's differences and keeps the steps plain. If the host does not deliver `dcb`
 unchanged, leave it off: the site works as before.
 
 ## What the Worker answers
