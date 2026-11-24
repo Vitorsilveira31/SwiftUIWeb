@@ -3,7 +3,7 @@
 // _headers file next to it. The brotli copy of each .wasm, .js and .css file goes with it (worker.js serves it to a reader
 // that accepts brotli, at the build's q11 instead of Cloudflare's on-the-fly quality) and the difference files
 // (`<module>.<64 hex>.dcb`, written when the build was given earlier modules; worker.js serves them to a reader that has
-// an earlier module, once its switch is on) of the modules it stages; the .gz copies stay behind (gzip
+// an earlier module, unless its DICTIONARY_UPDATES switch is "off") of the modules it stages; the .gz copies stay behind (gzip
 // readers get Cloudflare's own), and so do the .br copies of other files (index.html is rewritten by prerender, so its
 // copy would be stale), build logs and the build's own dotfiles (.bundle-inputs, the fingerprint that lets suites reuse a
 // bundle).

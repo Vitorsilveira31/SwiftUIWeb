@@ -18,19 +18,18 @@
 // `Available-Dictionary`). A reader that has an earlier module sends its hash in `Available-Dictionary` and accepts `dcb`;
 // the Worker then answers with the build's `<module>.<64 hex>.dcb` file the same way it answers with the `.br` copy.
 //
-// The difference answers are off until the host is seen to deliver them unchanged: whether Cloudflare's network passes
-// `Available-Dictionary` to a Worker and sends a `Content-Encoding: dcb` body byte for byte is checked on the live host, not
-// assumed. Until then a reader that sends the header gets the brotli copy as before. A request that carries
-// `SwiftUIWeb-Dictionary-Check: 1` (browsers never send it) gets the difference answer whatever the switch says, which is
-// how `bun Tools/check-dictionary-host.mjs <site> <earlier modules> --header "SwiftUIWeb-Dictionary-Check: 1"` tests the
-// host. To turn the answers on for every reader, set DICTIONARY_UPDATES to "on" (the Worker variable of that name, or the
-// default below) after that check passes.
+// The difference answers are on. They were turned on on 2026-11-24, after `Tools/check-dictionary-host.mjs` saw the host
+// deliver a `dcb` body unchanged, so a reader that sends the header gets the difference. Setting the Worker variable
+// `DICTIONARY_UPDATES` to "off" turns them off without a code change; a reader then gets the brotli copy as before. A
+// request that carries `SwiftUIWeb-Dictionary-Check: 1` (browsers never send it) gets the difference answer whatever the
+// switch says, which is how `bun Tools/check-dictionary-host.mjs <site> <earlier modules> --header
+// "SwiftUIWeb-Dictionary-Check: 1"` tests a host.
 
 import { acceptsDcb, differenceName, isDictionaryModule, parseAvailableDictionary, useAsDictionary, VARY } from "../dictionary-transport.mjs";
 
 const COMPRESSIBLE = /\.(wasm|js|css)$/;
 
-const DEFAULT_DICTIONARY_UPDATES = "off";
+const DEFAULT_DICTIONARY_UPDATES = "on";
 const CHECK_HEADER = "SwiftUIWeb-Dictionary-Check";
 
 const dictionaryUpdates = (request, env) =>

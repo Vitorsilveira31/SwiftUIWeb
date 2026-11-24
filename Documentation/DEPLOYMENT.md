@@ -149,8 +149,10 @@ Never build a file name from the header's text: parse it, check that the result 
 use it. `Tools/dictionary-transport.mjs` holds these rules as pure functions (Web Crypto and typed arrays only), so a Worker
 can import it; `Tools/bun-server.ts` is the reference. A host that cannot choose its answer by request header (a static
 host that serves a file for a path) ignores the `.dcb` files and works as before: it only downloads more. Do not upload
-them there. `Tools/cloudflare-site` stages them, and its Worker is ready to serve them but answers by difference only
-for a request that carries its check header until `Tools/check-dictionary-host.mjs` passes on the host (its README).
+them there. `Tools/cloudflare-site` stages them, and its Worker answers a returning visitor by difference: the host check
+passed on 2026-11-24, and `DICTIONARY_UPDATES="off"` on the Worker turns the answers off (its README). A copy of that Worker
+elsewhere starts with the switch off or on as it chooses (the default in `worker.js` is `"on"`), and runs
+`Tools/check-dictionary-host.mjs` on the host before relying on it.
 
 **Check a host.** Whether a CDN or proxy passes `Available-Dictionary` through and delivers a `Content-Encoding: dcb` body
 unchanged is a property of the host, not of the files. `bun Tools/check-dictionary-host.mjs <site URL> <directory of earlier
