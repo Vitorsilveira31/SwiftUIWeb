@@ -1,5 +1,7 @@
 import { BrowserIOOperation, BrowserIOEvent } from './protocol.generated.mjs';
 import { DOMViewError, createDOMViewHost } from './dom-view-host.mjs';
+import { ServiceError, createServiceHost, serviceAnswer } from './service-host.mjs';
+import { safeErrorMessage } from './redact.mjs';
 import { foldText, formatNumber } from './text-format.mjs';
 import { createPredicates } from './predicate-engine.mjs';
 import { createUnicodeImports } from './unicode-data.mjs';
@@ -9,7 +11,7 @@ const decoder = new TextDecoder('utf-8', { fatal: true });
 const MAX_PACKET = 64 * 1024 * 1024;
 // Operations a host can start again from their packet when the app moves to another thread (observers and timers; a
 // read-only fetch joins them once its request is parsed). Writes and transactions are reported as cancelled instead.
-const RESTARTABLE = new Set([BrowserIOOperation.timer, BrowserIOOperation.storageChanges, BrowserIOOperation.connectivityChanges, BrowserIOOperation.media]);
+const RESTARTABLE = new Set([BrowserIOOperation.timer, BrowserIOOperation.storageChanges, BrowserIOOperation.connectivityChanges, BrowserIOOperation.media, BrowserIOOperation.serviceEvents]);
 // Whether starting the operation again could repeat a side effect: every operation except the observers and a fetch
 // whose method only reads (GET, HEAD). Used when the app moves threads (see `fenceUnstarted` and `refuseReplayed`).
 function mayRepeatEffect(operation, packet) {
@@ -54,39 +56,32 @@ export class Reader {
   text() { return decoder.decode(this.data()); }
   finish() { if (this.at !== this.bytes.length) throw new IOError(-1, 'Unexpected trailing host packet data'); }
 }
+const isThenable = value => value !== null && (typeof value === 'object' || typeof value === 'function') && typeof value.then === 'function';
 function classify(error) {
   if (error instanceof IOError) return error;
   if (error instanceof DOMViewError) return new IOError(error.code, error.message);
+  if (error instanceof ServiceError) return new IOError(error.code, safeErrorMessage(error));
   const code = error?.name === 'QuotaExceededError' ? -3 : error?.name === 'SecurityError' || error?.name === 'NotAllowedError' ? -2 : error?.name === 'AbortError' ? -4 : -6;
   return new IOError(code, safeErrorMessage(error));
 }
-// Host diagnostics must never echo credentials, cookies, request bodies or
-// query strings into the RenderNode/DOM error channel or console. Keep the
-// stable error class/name because callers use the code, not an opaque message.
-export function safeErrorMessage(error) {
-  const raw = String(error?.message || error || 'Browser host error');
-  return raw
-    .replace(/([?&](?:token|access_token|refresh_token|code|key|secret|password|authorization))=[^&#\s]*/gi, '$1=[redacted]')
-    .replace(/(authorization\s*:\s*)(?:bearer\s+)?[^,;\s]+/gi, '$1[redacted]')
-    .replace(/(cookie\s*:\s*)([^,;\s]+)/gi, '$1[redacted]')
-    .replace(/(bearer\s+)[^\s]+/gi, '$1[redacted]')
-    .replace(/https?:\/\/[^\s]+/gi, value => {
-      try { const url = new URL(value); url.username = ''; url.password = ''; url.search = ''; url.hash = ''; return url.href; }
-      catch { return '[redacted-url]'; }
-    })
-    .slice(0, 512);
-}
+export { safeErrorMessage, safeErrorStack } from './redact.mjs';
 /** Per-instance host. Never replace blocked persistence with a fake success. */
 // `remoteDOM` is the worker side of the DOM bridge: the worker has no document, so
 // DOM reads answer from a mirror of the mounted elements that the main thread reported
 // before the last reconciliation, and DOM writes are queued for the main thread
 // (remote-dom-host.js) to apply in order. See Documentation/EmbeddedWorker.md.
-export function createBrowserIO({ getInstance, environment = globalThis, baseURL, onError = (e) => console.error(safeErrorMessage(e)), wake = () => {}, remoteDOM = false, stackMeter = null, onCookieWrite = () => {}, binaryAtoms = '' }) {
+export function createBrowserIO({ getInstance, environment = globalThis, baseURL, onError = (e) => console.error(safeErrorMessage(e)), wake = () => {}, remoteDOM = false, stackMeter = null, onCookieWrite = () => {}, binaryAtoms = '', services, onServiceDelivered = () => {} } = {}) {
   let binaryAtomBytes = null;
   const operations = new Map(); const replies = new Map(); const databases = new Map(); let nextReply = 1; let disposed = false;
   // Side-effecting fetches started since the last snapshot (their id, operation and packet), and on a thread that took
   // the app over, the ones the Worker already sent: a replay asking for one of them again fails instead of sending it.
   let sent = []; const refusals = new Map();
+  // Main thread, taking over: the page service's reply whose delivery failed on the Worker, by operation, for the request
+  // the replay makes again (`answerReplayed`).
+  const replayedAnswers = new Map();
+  // Only a runtime that can move threads (the worker's, `remoteDOM`) takes snapshots, which forget these entries; on the
+  // main thread nothing would ever forget them, so nothing is recorded there.
+  const recordSent = entry => { if (remoteDOM) sent.push(entry); };
   const takeRefusal = (id, operation, packet) => {
     const key = `${id}:${operation}`; const packets = refusals.get(key); if (!packets) return false;
     const at = packets.findIndex(candidate => sameBytes(candidate, packet)); if (at < 0) return false;
@@ -98,6 +93,8 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
   // reconcile that notices the removal can still unmount through them (a DOM component's dispose).
   let detachedDOMHandles = [];
   const domViews = remoteDOM ? null : createDOMViewHost(environment, { report: (element, error) => reportDOMError(element, error) });
+  // Headless services (service-host.mjs) live on the page: a worker runtime passes the host that forwards to it.
+  const serviceHost = services ?? (remoteDOM ? null : createServiceHost(environment));
   const mirror = { seq: 0, nodes: new Map(), ops: [], reported: new Set() };
   const domID = (element) => { if (!element) return 0; let id=domIDs.get(element); if (!id) { while (!nextDOMID || domElements.has(nextDOMID)) nextDOMID=(nextDOMID+1)>>>0; id=nextDOMID; nextDOMID=(nextDOMID+1)>>>0; domIDs.set(element,id); domElements.set(id,element); } return id; };
   const memory = () => {
@@ -143,6 +140,9 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
     }
     // Resuming a Swift continuation enqueues its waiting task on the
     // Embedded browser executor. Give the host a chance to drain it.
+    // A page service's answer or event changed Swift state outside any call: the host keeps it (a snapshot) before the
+    // drain this wakes can run, so a move to another thread cannot lose it.
+    if (current.operation === BrowserIOOperation.service || current.operation === BrowserIOOperation.serviceEvents) onServiceDelivered();
     wake();
   };
   const fail = (id, error) => { const value = classify(error); emit(id, value.code, encoder.encode(value.message)); };
@@ -244,7 +244,7 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
     const op = operations.get(id); if (!op) return;
     // A request that only reads can run again after the app moved threads; anything else is reported as cancelled.
     op.restart = !hasBody && ['GET', 'HEAD'].includes(method);
-    if (!op.restart) { op.packet = null; sent.push({ id, operation: BrowserIOOperation.fetch, packet }); }
+    if (!op.restart) { op.packet = null; recordSent({ id, operation: BrowserIOOperation.fetch, packet }); }
     if (typeof environment.fetch !== 'function') throw new IOError(-7, 'Fetch is unavailable');
     if (timeout) op.timer = setTimeout(() => { if (!operations.has(id)) return; op.controller.abort(); fail(id, new IOError(-5, 'Request timed out')); }, Math.min(timeout, 2147483647));
     if (reportsUpload && hasBody && !streaming && credentials !== 'omit' && redirect === 'follow' && typeof environment.XMLHttpRequest === 'function') {
@@ -279,6 +279,36 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
     if (!operations.has(id)) return;
     if (streaming) emit(id, 0);
     else { progress?.finish(size); const bytes = new Uint8Array(size); let at = 0; for (const chunk of chunks) { bytes.set(chunk, at); at += chunk.length; } emit(id, 0, responseHeader(response).data(bytes).bytes()); }
+  }
+  // A page service's answer (its text, or the failure) into Swift.
+  const settleService = (id, ok, value) => {
+    if (!operations.has(id)) return;
+    if (ok) emit(id, 0, new Writer().text(String(value)).bytes()); else fail(id, value);
+  };
+  // A call to a page service: name, method and payload text in; the method's result text out. A call has side effects:
+  // it is recorded like a write so that a replay after the app moves threads does not make it again (`refuseReplayed`).
+  // A failure to hand the answer to Swift (a trap in the app) is the runtime's, never the call's: through a forwarder
+  // (`settle`) it happens inside the message that carried the answer, where the host can move the app and replay that
+  // message; with the page's own services it goes to `onError`.
+  function serviceCall(id, packet) {
+    const input = new Reader(packet); const name = input.text(); const method = input.text(); const payload = input.text(); input.finish();
+    if (!serviceHost) throw new IOError(-7, 'Page services are unavailable in this runtime');
+    recordSent({ id, operation: BrowserIOOperation.service, packet });
+    const answer = serviceHost.call(name, method, payload, { operation: id, settle: (ok, value) => settleService(id, ok, value) });
+    if (isThenable(answer)) answer.then(text => settleService(id, true, text), error => settleService(id, false, error)).catch(onError);
+  }
+  // A page service's `event` payloads, one BrowserIOEvent.serviceEvent each, until Swift cancels the observation.
+  function observeService(id, packet) {
+    const input = new Reader(packet); const name = input.text(); const event = input.text(); input.finish();
+    if (!serviceHost) throw new IOError(-7, 'Page services are unavailable in this runtime');
+    const deliver = text => { if (operations.has(id)) emit(id, BrowserIOEvent.serviceEvent, new Writer().text(text).bytes()); };
+    // Through a forwarder an event goes into Swift inside the message that carried it, where the host handles a trap (it
+    // can move the app and replay that message). The page's own registry calls this from the SDK's `emit` and only logs
+    // what a listener throws, but a trap here is the runtime's failure: it goes to onError.
+    const receive = serviceHost.forwarded ? deliver : text => { try { deliver(text); } catch (error) { onError(error); } };
+    const unsubscribe = serviceHost.observe(name, event, receive, { operation: id });
+    const op = operations.get(id);
+    if (op) op.cleanup = unsubscribe; else unsubscribe();
   }
   async function timerRequest(id, packet) {
     const input = new Reader(packet); const seconds = input.f64(); input.finish();
@@ -884,6 +914,11 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
     try {
       const op = operations.get(id); if (!op) return;
       op.started = true;
+      if (op.answer) {
+        // Handing the answer to Swift is the runtime's to fail (a trap), not the call's.
+        try { settleService(id, op.answer.ok === true, serviceAnswer(op.answer)); } catch (deliveryError) { onError(deliveryError); }
+        return;
+      }
       if (op.refused) throw new IOError(-6, 'This request was already sent before the app moved to the main thread, so it is not sent again');
       if (operation === BrowserIOOperation.fetch) await fetchRequest(id, packet);
       else if (operation === BrowserIOOperation.timer) await timerRequest(id, packet);
@@ -893,6 +928,8 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
       else if (operation === BrowserIOOperation.storageChanges) observeStorage(id, packet);
       else if (operation === BrowserIOOperation.connectivityChanges) observeConnectivity(id);
       else if (operation === BrowserIOOperation.media) observeMedia(id, packet);
+      else if (operation === BrowserIOOperation.service) await serviceCall(id, packet);
+      else if (operation === BrowserIOOperation.serviceEvents) observeService(id, packet);
       else throw new IOError(-1, 'Unknown asynchronous BrowserIO operation');
     } catch (error) { try { fail(id, error); } catch (deliveryError) { onError(deliveryError); } }
   }
@@ -909,8 +946,11 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
       // The packet stays with observers and timers (it is small and a restart needs it); a fetch keeps it too and
       // `fetchRequest` drops it again unless the request is safe to repeat. See `inflight()`.
       const keepsPacket = RESTARTABLE.has(operation) || operation === BrowserIOOperation.fetch;
-      const refused = operation === BrowserIOOperation.fetch && takeRefusal(id, operation, packet);
-      operations.set(id, { controller: new AbortController(), timer: null, transaction: null, reader: null, cleanup: null, operation, packet: keepsPacket ? packet : null, restart: RESTARTABLE.has(operation), due: 0, sideEffects: mayRepeatEffect(operation, packet), started: false, refused });
+      const refused = (operation === BrowserIOOperation.fetch || operation === BrowserIOOperation.service) && takeRefusal(id, operation, packet);
+      // A replayed service call the Worker already made, whose answer is known: it gets that answer instead of a refusal.
+      const answer = refused && operation === BrowserIOOperation.service ? replayedAnswers.get(id) : undefined;
+      if (answer) replayedAnswers.delete(id);
+      operations.set(id, { controller: new AbortController(), timer: null, transaction: null, reader: null, cleanup: null, operation, packet: keepsPacket ? packet : null, restart: RESTARTABLE.has(operation), due: 0, sideEffects: mayRepeatEffect(operation, packet), started: false, refused: refused && !answer, answer });
       queueMicrotask(() => run(id, operation, packet)); return 0;
     },
     cancel(id) { try { cancel(id); } catch (error) { onError(error); } },
@@ -1000,7 +1040,25 @@ export function createBrowserIO({ getInstance, environment = globalThis, baseURL
         else queueMicrotask(() => { try { fail(id, new IOError(-4, 'Operation cancelled')); } catch (error) { onError(error); } });
       }
     },
-    /** Worker mode, before the app moves to another thread: the side-effecting fetches started since the last snapshot. */
+    /** Main thread, taking over: `data`, the page service's `service-reply` whose delivery failed on the Worker, answers the
+     * replay's request of the same operation when that request is refused as already sent (the Worker made the call after
+     * its last snapshot). `null` forgets it. */
+    answerReplayed(data) {
+      replayedAnswers.clear();
+      const id = Number(data?.operation) >>> 0;
+      if (data?.t === 'service-reply' && id) replayedAnswers.set(id, data);
+    },
+    /** Main thread, taking over: the page service's `service-reply` or `service-event` whose delivery failed on the Worker
+     * (the message the move replays) goes to its operation, restored by `resume`, by the operation number the message
+     * carries. This thread's forwarder ignores the Worker's messages, as it must for every other one. */
+    redeliverService(data) {
+      const id = Number(data?.operation) >>> 0; const op = operations.get(id);
+      if (!id || !op) return;
+      if (data.t === 'service-reply' && op.operation === BrowserIOOperation.service) settleService(id, data.ok === true, serviceAnswer(data));
+      else if (data.t === 'service-event' && op.operation === BrowserIOOperation.serviceEvents) emit(id, BrowserIOEvent.serviceEvent, new Writer().text(String(data.text ?? '')).bytes());
+    },
+    /** Worker mode, before the app moves to another thread: the side-effecting fetches and the service calls started since
+     * the last snapshot. */
     sentSinceSnapshot() { return sent.slice(); },
     /** Called when the app takes a snapshot: earlier sends are no longer replayed, so they are forgotten. */
     snapshotTaken() { sent = []; },

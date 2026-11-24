@@ -38298,6 +38298,48 @@
       "file": "Sources/SwiftUIWebBrowserIO/BrowserSecureStore.swift",
       "signature": "public struct BrowserSecureStore: Sendable",
       "availability": []
+    },
+    {
+      "target": "SwiftUIWebBrowserIO",
+      "file": "Sources/SwiftUIWebBrowserIO/BrowserService.swift",
+      "signature": "public func call(_ method: String, _ payload: String = ) async throws -> String",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebBrowserIO",
+      "file": "Sources/SwiftUIWebBrowserIO/BrowserService.swift",
+      "signature": "public func call(_ method: String, _ payload: String = , completion: @escaping @Sendable (Result<String, BrowserIOError>) -> Void) -> BrowserIOOperation",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebBrowserIO",
+      "file": "Sources/SwiftUIWebBrowserIO/BrowserService.swift",
+      "signature": "public func observe(_ event: String, _ receive: @escaping (String) -> Void) -> BrowserIOOperation",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebBrowserIO",
+      "file": "Sources/SwiftUIWebBrowserIO/BrowserService.swift",
+      "signature": "public func send(_ method: String, _ payload: String = )",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebBrowserIO",
+      "file": "Sources/SwiftUIWebBrowserIO/BrowserService.swift",
+      "signature": "public init(_ name: String)",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebBrowserIO",
+      "file": "Sources/SwiftUIWebBrowserIO/BrowserService.swift",
+      "signature": "public let name: String",
+      "availability": []
+    },
+    {
+      "target": "SwiftUIWebBrowserIO",
+      "file": "Sources/SwiftUIWebBrowserIO/BrowserService.swift",
+      "signature": "public struct BrowserService: Sendable",
+      "availability": []
     }
   ]
 }

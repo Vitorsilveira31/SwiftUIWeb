@@ -679,7 +679,8 @@ try {
     const start=(h,id,operation,packet)=>{watch(id);const p=alloc(packet.length);new Uint8Array(memory.buffer,p,packet.length).set(packet);assert.equal(h.imports.request(id,operation,p,packet.length),0);};
     const settle=()=>new Promise(resolve=>setTimeout(resolve,100));
     let fetches=0;const replayEnv={...environment,fetch:(...args)=>{fetches++;return globalThis.fetch(...args);}};
-    const worker=createBrowserIO({getInstance:()=>instance,environment:replayEnv,baseURL,onError:()=>{}});
+    // The worker's host is the one that moves threads (remoteDOM), so it is the one that records its sends.
+    const worker=createBrowserIO({getInstance:()=>instance,environment:replayEnv,baseURL,onError:()=>{},remoteDOM:true});
     start(worker,7101,BrowserIOOperation.fetch,request('/echo',{method:'POST',body:new Uint8Array([9])}));
     start(worker,7102,BrowserIOOperation.fetch,request('/missing'));
     worker.fenceUnstarted();

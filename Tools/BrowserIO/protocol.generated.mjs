@@ -24,10 +24,13 @@ export const BrowserIOOperation = Object.freeze({
   timeZoneOffset: 21,
   timeZoneIdentifier: 22,
   weekInfo: 23,
+  service: 24,
+  serviceEvents: 25,
 });
 export const BrowserIOEvent = Object.freeze({
   fetchHeaders: 100,
   fetchChunk: 101,
   fetchUploadProgress: 102,
   fetchDownloadProgress: 103,
+  serviceEvent: 104,
 });

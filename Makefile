@@ -58,7 +58,7 @@ watch:
 	bun Tools/dev-watch.mjs --package-root "$(CURDIR)" --product "$(or $(PRODUCT),ShowcaseSite)" --configuration "$(CONFIGURATION)"
 
 tools-test:
-	bun Tools/run-scripts.mjs "test ./Tools/test-compile-assets.mjs ./Tools/test-compile-strings.mjs ./Tools/test-inject-app-head.mjs ./Tools/test-seal-csp.mjs ./Tools/test-first-paint.mjs ./Tools/test-hash-release-bundle.mjs ./Tools/test-precompress-bundle.mjs ./Tools/test-bun-server-encoding.mjs ./Tools/test-bun-server-api-proxy.mjs ./Tools/test-local-package-dependencies.mjs ./Tools/test-framework-url-dependency.mjs ./Tools/test-staging-layout.mjs ./Tools/test-patch-browser-index.mjs ./Tools/test-embedded-capabilities.mjs ./Tools/test-embedded-preflight.mjs ./Tools/test-strip-wasm.mjs ./Tools/test-wasm-split-release.mjs ./Tools/test-swiftuiweb-tools.mjs ./Tools/test-wasm-audit.mjs ./Tools/test-perf-ab-stats.mjs ./Tools/test-cloudflare-site-stage.mjs" "test ./Tools/test-text-format.mjs" "test ./Tools/test-unicode-data.mjs" "test ./Tools/test-audit-showcase-catalog.mjs" "Tools/audit-showcase-catalog.mjs" "test ./Tools/test-compare-react.mjs ./Tools/test-compare-react-orders.mjs ./Tools/test-publish-react-comparison.mjs" "test ./Tools/test-mock-jsonplaceholder.mjs" "Tools/publish-react-comparison.mjs --check" "Tools/test-audits.mjs" "Tools/test-cloudflare-site-prerender.mjs" "Tools/audit-no-python.mjs" "Tools/test-audit-no-python.mjs" "Tools/audit-private-terms.mjs" "Tools/test-audit-private-terms.mjs" "Tools/test-bundle-reuse.mjs" "Tools/test-run-test-groups.mjs" "Tools/test-run-scripts.mjs" "Tools/test-swiftui-api-parity.mjs" "Tools/swiftuiweb-tools.mjs browser-io-protocol --check" "Tools/swiftuiweb-tools.mjs binary-atoms --check"
+	bun Tools/run-scripts.mjs "test ./Tools/test-compile-assets.mjs ./Tools/test-compile-strings.mjs ./Tools/test-inject-app-head.mjs ./Tools/test-seal-csp.mjs ./Tools/test-first-paint.mjs ./Tools/test-hash-release-bundle.mjs ./Tools/test-precompress-bundle.mjs ./Tools/test-bun-server-encoding.mjs ./Tools/test-bun-server-api-proxy.mjs ./Tools/test-local-package-dependencies.mjs ./Tools/test-package-web-resources.mjs ./Tools/test-framework-url-dependency.mjs ./Tools/test-staging-layout.mjs ./Tools/test-patch-browser-index.mjs ./Tools/test-embedded-capabilities.mjs ./Tools/test-embedded-preflight.mjs ./Tools/test-strip-wasm.mjs ./Tools/test-wasm-split-release.mjs ./Tools/test-swiftuiweb-tools.mjs ./Tools/test-wasm-audit.mjs ./Tools/test-perf-ab-stats.mjs ./Tools/test-cloudflare-site-stage.mjs" "test ./Tools/test-text-format.mjs" "test ./Tools/test-unicode-data.mjs" "test ./Tools/test-audit-showcase-catalog.mjs" "Tools/audit-showcase-catalog.mjs" "test ./Tools/test-compare-react.mjs ./Tools/test-compare-react-orders.mjs ./Tools/test-publish-react-comparison.mjs" "test ./Tools/test-mock-jsonplaceholder.mjs" "Tools/publish-react-comparison.mjs --check" "Tools/test-audits.mjs" "Tools/test-cloudflare-site-prerender.mjs" "Tools/audit-no-python.mjs" "Tools/test-audit-no-python.mjs" "Tools/audit-private-terms.mjs" "Tools/test-audit-private-terms.mjs" "Tools/test-bundle-reuse.mjs" "Tools/test-run-test-groups.mjs" "Tools/test-run-scripts.mjs" "Tools/test-swiftui-api-parity.mjs" "Tools/swiftuiweb-tools.mjs browser-io-protocol --check" "Tools/swiftuiweb-tools.mjs binary-atoms --check"
 	bun build --no-bundle --target=bun Tools/BrowserIO/browser-io.mjs > /dev/null
 
 test-layout:
@@ -128,6 +128,7 @@ BROWSER_GROUPS = \
 	"controls: controls-browser-test" "controls-a11y: controls-accessibility-test" "presentation: presentation-browser-test" \
 	"focus: focus-browser-test" "identity: identity-browser-test" "scrolling: scrolling-browser-test" \
 	"accessibility: accessibility-browser-test" "publication: publication-browser-test" "webkit: webkit-browser-test" \
+	"services: services-browser-test" \
 	"lowering: lowering-unit-test lowering-test" $(CONFORMANCE_GROUP) "integrated: integrated-check" \
 	"security: security-browser-test" "runtime: single-browser-runtime-audit server-test plugin-test-quick" \
 	"direct-build: direct-build-test" "live-literals: live-literals-browser-test" "state-reload: state-reload-browser-test" \
@@ -739,16 +740,24 @@ embedded-capabilities:
 single-browser-runtime-audit:
 	@bun Tools/check-single-browser-runtime.mjs
 
-.PHONY: embedded-network-storage-test embedded-network-storage-browser
+.PHONY: embedded-network-storage-test embedded-network-storage-browser services-browser-test
 embedded-network-storage-test:
 	bun Tools/BrowserIO/audit-browser-integration.mjs
 	$(SWIFT) build --target SwiftUIWebBrowserIO -c release
 	bun Tools/BrowserIO/test-host.mjs
+	bun Tools/BrowserIO/test-services.mjs
 	bun build --no-bundle --target=bun Tools/BrowserIO/browser-io.mjs > /dev/null
 	bun Tools/test-browserio-download-progress.mjs
 	bun Tools/test-browserio-persistence.mjs
 
 # Manual: open http://127.0.0.1:8091/browser-smoke.html, reload once (test-browserio-persistence.mjs automates it).
+# Page services end to end (BrowserService, Documentation/BROWSER_APP_SHELL.md): Examples/ServicesInterop built for
+# Embedded WebAssembly calls a page service with Swift in a worker and on the main thread.
+services-browser-test:
+	cd Examples/ServicesInterop && SWIFTUIWEB_PACKAGE_ROOT="$$PWD" SWIFTUIWEB_PRODUCT=ServicesInteropApp \
+	  SWIFTUIWEB_BUNDLE_ROOT="$$PWD/.build/browser" BUILD_ONLY=1 ../../Tools/run-browser-embedded.sh ServicesInteropApp
+	bun Tools/test-services-browser.mjs
+
 embedded-network-storage-browser:
 	bun Tools/serve-static.mjs Tools/BrowserIO 8091
 

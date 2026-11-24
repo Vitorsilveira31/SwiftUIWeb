@@ -1,4 +1,4 @@
-import { createBrowserIO, safeErrorMessage } from './BrowserIO/browser-io.mjs';
+import { createBrowserIO, safeErrorMessage, safeErrorStack } from './BrowserIO/browser-io.mjs';
 import { mountEmbeddedBrowser } from './embedded-dom.js';
 import { createHeadroomMeter, STACK_PROBE_MODULE } from './stack-probe.js';
 import { createWasiHost, readDocumentEnvironment, stackDiagnosticsRequested, publicationFlags } from './wasi-host.js';
@@ -44,7 +44,11 @@ function isHotMainModule(module) {
 // Main thread only: the worker client has its own watch, which keeps the worker's mirror current.
 let cookieWatch = null;
 
+// True while a session is being disposed: what BrowserIO reports then is the teardown, not a trap to act on.
+let disposing = false;
+
 function disposeCurrentSession() {
+  disposing = true;
   try { cookieWatch?.dispose(); } catch { /* the page is going away */ }
   cookieWatch = null;
   try { workerInstance?.dispose?.(); } catch (error) { console.error('[SwiftUIWeb] worker dispose failed', safeErrorMessage(error)); }
@@ -54,6 +58,7 @@ function disposeCurrentSession() {
   if (drainTimer !== null) { clearInterval(drainTimer); drainTimer = null; }
   browserSession = null; browserIOHost = null; instance = null; drainScheduled = false;
   hotMain = null; hotSide = null;
+  disposing = false;
 }
 
 /** A trap came out of the instance outside a call the DOM session made (a task drain). The instance is not used again:
@@ -107,7 +112,13 @@ function importsFor(module) {
   }
   let stackMeter = null;
   if (stackDiagnosticsRequested(globalThis.document)) { stackMeter = createHeadroomMeter(); globalThis.__stackProbe = stackMeter; }
-  const browserIO = createBrowserIO({ getInstance: () => instance, wake: scheduleTaskDrain, stackMeter, onCookieWrite: () => cookieWatch?.wrote(), binaryAtoms: BINARY_ATOMS.join('\0') });
+  // A failure to hand a result or an event to the instance (an answer, a page service's event) is a trap outside any
+  // call: the session stops and reports it (`trapped`), as for a trap in a task drain.
+  const onError = (error) => {
+    if (disposing || !instance) console.error('[SwiftUIWeb]', safeErrorMessage(error));
+    else trapped(error);
+  };
+  const browserIO = createBrowserIO({ getInstance: () => instance, wake: scheduleTaskDrain, stackMeter, onCookieWrite: () => cookieWatch?.wrote(), binaryAtoms: BINARY_ATOMS.join('\0'), onError });
   browserIOHost = browserIO;
   imports.browser_io = browserIO.imports;
   return imports;
@@ -177,7 +188,7 @@ function restartOnMainThread(module, options, when) {
   disposeCurrentSession();
   return startOnMainThread(module, options).catch(error => {
     console.error('[SwiftUIWeb] restarting on the main thread failed', safeErrorMessage(error));
-    try { globalThis.dispatchEvent(new CustomEvent('runtime-error', { detail: { message: safeErrorMessage(error) } })); } catch { /* no window */ }
+    try { globalThis.dispatchEvent(new CustomEvent('runtime-error', { detail: { message: safeErrorMessage(error), stack: safeErrorStack(error?.stack) } })); } catch { /* no window */ }
   });
 }
 

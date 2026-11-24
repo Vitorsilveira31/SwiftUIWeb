@@ -126,6 +126,31 @@ final class BrowserIOTests {
   }
 
   @Test
+  func testBrowserServiceFailsAndObservesNothingWithoutAHost() async {
+    /// What the callbacks saw; without a host they run before `call` and `observe` return.
+    final class Seen: @unchecked Sendable { var failure: Int32?; var events = 0 }
+    let seen = Seen()
+    let service = BrowserService("analytics")
+    #expect(service.name == "analytics")
+    service.call("track", #"{"event":"app_opened"}"#) { result in
+      if case .failure(let error) = result { seen.failure = error.code }
+    }
+    #expect(seen.failure == -7)
+    do {
+      _ = try await service.call("track")
+      Issue.record("expected unavailable BrowserIO host")
+    } catch let error as BrowserIOError {
+      #expect(error.code == -7)
+    } catch {
+      Issue.record("unexpected error: \(error)")
+    }
+    service.send("flush")
+    let observation = service.observe("message") { _ in seen.events += 1 }
+    observation.cancel()
+    #expect(seen.events == 0)
+  }
+
+  @Test
   func testBrowserStreamStorageConnectivityIntlAndDOMFallbacks() async {
     let request = BrowserHTTPRequest(url: "https://example.test/stream")
     var events: [String] = []
