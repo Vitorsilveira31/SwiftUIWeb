@@ -757,10 +757,11 @@ class _AnyViewRenderer {
 private final class _ViewRenderer<V: View>: _AnyViewRenderer {
   private let view: V
 
-  init(_ view: V) {
+  init(_ view: V, tag: _ViewTypeTag? = nil) {
     self.view = view
-    // The view says what names it: its type, or its value where the type does not tell (`View._swiftUIWebTypeTag`).
-    super.init(type: view._swiftUIWebTypeTag)
+    // The view says what names it: its type, or its value where the type does not tell (`View._swiftUIWebTypeTag`). An
+    // `AnyView` holding an `AnyView` is named by what the chain finally holds (`AnyView.heldTag`).
+    super.init(type: tag ?? view._swiftUIWebTypeTag)
   }
 
   @MainActor override func renderContent(_ context: _RenderContext) -> _RenderNode { view._render(in: context) }
@@ -946,6 +947,15 @@ public nonisolated struct AnyView: View {
   /// The tag of the erased view's type; nil when what is erased is not a view (an owner boundary of renderer code).
   var _typeTag: _ViewTypeTag? { renderer.type }
 
+  /// What names an `AnyView` that holds `view` is the type it holds, as in SwiftUI: when `view` is itself an `AnyView`
+  /// it is the tag of what that one holds, so a chain of erasures is told from another by the type it finally holds,
+  /// and not by `AnyView`, which every link of the chain has. nil for any other view (named by its own tag), and for an
+  /// erased owner boundary, which holds no view. A requirement of `View` cannot say it: its witness would be public API.
+  private static func heldTag<V: View>(_ view: V) -> _ViewTypeTag? {
+    guard V.self == AnyView.self else { return nil }
+    return unsafeBitCast(view, to: AnyView.self).renderer.type
+  }
+
   /// Erases `view` without registering a retained owner of its own.
   @_spi(Renderer) public static func _unowned<V: View>(_ view: V) -> AnyView {
     var erased = AnyView(view)
@@ -974,7 +984,7 @@ public nonisolated struct AnyView: View {
   public nonisolated init<V: View>(_ view: V) {
     // SAFETY: the main-actor renderer and closures below are the only users of `view`, and they run on the main actor.
     nonisolated(unsafe) let view = view
-    renderer = _ViewRenderer(view)
+    renderer = _ViewRenderer(view, tag: Self.heldTag(view))
     #if !hasFeature(Embedded)
     // The text that names the view does not change; forming it once here rather
     // than on every render keeps the per-type closure to the `_render` call.

@@ -21,7 +21,8 @@ describe("Cloudflare site staging", () => {
       "app.0123abcd.wasm": "wasm",
       "app.0123abcd.wasm.br": "br",
       "app.0123abcd.wasm.gz": "gz",
-      [`app.0123abcd.wasm.${"a".repeat(64)}.dcb`]: "a difference file, which the hosted site does not serve",
+      [`app.0123abcd.wasm.${"a".repeat(64)}.dcb`]: "a difference file of a staged module",
+      [`app.99999999.wasm.${"b".repeat(64)}.dcb`]: "a difference file whose module is not in the bundle",
       "index.0123abcd.js": "js",
       "index.0123abcd.js.br": "br",
       "index.0123abcd.js.gz": "gz",
@@ -31,8 +32,9 @@ describe("Cloudflare site staging", () => {
       "fonts/icons.0123abcd.woff2": "font",
     });
     const copied = stage(join(root, "bundle"), join(root, "public"));
-    expect(copied).toEqual(["app.0123abcd.wasm", "app.0123abcd.wasm.br", "fonts/icons.0123abcd.woff2", "index.0123abcd.js", "index.0123abcd.js.br", "index.html"]);
+    expect(copied).toEqual(["app.0123abcd.wasm", `app.0123abcd.wasm.${"a".repeat(64)}.dcb`, "app.0123abcd.wasm.br","fonts/icons.0123abcd.woff2", "index.0123abcd.js", "index.0123abcd.js.br", "index.html"]);
     expect(readFileSync(join(root, "public", "app.0123abcd.wasm.br"), "utf8")).toBe("br");
+    expect(existsSync(join(root, "public", `app.99999999.wasm.${"b".repeat(64)}.dcb`))).toBe(false);
     expect(existsSync(join(root, "public", "index.html.br"))).toBe(false);
     expect(existsSync(join(root, "public", "style.0123abcd.css.br"))).toBe(false);
     expect(existsSync(join(root, "public", "swift-build.log"))).toBe(false);

@@ -46,10 +46,13 @@ jobs:
       - name: Install the compressors and the archive tools
         run: |
           apt-get update -qq
-          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq brotli zstd unzip make
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq brotli zstd unzip make curl
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # wasm-opt and wasm-split: without them the release build still succeeds, but the site ships one module that is
+      # neither optimized nor split by its first screen.
+      - uses: ./.github/actions/setup-binaryen
       - name: Trust the checkout
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: ./.github/actions/cache-lowering-tool
@@ -69,7 +72,11 @@ jobs:
           swift sdk install \
             "https://download.swift.org/swift-${SWIFT_VERSION}-release/wasm-sdk/$release/${release}_wasm.artifactbundle.tar.gz" \
             --checksum "$WASM_SDK_CHECKSUM"
-      - run: bun install --frozen-lockfile
+      - name: Install the project tooling and Chromium
+        # The split profiles the site's first screen in headless Chromium (Tools/wasm-split-release.mjs).
+        run: |
+          bun install --frozen-lockfile
+          DEBIAN_FRONTEND=noninteractive bunx playwright install --with-deps chromium
       - name: Build and deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

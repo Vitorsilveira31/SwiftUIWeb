@@ -12,13 +12,35 @@
 // _headers is not applied to a Worker's response, and the file's own rules do not match `<name>.br` either, so the
 // headers come from the plain file: a HEAD request for it through the binding carries its Content-Type, the cache rule
 // and the security headers, and only the body, its length and its ETag are the copy's.
+//
+// Update by difference (Documentation/DEPLOYMENT.md, Tools/dictionary-transport.mjs). A content-hashed module
+// (`<stem>.<8 hex>.wasm`) names itself as a dictionary in every 200 and 304 answer (`Use-As-Dictionary`, and `Vary` lists
+// `Available-Dictionary`). A reader that has an earlier module sends its hash in `Available-Dictionary` and accepts `dcb`;
+// the Worker then answers with the build's `<module>.<64 hex>.dcb` file the same way it answers with the `.br` copy.
+//
+// The difference answers are on. They were turned on on 2026-11-24, after `Tools/check-dictionary-host.mjs` saw the host
+// deliver a `dcb` body unchanged, so a reader that sends the header gets the difference. Setting the Worker variable
+// `DICTIONARY_UPDATES` to "off" turns them off without a code change; a reader then gets the brotli copy as before. A
+// request that carries `SwiftUIWeb-Dictionary-Check: 1` (browsers never send it) gets the difference answer whatever the
+// switch says, which is how `bun Tools/check-dictionary-host.mjs <site> <earlier modules> --header
+// "SwiftUIWeb-Dictionary-Check: 1"` tests a host.
+
+import { acceptsDcb, differenceName, isDictionaryModule, parseAvailableDictionary, useAsDictionary, VARY } from "../dictionary-transport.mjs";
 
 const COMPRESSIBLE = /\.(wasm|js|css)$/;
 
+const DEFAULT_DICTIONARY_UPDATES = "on";
+const CHECK_HEADER = "SwiftUIWeb-Dictionary-Check";
+
+const dictionaryUpdates = (request, env) =>
+  request.headers.get(CHECK_HEADER) === "1" || (env.DICTIONARY_UPDATES ?? DEFAULT_DICTIONARY_UPDATES) === "on";
+
 // Cloudflare rewrites the request's Accept-Encoding to "br, gzip" before the Worker sees it; the reader's own value is
 // request.cf.clientAcceptEncoding.
+const readerEncodings = (request) => request.cf?.clientAcceptEncoding ?? request.headers.get("Accept-Encoding") ?? "";
+
 const acceptsBrotli = (request) =>
-  (request.cf?.clientAcceptEncoding ?? request.headers.get("Accept-Encoding") ?? "")
+  readerEncodings(request)
     .split(",")
     .some((part) => {
       const [coding, ...parameters] = part.trim().toLowerCase().split(";");
@@ -26,10 +48,57 @@ const acceptsBrotli = (request) =>
       return coding.trim() === "br" && (q === undefined || Number(q.slice(2)) > 0);
     });
 
-const withVary = (response) => {
+// What every answer for the file says about negotiation. A module varies on the dictionary as well and, when it answers 200
+// or 304, names itself as the dictionary for the next version.
+const negotiationHeaders = (headers, status, path) => {
+  if (!isDictionaryModule(path)) {
+    headers.append("Vary", "Accept-Encoding");
+    return;
+  }
+  headers.set("Vary", VARY);
+  const dictionary = status === 200 || status === 304 ? useAsDictionary(path) : null;
+  if (dictionary) headers.set("Use-As-Dictionary", dictionary);
+};
+
+const plainAnswer = async (request, env, path) => {
+  const response = await env.ASSETS.fetch(request);
   const headers = new Headers(response.headers);
-  headers.append("Vary", "Accept-Encoding");
+  negotiationHeaders(headers, response.status, path);
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+};
+
+// The answer made of a precompressed copy (the file at `copyPath`): its body, length and ETag, the plain file's other
+// headers. Null when there is no such copy (or no plain file), so the caller falls back.
+const copyAnswer = async (request, env, url, copyPath, coding) => {
+  const method = request.method;
+  const copyURL = new URL(url);
+  copyURL.pathname = copyPath;
+  // The reader's conditional headers go to the copy, whose ETag is the one the reader was sent.
+  const copy = await env.ASSETS.fetch(new Request(copyURL, { method, headers: request.headers }));
+  if (copy.status !== 200 && copy.status !== 304) {
+    copy.body?.cancel();
+    return null;
+  }
+  const plain = await env.ASSETS.fetch(new Request(url, { method: "HEAD" }));
+  if (plain.status !== 200) {
+    copy.body?.cancel();
+    return null;
+  }
+
+  const headers = new Headers(plain.headers);
+  headers.set("Content-Encoding", coding);
+  negotiationHeaders(headers, copy.status, url.pathname);
+  for (const name of ["Content-Length", "ETag"]) {
+    const value = copy.headers.get(name);
+    if (value) headers.set(name, value);
+    else headers.delete(name);
+  }
+  if (copy.status === 304) headers.delete("Content-Length");
+  return new Response(method === "HEAD" || copy.status === 304 ? null : copy.body, {
+    status: copy.status,
+    headers,
+    encodeBody: "manual",
+  });
 };
 
 export default {
@@ -37,35 +106,16 @@ export default {
     const url = new URL(request.url);
     const method = request.method;
     if ((method !== "GET" && method !== "HEAD") || !COMPRESSIBLE.test(url.pathname)) return env.ASSETS.fetch(request);
-    if (!acceptsBrotli(request)) return withVary(await env.ASSETS.fetch(request));
 
-    const copyURL = new URL(url);
-    copyURL.pathname += ".br";
-    // The reader's conditional headers go to the copy, whose ETag is the one the reader was sent.
-    const copy = await env.ASSETS.fetch(new Request(copyURL, { method, headers: request.headers }));
-    if (copy.status !== 200 && copy.status !== 304) {
-      copy.body?.cancel();
-      return withVary(await env.ASSETS.fetch(request));
-    }
-    const plain = await env.ASSETS.fetch(new Request(url, { method: "HEAD" }));
-    if (plain.status !== 200) {
-      copy.body?.cancel();
-      return withVary(await env.ASSETS.fetch(request));
+    if (isDictionaryModule(url.pathname) && dictionaryUpdates(request, env)) {
+      const hash = parseAvailableDictionary(request.headers.get("Available-Dictionary"));
+      if (hash && acceptsDcb(readerEncodings(request))) {
+        const answer = await copyAnswer(request, env, url, differenceName(url.pathname, hash), "dcb");
+        if (answer) return answer;
+      }
     }
 
-    const headers = new Headers(plain.headers);
-    headers.set("Content-Encoding", "br");
-    headers.append("Vary", "Accept-Encoding");
-    for (const name of ["Content-Length", "ETag"]) {
-      const value = copy.headers.get(name);
-      if (value) headers.set(name, value);
-      else headers.delete(name);
-    }
-    if (copy.status === 304) headers.delete("Content-Length");
-    return new Response(method === "HEAD" || copy.status === 304 ? null : copy.body, {
-      status: copy.status,
-      headers,
-      encodeBody: "manual",
-    });
+    if (!acceptsBrotli(request)) return plainAnswer(request, env, url.pathname);
+    return (await copyAnswer(request, env, url, `${url.pathname}.br`, "br")) ?? plainAnswer(request, env, url.pathname);
   },
 };

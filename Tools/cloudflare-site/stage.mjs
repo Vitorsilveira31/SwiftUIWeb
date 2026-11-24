@@ -1,7 +1,9 @@
 #!/usr/bin/env bun
 // Copies a release bundle into the assets directory of the Cloudflare site (Tools/cloudflare-site/public), with the
 // _headers file next to it. The brotli copy of each .wasm, .js and .css file goes with it (worker.js serves it to a reader
-// that accepts brotli, at the build's q11 instead of Cloudflare's on-the-fly quality); the .gz copies stay behind (gzip
+// that accepts brotli, at the build's q11 instead of Cloudflare's on-the-fly quality) and the difference files
+// (`<module>.<64 hex>.dcb`, written when the build was given earlier modules; worker.js serves them to a reader that has
+// an earlier module, unless its DICTIONARY_UPDATES switch is "off") of the modules it stages; the .gz copies stay behind (gzip
 // readers get Cloudflare's own), and so do the .br copies of other files (index.html is rewritten by prerender, so its
 // copy would be stale), build logs and the build's own dotfiles (.bundle-inputs, the fingerprint that lets suites reuse a
 // bundle).
@@ -15,6 +17,7 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDifferenceName } from "../dictionary-transport.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "../..");
@@ -22,7 +25,11 @@ const RECIPES = join(ROOT, "Examples/ShowcaseSite/Features/Components/Recipes");
 const LEFT_OUT = /^\.|\.(br|gz|log|dcb)$/;
 // The copies worker.js serves: the files it runs for (runWorkerFirst in cloudflare.config.ts).
 const SERVED_COPY = /\.(wasm|js|css)\.br$/;
+const DIFFERENCE_SUFFIX = /\.[0-9a-f]{64}\.dcb$/;
 const DEFAULT_ORIGIN = "https://swiftuiweb.vitorsilveira31.workers.dev";
+
+/** The site's origin: SITE_ORIGIN, or the project's own address. `bun Tools/cloudflare-site/stage.mjs --origin` prints it. */
+export const siteOrigin = () => process.env.SITE_ORIGIN || DEFAULT_ORIGIN;
 
 // The site's own words come from the same source tree as the bundle, so a <title> cannot drift from the app's: the pages
 // (SitePage.swift, in order), their tab names and the description (ShellStrings.swift) are read from there.
@@ -164,6 +171,11 @@ function render(template, { lang, tags, noscript, icon }) {
 
 const noscriptFor = (route) => `<noscript><h1>${escape(route.heading)}</h1><p>${escape(route.description)}</p></noscript>`;
 
+// A `.br` copy of a file worker.js runs for, or a difference file of a module, whose file is in the bundle too.
+const isServedCopy = (source, name) =>
+  (SERVED_COPY.test(name) && existsSync(source.slice(0, -3))) ||
+  (isDifferenceName(name) && existsSync(source.replace(DIFFERENCE_SUFFIX, "")));
+
 export function stage(bundle, assets) {
   if (!existsSync(join(bundle, "index.html"))) throw new Error(`${bundle} has no index.html: build the bundle first`);
   rmSync(assets, { recursive: true, force: true });
@@ -173,7 +185,7 @@ export function stage(bundle, assets) {
       const source = join(directory, name);
       const path = relative(bundle, source);
       if (statSync(source).isDirectory()) walk(source);
-      else if (!LEFT_OUT.test(name) || (SERVED_COPY.test(name) && existsSync(source.slice(0, -3)))) {
+      else if (!LEFT_OUT.test(name) || isServedCopy(source, name)) {
         mkdirSync(dirname(join(assets, path)), { recursive: true });
         copyFileSync(source, join(assets, path));
         copied.push(path);
@@ -188,7 +200,7 @@ export function stage(bundle, assets) {
 
 /** Writes the prerendered routes, the 404 page, robots.txt, sitemap.xml and _redirects next to the staged bundle. Reads the
  *  staged index.html as the template, so it runs after `stage`. Returns the paths written. */
-export function prerender(assets, { origin = process.env.SITE_ORIGIN || DEFAULT_ORIGIN, recipes = RECIPES, root = ROOT } = {}) {
+export function prerender(assets, { origin = siteOrigin(), recipes = RECIPES, root = ROOT } = {}) {
   const base = origin.replace(/\/+$/, "");
   const template = readFileSync(join(assets, "index.html"), "utf8");
   const icon = ICON_LINK.test(template.slice(0, template.search(/<\/head>/i)));
@@ -229,7 +241,9 @@ export function prerender(assets, { origin = process.env.SITE_ORIGIN || DEFAULT_
   return written;
 }
 
-if (import.meta.main) {
+if (import.meta.main && process.argv[2] === "--origin") {
+  console.log(siteOrigin());
+} else if (import.meta.main) {
   const [bundle, assets = join(HERE, "public")] = process.argv.slice(2);
   if (!bundle) {
     console.error("usage: bun Tools/cloudflare-site/stage.mjs <bundle> [<assets directory>]");
