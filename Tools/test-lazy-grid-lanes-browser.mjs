@@ -7,7 +7,9 @@
 // scrolling axis and 8 apart, then a text:
 //   adaptive  one adaptive column;           mixed     a fixed column beside an adaptive one (the fixed track, then the adaptive ones that fit);
 //   flexible  three flexible columns;        across    adaptive rows of a horizontal grid in a horizontal scroll view;
-//   growing   an adaptive grid of 12 cells that gets 300 more when "Append" is pressed.
+//   growing   an adaptive grid of 12 cells that gets 300 more when "Append" is pressed;
+//   aligned   [.fixed(90) leading, .adaptive(minimum: 120) trailing] of cells 60 wide: each cell sits at the edge its column's item names,
+//             whatever number of adaptive columns the window makes (a cell's column is only known once the browser laid the grid out).
 // Engine: SWIFTUIWEB_BROWSER_ENGINE (chromium by default). Bundle: LAZY_CELL_STATE_BUNDLE (.build/browser/LazyCellStateApp).
 import assert from "node:assert/strict";
 import { join, resolve } from "node:path";
@@ -16,9 +18,11 @@ import { engineName, freePort, launch, runSuite, serveBundle, ROOT } from "./bro
 const BUNDLE = resolve(process.env.LAZY_CELL_STATE_BUNDLE ?? join(ROOT, ".build/browser/LazyCellStateApp"));
 const MIXED_FIXED = 90, MIXED_MINIMUM = 120; // the Mixed tab's columns (LazyCellStateRootView.swift)
 const CELL = 100, GAP = 8, CELLS = 120, GROW_START = 12, GROW_STEP = 300;
+const ALIGNED_CELL = 60, NARROW_WIDTH = 520; // the Aligned tab's cells (LazyGridFixtures.swift), and a window that makes fewer columns than 1000
 const KINDS = [
   { kind: "adaptive", tab: "Adaptive", axis: "y" },
   { kind: "mixed", tab: "Mixed", axis: "y" },
+  { kind: "aligned", tab: "Aligned", axis: "y" },
   { kind: "flexible", tab: "Flexible", axis: "y" },
   { kind: "across", tab: "Across", axis: "x" },
 ];
@@ -42,6 +46,30 @@ const measureGrid = ({ kind, axis, cells, cell, gap }) => {
     expected: lines * cell + (lines - 1) * gap,
     shown: grid.querySelectorAll("[data-lazy-index]").length,
   };
+};
+
+/** In the page: where each cell of the grid of `kind` that is shown sits in its column. The cell `index` is in column `index % columns`
+ * (a row holds a cell for each column), which is `cellWidth` wide, flush with its column's leading edge in the first (the fixed item
+ * aligns leading) and with its trailing edge in the others (the adaptive item aligns trailing). Returns the columns' widths, how many
+ * cells were checked and the ones that are not where their column puts them. */
+const measureAlignment = ({ kind, cellWidth }) => {
+  const grid = document.querySelector(`[data-testid="${kind}-end"]`)?.closest(".scroll-view")?.querySelector("[data-keep-lazy-index]");
+  if (!grid || !grid.getClientRects().length) return null;
+  const style = getComputedStyle(grid);
+  const widths = style.gridTemplateColumns.split(/\s+/).filter((track) => /^[\d.]/.test(track)).map(parseFloat);
+  const gap = parseFloat(style.columnGap) || 0;
+  const origin = grid.getBoundingClientRect().left + grid.clientLeft;
+  const starts = widths.map((_, at) => origin + widths.slice(0, at).reduce((sum, width) => sum + width + gap, 0));
+  const wrong = [];
+  let checked = 0;
+  for (const cell of grid.querySelectorAll(":scope > [data-lazy-index]")) {
+    const index = Number(cell.getAttribute("data-lazy-index")), column = index % widths.length, r = cell.getBoundingClientRect();
+    const start = starts[column], end = start + widths[column];
+    const edge = column === 0 ? Math.abs(r.left - start) : Math.abs(r.right - end);
+    checked++;
+    if (edge > 1 || Math.abs(r.width - cellWidth) > 1) wrong.push({ index, column, left: Math.round(r.left), right: Math.round(r.right), start: Math.round(start), end: Math.round(end) });
+  }
+  return { columns: widths.length, widths, checked, wrong: wrong.slice(0, 6), wrongCount: wrong.length };
 };
 
 /** In the page: the scroll extent of the view of `kind` at every animation frame for `ms` milliseconds, and after every task that changed
@@ -123,9 +151,29 @@ async function main() {
           return found;
         };
 
+        // What is waited for: every cell the grid shows is in its column's edge. The wait ends when they all are, and the assertion names
+        // the cells that were not when they never were. `distinctFrom` is a column count the grid must not have (the other window's).
+        const settleAlignment = async (spec, when, distinctFrom = null) => {
+          const deadline = Date.now() + 10_000;
+          let found = null;
+          while (Date.now() < deadline) {
+            found = await page.evaluate(measureAlignment, { kind: spec.kind, cellWidth: ALIGNED_CELL });
+            if (found && found.checked > 0 && found.wrongCount === 0 && found.columns !== distinctFrom) break;
+            await page.waitForTimeout(50);
+          }
+          assert.ok(found && found.checked > 0, `${label} ${spec.kind} ${when}: the grid shows no cells`);
+          assert.notEqual(found.columns, distinctFrom, `${label} ${spec.kind} ${when}: the grid still has ${found.columns} columns after the window changed width`);
+          // Two columns would not tell a cell's column from its index modulo the items: the first column is the fixed item, the rest are the adaptive one.
+          assert.ok(found.columns > 2, `${label} ${spec.kind} ${when}: the grid has ${found.columns} columns; the test needs the adaptive item to repeat`);
+          assert.ok(found.checked >= found.columns, `${label} ${spec.kind} ${when}: ${found.checked} cells shown, fewer than the ${found.columns} columns`);
+          assert.equal(found.wrongCount, 0, `${label} ${spec.kind} ${when}: ${found.wrongCount} of ${found.checked} cells are not at the edge their column's item names (columns ${found.widths}): ${JSON.stringify(found.wrong)}`);
+          return found;
+        };
+
         for (const spec of KINDS) {
           await page.getByRole("tab", { name: spec.tab }).click();
           const found = await settle(spec, CELLS);
+          const aligned = spec.kind === "aligned" ? await settleAlignment(spec, "at 1000") : null;
           // A grid of one track would not tell a cell from a row.
           assert.ok(found.tracks > 1, `${label} ${spec.kind}: the grid has ${found.tracks} track(s); the test needs several`);
           if (spec.kind === "across") assert.equal(found.tracks, 4, `${label} ${spec.kind}: the grid has ${found.tracks} rows, the 300 tall view holds four`);
@@ -145,6 +193,20 @@ async function main() {
           assert.equal(spread(scrolled), 0, `${label} ${spec.kind}: the extent changed while scrolling to the end: ${[...new Set(scrolled)]}`);
           assert.equal(await page.evaluate(endsInside, { ...spec, index: CELLS - 1 }), true, `${label} ${spec.kind}: the last cell is not inside the view after scrolling to the end`);
           console.log(`[${label}] ${spec.kind}: ${found.tracks} tracks, ${found.extent} long, held while idle and scrolled to the end`);
+          if (aligned) {
+            // The rows at the end of the grid were mounted by the scroll, and their cells are aligned as the first rows' were.
+            await settleAlignment(spec, "at 1000, scrolled to the end");
+            // A narrower window makes fewer adaptive columns: the cells that were in the fixed column are in an adaptive one now (and the
+            // other way after the window grows back), and each takes the alignment of the column it is rendered in.
+            const height = page.viewportSize().height;
+            await page.setViewportSize({ width: NARROW_WIDTH, height });
+            await settle(spec, CELLS);
+            const narrow = await settleAlignment(spec, `at ${NARROW_WIDTH}`, aligned.columns);
+            await page.setViewportSize({ width: 1000, height });
+            await settle(spec, CELLS);
+            await settleAlignment(spec, "back at 1000", narrow.columns);
+            console.log(`[${label}] ${spec.kind}: cells at the edge of their column with ${aligned.columns} columns, then ${narrow.columns}, then ${aligned.columns} again`);
+          }
         }
 
         // A grid that grows: from the press to a second later the extent never goes down, and it ends at the rows' extent. What is

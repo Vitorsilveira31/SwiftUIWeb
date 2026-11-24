@@ -69,6 +69,21 @@ const childProposal = e => (e.getAttribute('data-layout-child-proposal') || ',')
 const layoutRead = e => (e.getAttribute('data-layout-child-proposal') ?? '') + '|' + (e.getAttribute('data-layout-content-width') ?? '') + ',' + (e.getAttribute('data-layout-content-height') ?? '');
 const FLEX = ['flex-start', 'center', 'flex-end'];
 const side = a => a <= 0.25 ? 0 : a >= 0.75 ? 2 : 1;
+const alignOf = a => a === 'baseline' ? 'baseline' : FLEX[side(a)];
+/** The item of a lazy grid's `tracks` (a `GridItem` each) that lays out the rendered column `column`, when the grid has `columns` columns
+ * (`getComputedStyle`'s count). The first adaptive item repeats as often as the width allows (`grid` writes it as `repeat(auto-fill, …)`),
+ * so the columns are the items before it, `columns - (tracks.length - 1)` of it, then the items after it. Without an adaptive item, or
+ * with a count the template cannot make, the items repeat in order. */
+export function trackOfColumn(tracks, columns, column) {
+  const adaptive = tracks.findIndex(t => t.type === 'adaptive'), repeats = columns - (tracks.length - 1);
+  if (adaptive < 0 || repeats < 1) return column % tracks.length;
+  return column <= adaptive ? column : column < adaptive + repeats ? adaptive : column - repeats + 1;
+}
+/** Whether where a cell of a grid with these `tracks` is aligned depends on the column it is rendered in, which only the browser knows
+ * once it laid the grid out: an adaptive item makes as many columns as fit, so a cell's column is not its index modulo the items. When
+ * every item aligns its cells the same way, the cell's column does not matter, and the mapper writes the alignment itself. */
+export const alignsByColumn = (tracks, ax, ay) => tracks.some(t => t.type === 'adaptive') &&
+  new Set(tracks.map(t => alignOf(t.ax ?? ax) + ' ' + alignOf(t.ay ?? ay))).size > 1;
 const align = value => /start|leading|top/.test(value || '') ? 0 : /end|trailing|bottom/.test(value || '') ? 1 : .5;
 /** A canvas that carries its own frame (`frame(...)` keeps the element): the drawing it holds is a flexible leaf with no element. */
 const framedCanvas = n => n.kind === 'frame' && !n.virtual && n.element.localName === 'canvas' && !n.element.children.length;
@@ -315,6 +330,7 @@ export class CssLayout {
     this.layoutsStale = true;
     this.probedLayouts = [];
     this.containers = new Set(); // the containers whose length a containerRelativeFrame below reads (`updateContainers`)
+    this.columned = new Set(); // the grids whose cells are aligned by the column they are rendered in (`alignGridColumns`)
     this.assigned = new WeakSet();
     this.stats = { analysed: 0, assigned: 0, rules: 0, unsupported: {}, nodes: 0, selectsMeasured: 0 };
     // `detached`: an analysis that writes nothing (the equivalence check of `flush`).
@@ -962,6 +978,42 @@ export class CssLayout {
       else if (e.style.getPropertyValue(name) !== value) { e.style.setProperty(name, value); this.layoutsStale = true; }
     }
   }
+  /** Aligns each cell of a grid whose items align differently and include an adaptive one (`alignsByColumn`) as the item of the column
+   * the browser rendered it in does: the cell takes `--cl-col-x` and `--cl-col-y` (which its block reads, `placement`). How many columns
+   * an adaptive item makes is known only after the layout (the tracks the browser resolved), and changes with the grid's width, so this
+   * runs after every pass (a patch brings cells, a resize of the window changes the columns) and when the grid's own size changes (a
+   * pane that moves). Aligning moves a cell inside its track and changes no track, so it cannot start another measure. */
+  alignGridColumns() {
+    const view = this.document.defaultView;
+    for (const grid of this.columned) {
+      const node = this.cache.get(grid);
+      if (!grid.isConnected || !node?.byColumn || !this.islandOf(grid)) { this.unalignGrid(grid, node); continue; }
+      if (typeof view.ResizeObserver === 'function') {
+        this.columnObserver ??= new view.ResizeObserver(() => this.alignGridColumns());
+        if (!this.watchedColumns?.has(grid)) { (this.watchedColumns ??= new WeakSet()).add(grid); this.columnObserver.observe(grid); }
+      }
+      const style = view.getComputedStyle(grid);
+      if (style.display !== 'grid') continue; // not laid out (a hidden tab): the cells keep what they have
+      const columns = (grid.classList.contains('hgrid') ? style.gridTemplateRows : style.gridTemplateColumns).split(/\s+/).filter(track => /^[\d.]/.test(track)).length;
+      if (columns < 1) continue;
+      for (const cell of node.kids) {
+        if (cell.cell < 0 || !cell.element.isConnected) continue;
+        const track = node.tracks[trackOfColumn(node.tracks, columns, cell.cell % columns)];
+        for (const [name, al] of [['--cl-col-x', track.ax ?? node.ax], ['--cl-col-y', track.ay ?? node.ay]]) {
+          const value = alignOf(al);
+          if (cell.element.style.getPropertyValue(name) !== value) cell.element.style.setProperty(name, value);
+        }
+      }
+    }
+  }
+  /** `grid` stopped being aligned by column (it left the page, was released, or its items changed): its cells fall back to the alignment
+   * their blocks hold. */
+  unalignGrid(grid, node) {
+    this.columned.delete(grid);
+    this.columnObserver?.unobserve(grid);
+    this.watchedColumns?.delete(grid);
+    for (const cell of node?.kids ?? []) if (cell.cell >= 0) { cell.element.style.removeProperty('--cl-col-x'); cell.element.style.removeProperty('--cl-col-y'); }
+  }
   /** The ideal size of each candidate of `entry` (SwiftUI's: proposed nothing on the axes the ViewThatFits chooses along, its
    * proposal on the other): each shown out of the flow, all in one layout, then put back. Kept per candidate with the
    * width it was measured at. */
@@ -1143,6 +1195,7 @@ export class CssLayout {
     node.ax = num(a('data-align-x'), .5); node.ay = num(a('data-align-y'), .5);
     if (kind === 'vstack') node.ax = num(a('data-align-x'), align(a('data-layout-alignment')));
     if (kind === 'hstack') node.ay = num(a('data-align-y'), align(a('data-layout-alignment')));
+    if (kind === 'grid') { node.byColumn = alignsByColumn(node.tracks, node.ax, node.ay); if (node.byColumn) this.columned.add(element); }
     node.baseline = kind === 'hstack' && this.options.baseline === true && a('data-align-y') == null && a('data-layout-alignment') === 'baseline';
     node.explicitPriority = element.hasAttribute('data-layout-priority'); node.priority = num(a('data-layout-priority'), 0);
     node.spacing = element.classList.contains('searchable') ? 0 : num(a('data-layout-gap'), 8);
@@ -1594,7 +1647,6 @@ export class CssLayout {
     const ps = parent.kind;
     const stackMain = ctx === 'row' ? 'x' : ctx === 'column' ? 'y' : null;
     const W = { x: 'width', y: 'height' }, MIN = { x: 'min-width', y: 'min-height' }, MAX = { x: 'max-width', y: 'max-height' };
-    const alignOf = a => a === 'baseline' ? 'baseline' : FLEX[side(a)];
     if (ps === 'table' && n.kind === 'gridrow') { push('display', 'contents'); return; }
     if (ps === 'position') { this.positioned(n, parent, push); return; }
     if (ps === 'labeledrow') {
@@ -1640,14 +1692,18 @@ export class CssLayout {
         const after = e.getAttribute('data-lazy-spacer') === '__lazy_after';
         push('position', 'absolute'); push('width', '0'); push('height', '0'); push('inset', after ? 'auto auto 0 0' : '0 auto auto 0');
         push('grid-column', '1 / -1'); push('width', n.axis.x.fixed != null ? vpx(n.axis.x.fixed) : 'auto'); push('height', n.axis.y.fixed != null ? vpx(n.axis.y.fixed) : 'auto'); return; }
+      // A cell takes the alignment of the item of its column. The item is the cell's index modulo the items, until an adaptive item
+      // repeats: then the column is the browser's to say (`alignGridColumns`), which sets `--cl-col-x` and `--cl-col-y` on the cell
+      // after the page is laid out, and the alignment written here is what the cell has until then.
       const t = parent.tracks[n.cell % parent.tracks.length];
       const ax = t.ax ?? parent.ax, ay = t.ay ?? parent.ay;
       for (const [a, al, selfProp] of [['x', ax, 'justify-self'], ['y', ay, 'align-self']]) {
         const sp = { ...n.axis[a] };
+        const aligned = parent.byColumn ? `var(--cl-col-${a},${alignOf(al)})` : alignOf(al);
         push(W[a], 'auto'); push(MAX[a], 'none'); push(MIN[a], '0');
-        if (sp.fixed != null) { push(W[a], vpx(sp.fixed)); push(selfProp, alignOf(al)); }
+        if (sp.fixed != null) { push(W[a], vpx(sp.fixed)); push(selfProp, aligned); }
         else if (sp.fill) { push(selfProp, 'stretch'); if (sp.max != null && sp.max !== Infinity) { push(MAX[a], vpx(sp.max)); } }
-        else push(selfProp, alignOf(al));
+        else push(selfProp, aligned);
       }
       return;
     }

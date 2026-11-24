@@ -20,6 +20,12 @@ before/after comparison.
   counted one row, so four rows of 100 wide cells gave 424 wide columns and a grid 3.4 times too long (11008 against 3232,
   with a scroll extent that changed while scrolling). The grid now has a percentage height (`height: 100%`, definite where
   its parent's height is), which both engines resolve to the same rows. Chromium is unchanged.
+- **A cell of a lazy grid with an adaptive item takes the alignment of the column it is rendered in.**
+  `LazyVGrid(columns: [GridItem(.fixed(90), alignment: .leading), GridItem(.adaptive(minimum: 120), alignment: .trailing)])`
+  aligned a cell by its index modulo the two items, so with three columns the third cell of a row was leading and the
+  fourth cell (the fixed column of the next row) trailing. The page now reads how many columns the browser made and aligns each
+  cell as the item of its column does, and again when the window or the grid changes size. Grids whose items all align the
+  same way, and grids without an adaptive item, are unchanged.
 
 ### Security fixes that change behaviour
 
