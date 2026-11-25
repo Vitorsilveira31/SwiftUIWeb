@@ -169,9 +169,11 @@ cleanup(){
   exit "$exit_code"
 }
 build_cache_locked=0
+# The lock is a `flock` on descriptor 9, which this shell keeps open (Tools/build-cache-lock.mjs): closing it, or this
+# shell ending, frees the cache. A process this shell started inherits the descriptor and keeps the cache while it runs.
 release_build_cache() {
   [[ "$build_cache_locked" == 1 ]] || return 0
-  bun "$ROOT/Tools/build-cache-lock.mjs" release "$build_cache" --pid "$$" 2>/dev/null || true
+  exec 9>&-
   build_cache_locked=0
 }
 trap cleanup EXIT
@@ -179,7 +181,8 @@ trap 'exit 130' INT
 trap 'exit 143' TERM HUP
 # Held from the first write into the build cache until the bundle is ready (the server below does not need it).
 if [[ -n "$build_cache" ]]; then
-  bun "$ROOT/Tools/build-cache-lock.mjs" acquire "$build_cache" --pid "$$" || exit 1
+  mkdir -p "$build_cache"; exec 9>>"$build_cache/lock"
+  bun "$ROOT/Tools/build-cache-lock.mjs" acquire "$build_cache" --fd 9 --pid "$$" || exit 1
   build_cache_locked=1
 fi
 if [[ "$EXTERNAL_PACKAGE" == 1 ]]; then

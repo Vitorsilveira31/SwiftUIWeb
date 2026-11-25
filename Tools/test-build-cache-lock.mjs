@@ -1,14 +1,14 @@
 // Run: bun test ./Tools/test-build-cache-lock.mjs
-// Tools/build-cache-lock.mjs: one build at a time in a build cache folder; a lock whose process is gone, or whose process id
-// now names another process, is taken over; a release by a process that does not hold the lock changes nothing.
+// Tools/build-cache-lock.mjs: one shell at a time holds a build cache, the lock outlives the tool and ends with the shell's
+// descriptor (a killed holder frees it at once), a waiting shell names the holder and fails after its timeout, and of many
+// shells that start together exactly one holds the cache at any moment.
 import assert from "node:assert/strict";
-import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { isStale, release, tryAcquire } from "./build-cache-lock.mjs";
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), "build-cache-lock.mjs");
 
@@ -21,77 +21,91 @@ async function withCache(body) {
   }
 }
 
-test("a free cache is taken, and a second live process is told who holds it", () =>
-  withCache((cache) => {
-    assert.equal(tryAcquire(cache, process.pid), null);
-    const sleeper = spawn("sleep", ["30"]);
-    try {
-      assert.equal(tryAcquire(cache, sleeper.pid).pid, process.pid);
-    } finally {
-      sleeper.kill();
-    }
-    release(cache, process.pid);
-    assert.equal(existsSync(join(cache, "lock")), false);
-  }));
+/** A shell that takes the lock the way the launcher does, then runs <after>; resolves with its exit code and output. */
+function shell(cache, after, timeout = 20) {
+  const script = `exec 9>>"$1/lock"; bun "$2" acquire "$1" --fd 9 --pid $$ --timeout ${timeout} || exit $?; ${after}`;
+  const child = spawn("bash", ["-c", script, "bash", cache, SCRIPT]);
+  let output = "";
+  child.stdout.on("data", (chunk) => (output += chunk));
+  child.stderr.on("data", (chunk) => (output += chunk));
+  const exited = new Promise((resolve) => child.on("exit", (code) => resolve({ code, output })));
+  return { child, exited, output: () => output };
+}
 
-test("a lock whose process exited is taken over", () =>
-  withCache((cache) => {
-    const exited = spawnSync("true").pid;
-    mkdirSync(join(cache, "lock"));
-    writeFileSync(join(cache, "lock", "owner.json"), JSON.stringify({ pid: exited, started: "gone" }));
-    assert.equal(tryAcquire(cache, process.pid), null);
-    assert.equal(JSON.parse(readFileSync(join(cache, "lock", "owner.json"), "utf8")).pid, process.pid);
-  }));
+const until = async (condition) => {
+  for (let i = 0; i < 200 && !condition(); i += 1) await Bun.sleep(50);
+  assert.ok(condition());
+};
 
-test("a reused process id is not the owner: the start time must match too", () =>
-  withCache((cache) => {
-    mkdirSync(join(cache, "lock"));
-    writeFileSync(join(cache, "lock", "owner.json"), JSON.stringify({ pid: process.pid, started: "Thu Jan  1 00:00:00 1970" }));
-    assert.equal(isStale(join(cache, "lock")), true);
-  }));
-
-test("a lock directory without an owner is stale only after a grace period", () =>
-  withCache((cache) => {
-    const lock = join(cache, "lock");
-    mkdirSync(lock);
-    assert.equal(isStale(lock), false);
-    const old = new Date(Date.now() - 120_000);
-    utimesSync(lock, old, old);
-    assert.equal(isStale(lock), true);
-  }));
-
-test("a release by a process that does not hold the lock leaves it", () =>
-  withCache((cache) => {
-    assert.equal(tryAcquire(cache, process.pid), null);
-    release(cache, process.pid + 1);
-    assert.equal(existsSync(join(cache, "lock")), true);
-  }));
-
-test("the command waits for the holder and fails after the timeout", () =>
-  withCache((cache) => {
-    assert.equal(tryAcquire(cache, process.pid), null);
-    const sleeper = spawn("sleep", ["30"]);
-    try {
-      const result = spawnSync("bun", [SCRIPT, "acquire", cache, "--pid", String(sleeper.pid), "--timeout", "1"], { encoding: "utf8" });
-      assert.equal(result.status, 75);
-      assert.match(result.stderr, new RegExp(`Waiting for process ${process.pid}`));
-      assert.match(result.stderr, /SWIFTUIWEB_STABLE_WORKSPACE=0/);
-    } finally {
-      sleeper.kill();
-    }
-  }));
-
-test("the command takes the lock once the holder releases it", () =>
+test("the lock outlives the tool, names its holder, and makes a second shell wait", () =>
   withCache(async (cache) => {
-    assert.equal(tryAcquire(cache, process.pid), null);
-    const sleeper = spawn("sleep", ["30"]);
+    const first = shell(cache, "echo held; sleep 2");
+    await until(() => first.output().includes("held"));
+    assert.equal(readFileSync(join(cache, "lock"), "utf8").trim(), String(first.child.pid));
+    const started = Date.now();
+    const second = shell(cache, "echo second");
+    const result = await second.exited;
+    assert.equal(result.code, 0);
+    assert.match(result.output, new RegExp(`Waiting for process ${first.child.pid}`));
+    assert.ok(Date.now() - started >= 1000, "the second shell did not wait for the first");
+    assert.equal((await first.exited).code, 0);
+  }));
+
+test("a killed holder frees the cache at once", () =>
+  withCache(async (cache) => {
+    const first = shell(cache, "echo held; sleep 30 9>&-");
+    await until(() => first.output().includes("held"));
+    const second = shell(cache, "echo second");
+    await until(() => second.output().includes("Waiting"));
+    first.child.kill("SIGKILL");
+    const result = await second.exited;
+    assert.equal(result.code, 0);
+    assert.match(result.output, /second/);
+  }), 20_000);
+
+test("a waiting shell fails after its timeout and says how to build without the cache", () =>
+  withCache(async (cache) => {
+    const first = shell(cache, "echo held; sleep 30 9>&-");
+    await until(() => first.output().includes("held"));
     try {
-      const waiting = spawn("bun", [SCRIPT, "acquire", cache, "--pid", String(sleeper.pid), "--timeout", "20"]);
-      const done = new Promise((resolve) => waiting.on("exit", resolve));
-      setTimeout(() => release(cache, process.pid), 800);
-      assert.equal(await done, 0);
-      assert.equal(JSON.parse(readFileSync(join(cache, "lock", "owner.json"), "utf8")).pid, sleeper.pid);
+      const result = await shell(cache, "echo second", 1).exited;
+      assert.equal(result.code, 75);
+      assert.match(result.output, /still in use by process/);
+      assert.match(result.output, /SWIFTUIWEB_STABLE_WORKSPACE=0/);
     } finally {
-      sleeper.kill();
+      first.child.kill("SIGKILL");
     }
   }));
+
+test("of shells that start together, one holds the cache at a time", () =>
+  withCache(async (cache) => {
+    // Each holder marks the folder while it holds the lock; a second mark while one exists is a double hold.
+    const body = `if ! mkdir "${cache}/inside" 2>/dev/null; then echo DOUBLE; exit 1; fi; sleep 0.2; rmdir "${cache}/inside"`;
+    const shells = Array.from({ length: 6 }, () => shell(cache, body));
+    const results = await Promise.all(shells.map((s) => s.exited));
+    for (const result of results) {
+      assert.equal(result.code, 0, result.output);
+      assert.doesNotMatch(result.output, /DOUBLE/);
+    }
+  }));
+
+test("a descriptor that is not open is an error, not a lock to wait for", () =>
+  withCache(async (cache) => {
+    const child = spawn("bun", [SCRIPT, "acquire", cache, "--fd", "57", "--pid", String(process.pid), "--timeout", "5"]);
+    const code = await new Promise((resolve) => child.on("exit", resolve));
+    assert.notEqual(code, 0);
+  }));
+
+test("a process the holder started keeps the cache while it still runs", () =>
+  withCache(async (cache) => {
+    // A compiler the launcher started still writes the cache after the launcher is killed: the lock waits for it too.
+    const first = shell(cache, "sleep 2 & echo held; wait");
+    await until(() => first.output().includes("held"));
+    const started = Date.now();
+    const second = shell(cache, "echo second");
+    await until(() => second.output().includes("Waiting"));
+    first.child.kill("SIGKILL");
+    const result = await second.exited;
+    assert.equal(result.code, 0);
+    assert.ok(Date.now() - started >= 1500, "the cache was free while the holder's child still ran");
+  }), 20_000);
