@@ -67,6 +67,13 @@ struct LazyCellStateRootView: View {
         .tabItem { Label("Across", systemImage: "house") }.tag(5)
       GrowingGridFixture(kind: "growing")
         .tabItem { Label("Growing", systemImage: "house") }.tag(6)
+      // A streaming app's home (hero, rails of posters over canvas placeholders): `Tools/test-streaming-home-resize-browser.mjs`.
+      StreamingHomeFixture()
+        .tabItem { Label("Streaming", systemImage: "house") }.tag(8)
+      StreamingHomeFixture(placeholders: false)
+        .tabItem { Label("Streaming bare", systemImage: "house") }.tag(9)
+      StreamingHomeFixture(grid: 4)
+        .tabItem { Label("Streaming coarse", systemImage: "house") }.tag(10)
     }
     .task { tab = 1 }
   }

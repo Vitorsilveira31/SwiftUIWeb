@@ -494,11 +494,33 @@ final class CanvasTests {
 
     let node = FiberTree(canvas).renderNode
     let wire = node.attributes["data-canvas-commands"] ?? ""
-    _expectTrue(wire.hasPrefix("[{\"o\":\"f\",\"d\":\"M 0 0"), "the fill carries its path as SVG data: \(wire)")
+    // A plain rectangle travels as its own command (`R x,y,w,h`), which the host fills as the rectangle it is.
+    _expectTrue(wire.hasPrefix("[{\"o\":\"f\",\"d\":\"R0,0,10,5\",\"s\":"), "the fill of a rectangle carries its rectangle: \(wire)")
     _expectTrue(wire.contains("{\"o\":\"t\",\"x\":2,\"y\":3}"))
     _expectTrue(wire.contains("\"o\":\"tx\",\"t\":\"hi\""))
     // The drawing closure receives the laid-out size, so the host measures the canvas as it does a GeometryReader.
     _expectEqual(node.attributes["data-geometry-reader"], "true")
     _expectNotNil(node.events["geometry"])
+  }
+
+  /// Only a plain rectangle goes as `R x,y,w,h`: a rounded one, one with a transform, a rectangle with something after it and any other
+  /// path keep their SVG data, and the even-odd rule is still sent for them.
+  @Test
+  func testOnlyAPlainRectangleFillTravelsAsARectangle() {
+    let canvas = Canvas { context, _ in
+      context.fill(Path(roundedRect: CGRect(x: 0, y: 0, width: 10, height: 6), cornerRadius: 2), with: .color(.red))
+      var triangle = Path()
+      triangle.move(to: CGPoint(x: 0, y: 0)); triangle.addLine(to: CGPoint(x: 4, y: 0)); triangle.addLine(to: CGPoint(x: 0, y: 4)); triangle.closeSubpath()
+      context.fill(triangle, with: .color(.red), style: FillStyle(eoFill: true))
+      var two = Path(CGRect(x: 1, y: 1, width: 2, height: 2))
+      two.addRect(CGRect(x: 5, y: 5, width: 2, height: 2))
+      context.fill(two, with: .color(.red))
+      context.fill(Path(CGRect(x: -1.5, y: 2.25, width: 3, height: 0.125)), with: .color(.blue))
+    }.frame(width: 20, height: 10)
+    let wire = FiberTree(canvas).renderNode.attributes["data-canvas-commands"] ?? ""
+    _expectFalse(wire.contains("\"d\":\"RR"), "a rounded rectangle is not a plain one: \(wire)")
+    _expectTrue(wire.contains("\"o\":\"f\",\"d\":\"M 0 0 L 4 0 L 0 4 Z\",\"s\":{\"k\":\"c\",\"c\":\"") && wire.contains("\"eo\":1}"), "a triangle keeps its path and its rule: \(wire)")
+    _expectFalse(wire.contains("\"d\":\"R1,1,2,2"), "a path of two rectangles is not a plain one: \(wire)")
+    _expectTrue(wire.contains("\"d\":\"R-1.5,2.25,3,0.125\""), "a plain rectangle keeps the numbers it was written with: \(wire)")
   }
 }
