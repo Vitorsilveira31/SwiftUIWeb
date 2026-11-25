@@ -300,11 +300,12 @@ else
     lowering_interrupted=0; [[ ! -e "$lowering_marker" ]] || lowering_interrupted=1
     : > "$lowering_marker"
     "$LOWERER" "${lower_args[@]}" | tee "$tmp/lowering-summary.json"
-    rm -f "$lowering_marker"
     tree_changes="$(bun -e 'const m = await Bun.file(process.argv[1]).json(); if (Number.isInteger(m.workspaceChanges)) console.log(m.workspaceChanges)' "$tmp/lowering-summary.json" 2>/dev/null || true)"
     [[ "$lowering_interrupted" == 0 ]] || tree_changes=""
     # As after a sync below: a tree the last build did not see drops its stamp now, not only when the build starts.
     [[ "$tree_changes" == 0 ]] || rm -f "$build_cache/last-build.stamp"
+    # Only now: a run stopped before the stamp is dropped must still find the marker.
+    rm -f "$lowering_marker"
   else
     "$LOWERER" "${lower_args[@]}"
   fi
@@ -393,8 +394,8 @@ if [[ -n "$build_cache" ]]; then
       # (SWIFTUIWEB_SYNC_LIST=1 also prints them, to find files that change without an edit).
       # A sync that fails partway leaves some files at their older bytes and times, which SwiftPM would then skip: stop here,
       # and the next run rewrites every file that differs. The files it did write are not in that run's list, so the marker
-      # left here makes that run neither skip the build nor trust the list (an unknown count is a `swift build`, which
-      # compiles by modification time).
+      # left here (removed once a build passes) makes that run neither skip the build nor trust the list (an unknown count
+      # is a `swift build`, which compiles by modification time).
       sync_marker="$build_cache/sync-incomplete"
       sync_incomplete=0; [[ ! -e "$sync_marker" ]] || sync_incomplete=1
       : > "$sync_marker"
@@ -413,9 +414,9 @@ if [[ -n "$build_cache" ]]; then
       else tree_changes=""; fi
       [[ "$sync_incomplete" == 0 ]] || tree_changes=""
       # A tree the last build did not see has no valid stamp, even if this run stops before it builds: drop it now, so the
-      # next run (whose sync then writes nothing) cannot skip the build. A sync that wrote nothing keeps it.
+      # next run (whose sync then writes nothing) cannot skip the build. A sync that wrote nothing keeps it. The marker
+      # stays until this run's build passes, so a run stopped before that leaves the next one an unknown count.
       [[ "$tree_changes" == 0 ]] || rm -f "$build_cache/last-build.stamp"
-      rm -f "$sync_marker"
       package_path="$build_cache/tree${package_path#"$sync_from"}"
     fi
     scratch="$build_cache/scratch"
@@ -524,6 +525,8 @@ if grep -E 'warning: .*(Sendable|actor-isolated|nonisolated|data race)' "$tmp/sw
 fi
 # The stamp is written after the concurrency check, so a build with warnings or data-race errors never becomes one that is skipped.
 if [[ "$dev_tree" == 1 && "$skip_swift_build" == 0 && ! -s "$tmp/concurrency-warnings.log" ]]; then printf '%s\n' "$stamp_text" > "$stamp"; fi
+# The build passed (or had nothing to do): the tree it saw is the whole synced tree.
+[[ -z "${sync_marker:-}" ]] || rm -f "$sync_marker"
 artifact="$(find "$scratch" -path '*Products*' -name "$product.wasm" -print | head -1)"; [[ -f "$artifact" ]] || { echo "Could not locate $product.wasm" >&2; exit 1; }
 # A save of Swift sources that the direct build compiled changes one file of the bundle, app.wasm, as long as the
 # application uses the same framework features as before (the reachability manifest decides which host files and icons the
