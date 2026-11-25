@@ -792,6 +792,8 @@ public extension Button where Label == SwiftUIWebCore.Label<Text, Image> {
   if let role { node.attributes["data-role"] = role.rawValue }
   if context.environment.isEnabled { node.events["click"] = _EventHandler(name: "click", action: action) }
   else { node.attributes["disabled"] = "disabled"; node.attributes["aria-disabled"] = "true" }
+  // `.hoverEffectDisabled()` on the button or around it turns off the pointer highlight of its shape, as on iPadOS.
+  if !context.environment.isHoverEffectEnabled { node.attributes["data-hover-disabled"] = "true" }
   _applyKeyboardShortcut(context, to: node)
   return node
 }
