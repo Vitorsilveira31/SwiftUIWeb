@@ -136,8 +136,8 @@ What decides that an object moves, all of it from the two modules and the linker
 A move from the Worker to the main thread copies a snapshot of the Worker's memory over the new instance's. A snapshot taken before the
 Worker loaded `app-rest.wasm` has zeros where its data goes, so the main thread then instantiates the second module after the copy
 (`loadAroundCopy` of `Tools/wasm-split-loader.js`, with `hold()` and `release()`); a snapshot taken after has the data, and the
-instantiation comes first so that the copy has the last word. `window.__renderWorker.peek(address)` (performance diagnostics) lets a
-test read the adopted memory.
+instantiation comes first so that the copy has the last word. `window.__renderWorker.holds(address, word)` (performance diagnostics) answers
+whether a word of the adopted memory is the given value, which lets a test check the data without reading the memory out.
 
 ## 3. Measured
 

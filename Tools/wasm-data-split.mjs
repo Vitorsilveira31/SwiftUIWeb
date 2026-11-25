@@ -302,8 +302,11 @@ export function planDataMove({ primary, secondary, objects, readOnly = isReadOnl
   const data = joinOverlapping(objects.filter((object) => object.segment !== ".bss" && object.size > 0 && object.address >= image.low && object.address + object.size <= image.high), readOnly);
   if (data.length === 0 || !mapMatches(image, data)) return { reason: "the link map does not describe this module's data" };
 
-  const primaryRefs = codeAddresses(primary, image.low, image.high);
-  const secondaryRefs = codeAddresses(secondary, image.low, image.high);
+  // A string literal at the start of the image has the address of its native object below the image, so the scan starts
+  // STRING_BIAS earlier (what the bias allows an address to name is decided by ownersOf).
+  const reach = Math.max(0, image.low - STRING_BIAS);
+  const primaryRefs = codeAddresses(primary, reach, image.high);
+  const secondaryRefs = codeAddresses(secondary, reach, image.high);
   // The objects an address may name: the one that contains it, or (a pointer one past its end) the one that ends there, and a
   // string literal that starts up to STRING_BIAS bytes after it: a `String` holds the address of its native object, which is
   // the first character less the 20 bytes of header (`_StringObject.nativeBias` on a 32-bit target), and the compiler writes that
@@ -332,7 +335,7 @@ export function planDataMove({ primary, secondary, objects, readOnly = isReadOnl
     for (let at = 0; at + 4 <= object.size; at++) {
       if (!image.present[base + at] || !image.present[base + at + 3]) continue;
       const word = (image.bytes[base + at] | (image.bytes[base + at + 1] << 8) | (image.bytes[base + at + 2] << 16) | (image.bytes[base + at + 3] << 24)) >>> 0;
-      if (word >= image.low && word <= image.high) for (const owner of ownersOf(word)) if (owner !== object) object.points.push(owner);
+      if (word >= reach && word <= image.high) for (const owner of ownersOf(word)) if (owner !== object) object.points.push(owner);
     }
   }
   // Initialized bytes the map gives to no object (the header before a string literal, say) stay in the first module, and a word in
@@ -342,7 +345,7 @@ export function planDataMove({ primary, secondary, objects, readOnly = isReadOnl
   for (let at = 0; at + 4 <= claimed.length; at++) {
     if (!image.present[at] || !image.present[at + 3] || (claimed[at] && claimed[at + 1] && claimed[at + 2] && claimed[at + 3])) continue;
     const word = (image.bytes[at] | (image.bytes[at + 1] << 8) | (image.bytes[at + 2] << 16) | (image.bytes[at + 3] << 24)) >>> 0;
-    if (word >= image.low && word <= image.high) for (const target of ownersOf(word)) target.stays = true;
+    if (word >= reach && word <= image.high) for (const target of ownersOf(word)) target.stays = true;
   }
   // A candidate is a read-only object the first module's code does not name that the second module's code names, or that only
   // such objects point at. It moves unless some object that stays in the first module (whatever the reason, and an object

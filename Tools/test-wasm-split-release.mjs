@@ -193,7 +193,8 @@ test("the check of a data move notes an access that touches a moved range, where
   let added = null;
   const stand = { Module, instantiate: (module, imports) => { added = imports; } };
   const scope = {};
-  new Function("WebAssembly", "performance", "globalThis", dataHook([[4096, 4100], [8192, 8200]]))(stand, { getEntriesByName: () => marks }, scope);
+  // No BroadcastChannel in the stand-in: the hook only uses it to tell the page a Worker was instrumented.
+  new Function("WebAssembly", "performance", "globalThis", "BroadcastChannel", dataHook([[4096, 4100], [8192, 8200]]))(stand, { getEntriesByName: () => marks }, scope, undefined);
   stand.instantiate(new Module(), {});
   const { load_ptr: read, store_ptr: write } = added.env;
   // An eight-byte access from 4094 covers the four moved bytes although neither of its ends is inside them.
@@ -215,19 +216,20 @@ test("the module is instrumented after its bulk copies and fills became loops th
 test("the check of a data move refuses a run that measured nothing: no hook, no second module, a Worker that ended", async () => {
   // A page double: `hook` says the instrumented module reported, `mark` that the second module was instantiated, `closing` that
   // the Worker closed while the first screen was up.
-  // `closing` is a Worker that ran the instrumented module and closed; `probe` one that never did (the stack probe's).
-  const run = async ({ closing = false, probe = false, hook = true, mark = true } = {}) => {
-    const handlers = {};
-    const worker = { on: (event, handler) => { handlers[`worker-${event}`] = handler; }, evaluate: async () => closing };
+  // `closing`: a Worker told the page it instrumented the module and is gone when the run ends; `alive`: the same Worker, still there with
+  // its record; `probe`: Workers that came and went without instrumenting anything (the stack probe's).
+  const run = async ({ closing = false, alive = false, probe = false, hook = true, mark = true } = {}) => {
+    const worker = { evaluate: async (callback) => (String(callback).includes("getEntriesByName") ? 1 : []) };
     const page = {
-      on: (event, handler) => { handlers[event] = handler; },
-      goto: async () => { if (closing || probe) { handlers.worker?.(worker); await new Promise((done) => setTimeout(done, 80)); handlers["worker-close"]?.(); } },
+      on: () => {},
+      goto: async () => {},
       waitForSelector: async () => {},
-      workers: () => [],
+      workers: () => (alive ? [worker] : []),
       evaluate: async (callback) => {
         const source = String(callback);
         if (source.includes("getEntriesByName")) return mark ? 1 : 0;
         if (source.includes("__swiftuiwebDataReads")) return hook ? [] : null;
+        if (source.includes("__swiftuiwebWorkersInstrumented")) return closing || alive ? 1 : 0;
         return undefined;
       },
     };
@@ -237,5 +239,6 @@ test("the check of a data move refuses a run that measured nothing: no hook, no 
   expect(await run()).toEqual([]);
   expect(await run({ closing: true })).toEqual(["the Worker ended during the run, with what it had recorded"]);
   expect(await run({ probe: true })).toEqual([]);
+  expect(await run({ alive: true })).toEqual([]);
   expect(await run({ hook: false })).toEqual(["the instrumented module did not report"]);
 }, 30_000);

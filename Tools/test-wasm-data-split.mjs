@@ -365,3 +365,19 @@ test("initialized bytes the map gives to no object keep what they point at", () 
   const free = neighbours({ first: [6144 + 4], second: [4096, 5120], unmapped: [[9000, [1, 2, 3, 4, 1, 2, 3, 4]]] });
   expect(planDataMove({ primary: free.primary, secondary: free.secondary, objects: parseLinkMap(free.map) }).objects.map((object) => object.symbol)).toEqual(["a", "b"]);
 });
+
+test("a string at the start of the data names itself by an address below the data", () => {
+  // The literal is the first object of the image (4096) and the first module holds 4076 + 20, which is how a String names it.
+  const map = rows(
+    "       -   275cf4    25c0e DATA",
+    segmentRow(0x1000, 0x800, ".rodata"),
+    objectRow(0x1000, 0x400, "/app/A.o", ".rodata..L.str.1024.first-literal", ".L.str.1024.first-literal"),
+    objectRow(0x1400, 0x400, "/app/A.o", ".rodata.b", "b"),
+  );
+  const data = [{ at: 4096, bytes: fill(1024, 9) }, { at: 5120, bytes: fill(1024, 8) }];
+  const secondary = wasm({ imported: true, bodies: [body(NAMED(4096), NAMED(5120))] });
+  const named = wasm({ bodies: [body(NAMED(4076))], data });
+  expect(planDataMove({ primary: named, secondary, objects: parseLinkMap(map) }).objects.map((object) => object.symbol)).toEqual(["b"]);
+  const unnamed = wasm({ bodies: [body(NAMED(4056))], data });
+  expect(planDataMove({ primary: unnamed, secondary, objects: parseLinkMap(map) }).objects.map((object) => object.symbol)).toEqual([".L.str.1024.first-literal", "b"]);
+});
