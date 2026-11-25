@@ -9,6 +9,14 @@ before/after comparison.
 
 ## Unreleased
 
+### A sidebar's section titles keep their height (visual change)
+
+- **A `TabSection` title in a sidebar no longer shrinks when the sidebar's tabs do not fit.** The sidebar list is a column of
+  fixed height that scrolls, and a section title (`min-height: 0`, `overflow: hidden`) was a flexible item, so a list taller
+  than the window squeezed each title to a few points and cut its text (9 of 24 points in a sidebar of 16 tabs and four
+  sections), while the tabs kept their height. The title no longer shrinks (`flex: none`); the list scrolls instead. A
+  sidebar whose tabs fit is unchanged.
+
 ### Lazy grid layout fixes (visual change)
 
 - **A fixed item beside an adaptive one keeps its track.** `LazyVGrid(columns: [GridItem(.fixed(90)), GridItem(.adaptive(minimum: 120))])`
