@@ -367,9 +367,10 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
       const missing = Math.ceil(state.length / 65536) - memory.buffer.byteLength / 65536;
       if (missing > 0) memory.grow(missing);
       new Uint8Array(memory.buffer, 0, state.length).set(new Uint8Array(state.memory, 0, state.length));
+      // The snapshot can hold what a SecureField held; the instance's memory is the only copy that stays. It goes at once: the
+      // second module's instantiation, which may follow, can fail.
+      new Uint8Array(state.memory, 0, state.length).fill(0);
     });
-    // The snapshot can hold what a SecureField held; the instance's memory is the only copy that stays.
-    new Uint8Array(state.memory, 0, state.length).fill(0);
     lastSeq = state.seq; callsProcessed = callsReported = state.calls;
     if (state.dom) browserIO.domTable(state.dom.seq, state.dom.table);
     drainTimer = setInterval(scheduleTaskDrain, 250);
@@ -493,7 +494,8 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
     if (stackMeter) { const stats = stackMeter.snapshot(); if (stats.samples !== stackSamples) { stackSamples = stats.samples; post({ t: 'stack-stats', stats }); } }
   }
 
-  /** A 32-bit word of this instance's memory (diagnostics: the tests read the data a moved app carries). */
-  const peek = address => (exports ? new DataView(exports.memory.buffer).getUint32(address, true) : null);
-  return { handle, adopt, peek, get halted() { return halted; } };
+  /** Whether the 32-bit word at `address` of this instance's memory is `word` (diagnostics: the tests ask it about the data a
+   * moved app carries; the answer is a yes or no, not the memory). */
+  const holds = (address, word) => exports ? new DataView(exports.memory.buffer).getUint32(address, true) === (word >>> 0) : false;
+  return { handle, adopt, holds, get halted() { return halted; } };
 }

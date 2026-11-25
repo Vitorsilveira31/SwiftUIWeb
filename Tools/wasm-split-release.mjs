@@ -83,7 +83,7 @@ export function dataHook(runs) {
     `const touch=kind=>(id,bytes,offset,ptr)=>{const a=(ptr+offset)>>>0;if(reads.length<16&&!loaded()&&touches(a,bytes))reads.push(kind+" "+a);return ptr;};` +
     `const keep=(id,value)=>value;` +
     `const imports={load_ptr:touch("read"),store_ptr:touch("write"),load_val_i32:keep,load_val_i64:keep,load_val_f32:keep,load_val_f64:keep,store_val_i32:keep,store_val_i64:keep,store_val_f32:keep,store_val_f64:keep,memory_grow_pre:keep,memory_grow_post:keep};` +
-    `const instantiate=WebAssembly.instantiate;WebAssembly.instantiate=function(module,env){if(module instanceof WebAssembly.Module&&env&&WebAssembly.Module.imports(module).some(e=>e.module==="env"&&e.name==="load_ptr"))env.env=Object.assign({},env.env,imports);return instantiate.apply(this,arguments);};}\n`;
+    `const instantiate=WebAssembly.instantiate;WebAssembly.instantiate=function(module,env){if(module instanceof WebAssembly.Module&&env&&WebAssembly.Module.imports(module).some(e=>e.module==="env"&&e.name==="load_ptr")){env.env=Object.assign({},env.env,imports);globalThis.__swiftuiwebInstrumented=true;}return instantiate.apply(this,arguments);};}\n`;
 }
 
 // Runs in the scope that holds the instrumented instance: the profile is written into fresh pages of its memory.
@@ -343,14 +343,21 @@ async function profileOnce(browser, base, route, viewport) {
  */
 export async function dataReadsOnce(browser, base, route, viewport) {
   const context = await browser.newContext({ viewport, deviceScaleFactor: 1 });
+  const polls = [];
   try {
     const page = await context.newPage();
     const errors = [];
     page.on("pageerror", (error) => errors.push(String(error)));
     // A Worker whose stack runs out moves the app to the main thread and is terminated, with what its hook recorded: a check
-    // that lost it cannot say the first screen touched nothing.
+    // that lost it cannot say the first screen touched nothing. Only a Worker seen running the instrumented module counts: the
+    // short-lived Workers of the page (the stack probe) end at once and record nothing.
     let workerEnded = false;
-    page.on("worker", (worker) => worker.on("close", () => { workerEnded = true; }));
+    page.on("worker", (worker) => {
+      let instrumented = false;
+      const poll = setInterval(() => { worker.evaluate(() => globalThis.__swiftuiwebInstrumented === true).then((yes) => { instrumented ||= yes; }, () => {}); }, 20);
+      polls.push(poll);
+      worker.on("close", () => { clearInterval(poll); if (instrumented) workerEnded = true; });
+    });
     await page.goto(`${base}${route}`, { waitUntil: "domcontentloaded" });
     await settle(page);
     // The second module arrives behind the first screen; what the first module touches until then is what counts.
@@ -361,11 +368,21 @@ export async function dataReadsOnce(browser, base, route, viewport) {
       await new Promise((done) => setTimeout(done, 100));
     }
     if (errors.length) throw new Error(`the instrumented bundle reported page errors: ${errors.join("; ")}`);
+    // A check that measured nothing has not passed: the hook must have run (its record exists in a Worker or in the page) and the
+    // second module must have been instantiated by the end, or the run says so.
     const reads = [];
-    for (const scope of [...page.workers(), page]) reads.push(...(await scope.evaluate(() => globalThis.__swiftuiwebDataReads ?? []).catch(() => [])));
+    let hooked = false, loaded = false;
+    for (const scope of [...page.workers(), page]) {
+      const record = await scope.evaluate(() => globalThis.__swiftuiwebDataReads ?? null).catch(() => null);
+      if (Array.isArray(record)) { hooked = true; reads.push(...record); }
+      loaded ||= (await scope.evaluate(() => performance.getEntriesByName("swiftuiweb-app-rest").length).catch(() => 0)) > 0;
+    }
+    if (!hooked) reads.push("the instrumented module did not report");
+    if (!loaded) reads.push(`the second module was not instantiated within the run`);
     if (workerEnded) reads.push("the Worker ended during the run, with what it had recorded");
     return reads;
   } finally {
+    for (const poll of polls) clearInterval(poll);
     await context.close();
   }
 }

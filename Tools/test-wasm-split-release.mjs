@@ -212,22 +212,30 @@ test("the module is instrumented after its bulk copies and fills became loops th
   expect(instrumentation(["--mvp-features", "--enable-bulk-memory"])).toEqual(["--mvp-features", "--enable-bulk-memory", "--llvm-memory-copy-fill-lowering", "--instrument-memory"]);
 });
 
-test("the check of a data move refuses a run in which the Worker ended, whose record is gone", async () => {
-  // A page that never reports a Worker, and one whose Worker closes while the first screen is up.
-  const run = async (closing) => {
+test("the check of a data move refuses a run that measured nothing: no hook, no second module, a Worker that ended", async () => {
+  // A page double: `hook` says the instrumented module reported, `mark` that the second module was instantiated, `closing` that
+  // the Worker closed while the first screen was up.
+  // `closing` is a Worker that ran the instrumented module and closed; `probe` one that never did (the stack probe's).
+  const run = async ({ closing = false, probe = false, hook = true, mark = true } = {}) => {
     const handlers = {};
-    const worker = { on: (event, handler) => { handlers[`worker-${event}`] = handler; } };
+    const worker = { on: (event, handler) => { handlers[`worker-${event}`] = handler; }, evaluate: async () => closing };
     const page = {
       on: (event, handler) => { handlers[event] = handler; },
-      goto: async () => { if (closing) { handlers.worker?.(worker); handlers["worker-close"]?.(); } },
+      goto: async () => { if (closing || probe) { handlers.worker?.(worker); await new Promise((done) => setTimeout(done, 80)); handlers["worker-close"]?.(); } },
       waitForSelector: async () => {},
       workers: () => [],
-      // The mark of the second module is there, and nothing was recorded.
-      evaluate: async (callback) => (String(callback).includes("getEntriesByName") ? 1 : String(callback).includes("__swiftuiwebDataReads") ? [] : undefined),
+      evaluate: async (callback) => {
+        const source = String(callback);
+        if (source.includes("getEntriesByName")) return mark ? 1 : 0;
+        if (source.includes("__swiftuiwebDataReads")) return hook ? [] : null;
+        return undefined;
+      },
     };
     const browser = { newContext: async () => ({ newPage: async () => page, close: async () => {} }) };
     return dataReadsOnce(browser, "http://127.0.0.1:1", "/", { width: 1, height: 1 });
   };
-  expect(await run(false)).toEqual([]);
-  expect(await run(true)).toEqual(["the Worker ended during the run, with what it had recorded"]);
-});
+  expect(await run()).toEqual([]);
+  expect(await run({ closing: true })).toEqual(["the Worker ended during the run, with what it had recorded"]);
+  expect(await run({ probe: true })).toEqual([]);
+  expect(await run({ hook: false })).toEqual(["the instrumented module did not report"]);
+}, 30_000);

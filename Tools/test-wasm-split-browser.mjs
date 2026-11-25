@@ -334,7 +334,7 @@ async function splitBundle(browser, bundle) {
         // The Worker is gone; the mark is the main thread's own.
         const after = await page.evaluate(() => performance.getEntriesByName("swiftuiweb-app-rest").length);
         assert.ok(after >= 1, `${label}: the main thread loaded app-rest.wasm for the instance it adopted`);
-        if (moved) assert.equal(await page.evaluate((address) => window.__renderWorker.peek(address), moved.address), moved.value, `${label}: the adopted memory holds the data app-rest.wasm carries`);
+        if (moved) assert.equal(await page.evaluate(([address, value]) => window.__renderWorker.holds(address, value), [moved.address, moved.value]), true, `${label}: the adopted memory holds the data app-rest.wasm carries`);
       }
       assert.deepEqual(errors, [], `${label}: no page error`);
       await context.close();
