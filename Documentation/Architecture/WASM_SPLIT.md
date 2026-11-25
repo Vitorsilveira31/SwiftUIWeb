@@ -164,11 +164,11 @@ quality 11; the second module grows by most of what the first loses, and the pai
 
 | | `app.wasm` before | `app.wasm` after | `app-rest.wasm` before | `app-rest.wasm` after | Data moved |
 |---|---|---|---|---|---|
-| A large application | 396.9 KB | 348.3 KB (−12.2%) | 1,097.4 KB | 1,160.7 KB | 219.1 KB, 5,798 objects |
-| Showcase | 241.2 KB | 230.8 KB (−4.3%) | 521.0 KB | 536.5 KB | 47.9 KB, 1,360 objects |
-| Project site | 379.6 KB | 375.6 KB (−1.1%) | 229.9 KB | 237.4 KB | 22.8 KB, 480 objects |
+| A large application | 396.9 KB | 348.9 KB (−12.1%) | 1,097.4 KB | 1,160.0 KB | 204.0 KB, 5,667 objects |
+| Showcase | 241.2 KB | 231.6 KB (−4.0%) | 521.0 KB | 535.9 KB | 46.5 KB, 1,340 objects |
+| Project site | 379.6 KB | 375.7 KB (−1.0%) | 229.9 KB | 236.8 KB | 21.6 KB, 469 objects |
 
-The second module grows by more than the first shrinks (the large application: +63.3 KB against −48.6 KB): the moved bytes compress
+The second module grows by more than the first shrinks (the large application: +62.6 KB against −48.0 KB): the moved bytes compress
 worse beside code than beside the data they came from, and each run of them is a data segment of its own. What the first screen of a
 large application allocates is a small part of its type metadata (2,824 of the 3,386 metadata records of its generic classes belong
 to views no first screen creates), which is why it gains the most. The project site has no string catalog (its two languages are
