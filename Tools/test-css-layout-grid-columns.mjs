@@ -132,13 +132,17 @@ try {
   await lay({ tracks: [fix(90, 0, 0.5), adapt(120, 1, 0.5)].join("|") });
   const disposed = await page.evaluate(async () => {
     const cell = document.getElementById("grid").children[3], before = cell.style.getPropertyValue("--cl-col-x");
+    // The observer `lay` made (the first `alignGridColumns` creates it): `dispose` must disconnect it, not only stop reacting to it.
+    const observer = window.mapper.columnObserver;
+    let disconnected = 0;
+    if (observer) { const disconnect = observer.disconnect; observer.disconnect = function () { disconnected++; return disconnect.call(this); }; }
     window.mapper.dispose();
     document.getElementById("root").style.setProperty("width", "400px", "important");
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     window.mapper.alignGridColumns();
-    return { before, after: cell.style.getPropertyValue("--cl-col-x"), columns: getComputedStyle(document.getElementById("grid")).gridTemplateColumns.split(" ").length, held: window.mapper.columned.size };
+    return { before, after: cell.style.getPropertyValue("--cl-col-x"), columns: getComputedStyle(document.getElementById("grid")).gridTemplateColumns.split(" ").length, held: window.mapper.columned.size, observed: !!observer, disconnected, kept: window.mapper.columnObserver };
   });
-  assert.deepEqual(disposed, { before: "flex-end", after: "flex-end", columns: 3, held: 0 }, `a disposed mapper leaves the cells alone: ${JSON.stringify(disposed)}`);
+  assert.deepEqual(disposed, { before: "flex-end", after: "flex-end", columns: 3, held: 0, observed: true, disconnected: 1, kept: null }, `a disposed mapper leaves the cells alone and disconnects the observer: ${JSON.stringify(disposed)}`);
 
   // Items that align the same way, or none that is adaptive: the alignment stays in the block, and nothing is observed or written.
   for (const tracks of [[fix(90, 1, 0.5), adapt(120, 1, 0.5)], [fix(90, "", ""), adapt(120, "", "")], [fix(90, 0, 0.5), flex(1, 0.5), flex(1, 0.5)]]) {
