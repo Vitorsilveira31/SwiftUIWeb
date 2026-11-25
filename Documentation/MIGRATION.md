@@ -18,8 +18,9 @@ before/after comparison.
   ([`EMBEDDED_SOURCE_LOWERING.md`](EMBEDDED_SOURCE_LOWERING.md)). The compiler flags and the bundle are the same.
 - **What to know.** The cache takes disk space, about what one build's scratch folder takes; delete it to reclaim the space
   (the next build is a full one). Two builds of the same product and configuration in the same package no longer run at
-  the same time: the second waits for the first. On CI (`CI` set) nothing changes. `SWIFTUIWEB_STABLE_WORKSPACE=0` restores
-  the temporary folder.
+  the same time: the second waits for the first. On CI (`CI` set) nothing changes unless `SWIFTUIWEB_STABLE_WORKSPACE=1`.
+  `SWIFTUIWEB_STABLE_WORKSPACE=0` restores the temporary folder; a development loop (`SWIFTUIWEB_DEV_CACHE`) always keeps
+  its own cache.
 
 ### `.hoverEffectDisabled()` turns off a plain control's shape highlight
 

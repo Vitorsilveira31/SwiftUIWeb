@@ -383,7 +383,13 @@ if [[ -n "$build_cache" ]]; then
       mkdir -p "$build_cache"
       # The files the sync writes are listed for the direct build, which must know that each one is its to compile
       # (SWIFTUIWEB_SYNC_LIST=1 also prints them, to find files that change without an edit).
-      tree_summary="$(bun Tools/sync-tree.mjs "$sync_from" "$build_cache/tree" --list 2> "$tmp/sync-changes.txt" || true)"
+      # A sync that fails partway leaves some files at their older bytes and times, which SwiftPM would then skip: stop here,
+      # and the next run rewrites every file that differs.
+      if ! tree_summary="$(bun Tools/sync-tree.mjs "$sync_from" "$build_cache/tree" --list 2> "$tmp/sync-changes.txt")"; then
+        grep -vE "^  (changed|removed): " "$tmp/sync-changes.txt" >&2 || true
+        echo "error: could not sync the lowered tree into $build_cache/tree; the next build syncs it again." >&2
+        exit 1
+      fi
       [[ -z "${SWIFTUIWEB_SYNC_LIST:-}" ]] || cat "$tmp/sync-changes.txt" >&2
       echo "Lowered tree: $tree_summary"
       # `changed 0, removed 0, …` is a tree the last build already saw; anything else (or no summary) builds.

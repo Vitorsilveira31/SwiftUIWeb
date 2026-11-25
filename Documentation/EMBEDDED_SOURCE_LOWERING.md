@@ -141,9 +141,11 @@ The lowered copy is then synced into a **build cache** that lives between runs, 
 in the consumer's build root, together with SwiftPM's scratch folder. Only files whose bytes changed are rewritten, so the
 others keep their modification times, and the next build compiles only what changed. A build that changed nothing still
 runs `swift build`, which finds nothing to do. One build at a time uses a cache: a second build of the same product and
-configuration waits for the first and says which process it waits for (`Tools/build-cache-lock.mjs`). The cache is
+configuration waits for the first and says which process it waits for (`Tools/build-cache-lock.mjs`, a `flock` the kernel
+releases when the build ends, however it ends). The cache is
 disabled on CI (`CI` set), where the machine is new for each run. `SWIFTUIWEB_STABLE_WORKSPACE=0` builds in a temporary
-folder that is removed afterwards, as before; `=1` keeps a cache on CI too. The cache only changes where the build
+folder that is removed afterwards, as before; `=1` keeps a cache on CI too. A development loop (`SWIFTUIWEB_DEV_CACHE`)
+uses its own cache whatever `SWIFTUIWEB_STABLE_WORKSPACE` says. The cache only changes where the build
 runs: the compiler, flags and output are the same as a build in a temporary folder. The development loop's settings
 stay with `SWIFTUIWEB_DEV_CACHE` ([`DEVELOPMENT_WORKFLOW.md`](DEVELOPMENT_WORKFLOW.md)). Deleting the folder costs one
 full build.
