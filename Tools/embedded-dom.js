@@ -2724,6 +2724,17 @@ export function mountEmbeddedBrowser(instance, options = {}) {
     for (const [color,location] of shading.s) gradient.addColorStop(Math.min(1,Math.max(0,location)),canvasColor(canvas,color));
     return gradient;
   }
+  // A fill whose path is a plain rectangle comes as `Rx,y,w,h` (Swift writes a `Path(rect)` as it is): it is filled as a rectangle, with
+  // no Path2D to parse and allocate for it, where a canvas of colored cells (a blur-hash placeholder) fills hundreds each time.
+  function fillPath(ctx, d, evenOdd) {
+    // The rectangle is filled as the polygon it was (not with `fillRect` or `rect`, which the browser rasterizes with another antialiasing),
+    // its far corner written the way Swift wrote the polygon's (the sum rounded to a thousandth), so a canvas at rest is what it was.
+    if (d.charCodeAt(0)===82) {
+      const v=d.slice(1).split(","), x=+v[0], y=+v[1], thousandth=n=>Math.sign(n)*Math.round(Math.abs(n)*1000)/1000, x2=thousandth(x+ +v[2]), y2=thousandth(y+ +v[3]);
+      ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x2,y); ctx.lineTo(x2,y2); ctx.lineTo(x,y2); ctx.closePath(); ctx.fill(evenOdd?'evenodd':'nonzero'); return;
+    }
+    ctx.fill(new Path2D(d),evenOdd?'evenodd':'nonzero');
+  }
   function paintCanvas(canvas, commands) {
     const [width,height]=(canvas.getAttribute('data-canvas-size')||'300,150').split(',').map(Number), ratio=window.devicePixelRatio||1;
     const w=Math.max(1,Math.round(width*ratio)), h=Math.max(1,Math.round(height*ratio));
@@ -2742,8 +2753,8 @@ export function mountEmbeddedBrowser(instance, options = {}) {
         case 'td': ctx.fillStyle=canvasColor(canvas,c.c); ctx.fillRect(c.x0,c.y-c.th/2,c.x1-c.x0,c.th); break;
         case 'rs': while (stack>0) { ctx.restore(); stack--; } ctx.restore(); ctx.save(); ctx.setTransform(ratio,0,0,ratio,0,0); ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over'; ctx.filter='none'; clearMode=false; savedClear.length=0; break;
         case 'f': {
-          if (clearMode) { ctx.save(); ctx.globalAlpha=1; ctx.globalCompositeOperation='destination-out'; ctx.fillStyle='#000'; ctx.fill(new Path2D(c.d),c.eo?'evenodd':'nonzero'); ctx.restore(); break; }
-          const style=canvasShading(ctx,canvas,c.s); if (style) { ctx.fillStyle=style; ctx.fill(new Path2D(c.d),c.eo?'evenodd':'nonzero'); } break;
+          if (clearMode) { ctx.save(); ctx.globalAlpha=1; ctx.globalCompositeOperation='destination-out'; ctx.fillStyle='#000'; fillPath(ctx,c.d,c.eo); ctx.restore(); break; }
+          const style=canvasShading(ctx,canvas,c.s); if (style) { ctx.fillStyle=style; fillPath(ctx,c.d,c.eo); } break;
         }
         case 's': {
           if (clearMode) { ctx.save(); ctx.globalAlpha=1; ctx.globalCompositeOperation='destination-out'; ctx.strokeStyle='#000'; ctx.lineWidth=c.w; ctx.lineCap=c.cap; ctx.lineJoin=c.join; ctx.miterLimit=c.ml; ctx.setLineDash(c.dash); ctx.lineDashOffset=c.dp; ctx.stroke(new Path2D(c.d)); ctx.restore(); break; }

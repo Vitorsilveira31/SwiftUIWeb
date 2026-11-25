@@ -2789,6 +2789,7 @@ public nonisolated struct Canvas<Symbols: View>: View, _OwnerBoundaryContent {
     node.attributes["data-geometry-reader"] = "true"
     let ownerToken = context._renderOwnerToken
     let invalidationStore = context.stateStore
+    let canvasPath = context._fiberPath
     node.events["geometry"] = _EventHandler(name: "geometry", action: { rawValue in
       guard let next = _GeometryMeasurement(decoding: rawValue) else { return }
       let nextWidth = Double(next.size.width), nextHeight = Double(next.size.height)
@@ -2796,6 +2797,11 @@ public nonisolated struct Canvas<Symbols: View>: View, _OwnerBoundaryContent {
       store.hasHostMeasurement = true
       guard nextWidth != Double(store.rendered.width) || nextHeight != Double(store.rendered.height) else { return }
       store.rendered = SwiftUIWebCanvasSize(width: nextWidth, height: nextHeight)
+      // The views that remember what they rendered (`_RenderOwnerRegistry._reusedView`), the canvas's own among them, hold it as it
+      // was drawn: the report invalidates the owner, but a render that reaches those views gives the old drawing back, and the
+      // canvas stayed drawn for the size it had before the window's last step (a GeometryReader's content is forgotten the same way).
+      invalidationStore._staleViewPaths.insert(canvasPath)
+      invalidationStore._forgetViews(above: canvasPath)
       if let ownerToken { invalidationStore._ownerObservationDidChange(ownerToken) }
     })
     node._canvasCommands = graphics.commands
@@ -3132,6 +3138,20 @@ private func _canvasReducedAngle(_ value: Double) -> Double {
 }
 
 /// The drawing as JSON for a host that paints it (the browser's 2D context). Paths travel as SVG path data.
+/// Whether a path command is the plain rectangle `Path(rect)` makes: `R` and four numbers, not a rounded rectangle (`RR`) or one with
+/// a transform (`RT`).
+private func _isPlainRectCommand(_ command: String) -> Bool {
+  var commas = 0
+  var index = 0
+  for byte in command.utf8 {
+    if index == 0 { guard byte == 82 else { return false } }
+    else if byte == 44 { commas += 1 }
+    else if !((byte >= 48 && byte <= 57) || byte == 45 || byte == 46) { return false }
+    index += 1
+  }
+  return index > 1 && commas == 3
+}
+
 @MainActor private func _canvasWire(_ commands: [_CanvasCommand]) -> String {
   func n(_ value: Double) -> String { _pathNumber(value) }
   func q(_ text: String) -> String {
@@ -3178,7 +3198,12 @@ private func _canvasReducedAngle(_ value: Double) -> Double {
   for command in commands {
     var item: String
     switch command {
-    case .fill(let path, let value, let eoFill): item = "{\"o\":\"f\",\"d\":" + d(path) + ",\"s\":" + shading(value) + ",\"eo\":" + (eoFill ? "1" : "0") + "}"
+    case .fill(let path, let value, let eoFill):
+      // A plain rectangle (`Path(rect)`: one `R x,y,w,h` command, its numbers already written) goes as it is, and the page fills it as
+      // a rectangle: a canvas of hundreds of colored cells (a blur-hash placeholder) sent about 130 bytes for each, of which the
+      // path (a rectangle written out as a polygon) was a third, through every hash, copy and parse of a resize step.
+      let rectangle = path.count == 1 && _isPlainRectCommand(path[0])
+      item = "{\"o\":\"f\",\"d\":" + (rectangle ? q(path[0]) : d(path)) + ",\"s\":" + shading(value) + (eoFill && !rectangle ? ",\"eo\":1}" : (rectangle ? "}" : ",\"eo\":0}"))
     case .stroke(let path, let value, let style):
       item = "{\"o\":\"s\",\"d\":" + d(path) + ",\"s\":" + shading(value) + ",\"w\":" + n(style.lineWidth) + ",\"cap\":" + q(style._svgLineCap) + ",\"join\":" + q(style._svgLineJoin) + ",\"ml\":" + n(style.miterLimit) + ",\"dash\":[" + style.dash.map(n).joined(separator: ",") + "],\"dp\":" + n(style.dashPhase) + "}"
     case .clip(let path, let eoFill): item = "{\"o\":\"c\",\"d\":" + d(path) + ",\"eo\":" + (eoFill ? "1" : "0") + "}"
