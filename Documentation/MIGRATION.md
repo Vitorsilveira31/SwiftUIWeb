@@ -9,6 +9,19 @@ before/after comparison.
 
 ## Unreleased
 
+### An external package keeps its build between runs
+
+- **A second build of a consumer package compiles only what changed.** The launcher lowered the consumer and the framework into
+  a new temporary folder for every build, so SwiftPM never found its earlier work and every build, even with nothing
+  changed, compiled everything. The lowered tree and the scratch folder now live in `.build/build-cache/<product>-<configuration>-<profile>`
+  in the consumer's build root, and only files whose bytes changed are rewritten
+  ([`EMBEDDED_SOURCE_LOWERING.md`](EMBEDDED_SOURCE_LOWERING.md)). The compiler flags and the bundle are the same.
+- **What to know.** The cache takes disk space, about what one build's scratch folder takes; delete it to reclaim the space
+  (the next build is a full one). Two builds of the same product and configuration in the same package no longer run at
+  the same time: the second waits for the first. On CI (`CI` set) nothing changes unless `SWIFTUIWEB_STABLE_WORKSPACE=1`.
+  `SWIFTUIWEB_STABLE_WORKSPACE=0` restores the temporary folder; a development loop (`SWIFTUIWEB_DEV_CACHE`) always keeps
+  its own cache.
+
 ### `.hoverEffectDisabled()` turns off a plain control's shape highlight
 
 - **A plain or borderless `Button`, or a plain `NavigationLink`, under `.hoverEffectDisabled()` no longer paints the
