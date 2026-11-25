@@ -29,7 +29,8 @@ build → strip + wasm-opt → … → scope-resize-transitions → wasm-split �
    do not.
 3. `wasm-split --split --profile` writes the two modules. They do not go through `wasm-opt` again: on the Board that made
    them larger over the wire (+0.9 KB brotli) for 5 KB less raw.
-4. The split bundle is loaded once more at each viewport and must reach its first screen with no page error. A first screen
+4. The data only the second module's code uses moves into the second module (section 2, "Data that moves with the code").
+5. The split bundle is loaded once more at each viewport and must reach its first screen with no page error. A first screen
    that had to wait for `app-rest.wasm` (a function the profile missed) is reported as a warning. A split that
    moved a mutable global into `app-rest.wasm` fails the build: a move from the Worker to the main thread carries linear
    memory only, and that global would start over (a Swift module's only mutable global is its stack pointer, which stays in
@@ -91,6 +92,53 @@ Both modules get content-hashed names, the loader's reference to `app-rest.wasm`
 (`Tools/hash-release-bundle.mjs`), and both are precompressed. The Content-Security-Policy needs nothing new: the second module
 is a same-origin fetch and compiles under the `'wasm-unsafe-eval'` the page already has.
 
+### Data that moves with the code
+
+`wasm-split` moves functions and leaves every byte of data where it was, so `app.wasm` still holds the vtables, witness tables, type
+metadata and string literals of the whole application, although the first screen reads a small part of them. On a large application
+that is a fifth of the first module. `Tools/wasm-data-split.mjs` moves the part nothing in the first module can reach into
+`app-rest.wasm`, as active data segments at the same addresses: they are written into the shared linear memory when the second module
+is instantiated, which happens before any of its functions can run (in the Worker, after the first screen or at the first call that
+needs it; on the main thread, before the application starts). The page makes no request for it and no API changes.
+
+What decides that an object moves, all of it from the two modules and the linker's map (the launcher asks the linker for
+`-Xlinker -Map=` on a build that splits, `.build/wasm-link-maps/<product>.map`):
+
+- **The extent of an object.** Swift gives each global an input section of its own, so the map says exactly which bytes are a string
+  literal, a witness table or a metadata record. The map must describe the module: its objects must cover the initialized bytes of the
+  data section, or nothing moves. The cache key of a split includes the map.
+- **Only what code cannot write.** Everything the linker put in `.rodata`, and the objects of `.data` that are type metadata (`...Mf`),
+  protocol or value witness tables (`...WP`, `...WV`) or async function pointers (`...Tu`): the compiler does not mark them
+  `const`, but Embedded Swift builds no metadata at run time and never stores to them (no store with a constant address in either module
+  of the Showcase or of a large application hits one). Variables stay.
+- **Who names it.** An object stays when the first module's code names an address inside it (an `i32.const`, or the offset of a load or
+  a store, where LLVM folds a global's address), when a global's initializer does, when an object that stays holds a word that looks like
+  its address (read at every byte offset, so a packed pointer counts), or when something names the address one past its end (which is
+  also the start of the object that touches it). Initialized bytes the map gives to no object stay in the first module, and a word in
+  them that looks like an address keeps what it points at. A string
+  literal is also named by an address up to 24 bytes before it: a `String` holds the address of its native object, the first character
+  less a 20-byte header (`_StringObject.nativeBias` on a 32-bit target). Objects the linker made share bytes (a string that is the tail of
+  another) are one object. An object moves when the second module's code names it, or when only moving objects point at it, unless an
+  object that stays (anything that is not moving, an object nobody names included) may point at it. Zero padding between two moving
+  objects that no object owns goes with them.
+- **Doubt keeps the data where it was.** A module with a passive data segment (`memory.init` names those by index), with an opcode the
+  scan does not know, or whose map does not fit, moves nothing, and the build says why (`wasm split: the data stays in app.wasm (...)`).
+  `SWIFTUIWEB_WASM_SPLIT_DATA=0` turns the move off.
+- **The build checks it.** The analysis reads addresses out of code, and an address can be built in ways no scan sees (the string bias
+  above was one: the first version moved a string the first screen then read as zeros). So the move is run before it ships: the first
+  module, with the data moved, is instrumented with Binaryen's `--instrument-memory` (an import is called for every load and store),
+  (`--llvm-memory-copy-fill-lowering` runs first, so a bulk copy is seen as the loads it is) and the first screen runs at each viewport
+  of the profile run; every access that touches a moved range, whatever bytes it starts and ends at, before `app-rest.wasm` is instantiated
+  fails the check (so does a run that measured nothing: the instrumented module did not report, the second module was not instantiated within the run, or the Worker that ran the module ended because the app moved to the main thread, taking its record along), and then the data stays in `app.wasm` and the build says what was touched. The check covers the first screen the
+  profile run sees, as the split does, so it is a net under the analysis and not a proof for every later interaction; the analysis
+  is the rule, and it errs towards keeping data.
+
+A move from the Worker to the main thread copies a snapshot of the Worker's memory over the new instance's. A snapshot taken before the
+Worker loaded `app-rest.wasm` has zeros where its data goes, so the main thread then instantiates the second module after the copy
+(`loadAroundCopy` of `Tools/wasm-split-loader.js`, with `hold()` and `release()`); a snapshot taken after has the data, and the
+instantiation comes first so that the copy has the last word. `window.__renderWorker.holds(address, word)` (performance diagnostics) answers
+whether a word of the adopted memory is the given value, which lets a test check the data without reading the memory out.
+
 ## 3. Measured
 
 The module sizes were measured on 2026-11-23, with the placeholders in the module's own table (brotli, quality 11); they are
@@ -110,6 +158,22 @@ the element segments of the second module that fill the placeholders' slots, the
 which go through a table, and the two halves being compressed apart. Where the placeholders sit moves bytes between the two
 modules: on a large application the first module is 404,603 B with them in the module's own table and 430,450 B with a table
 of their own (19 trampolines against 10,907), and the second module 1,119,675 B against 1,104,299 B.
+
+Data that moves with the code (section 2), measured on 2026-11-24 on main at bdf4a72c, the same sources before and after (brotli,
+quality 11; the second module grows by most of what the first loses, and the pair by about 1%):
+
+| | `app.wasm` before | `app.wasm` after | `app-rest.wasm` before | `app-rest.wasm` after | Data moved |
+|---|---|---|---|---|---|
+| A large application | 396.9 KB | 348.9 KB (−12.1%) | 1,097.4 KB | 1,160.0 KB | 204.0 KB, 5,667 objects |
+| Showcase | 241.2 KB | 231.6 KB (−4.0%) | 521.0 KB | 535.9 KB | 46.5 KB, 1,340 objects |
+| Project site | 379.6 KB | 375.7 KB (−1.0%) | 229.9 KB | 236.8 KB | 21.6 KB, 469 objects |
+
+The second module grows by more than the first shrinks (the large application: +62.6 KB against −48.0 KB): the moved bytes compress
+worse beside code than beside the data they came from, and each run of them is a data segment of its own. What the first screen of a
+large application allocates is a small part of its type metadata (2,824 of the 3,386 metadata records of its generic classes belong
+to views no first screen creates), which is why it gains the most. The project site has no string catalog (its two languages are
+literals in the code of the pages that show them), and its first screen is the whole landing page, so little of its data is only for
+later.
 
 Board, cold load (Worker, the default):
 
@@ -144,6 +208,10 @@ not the download competing with the first screen. Every interaction of `Tools/co
 - What the first screen did not run waits for `app-rest.wasm` when it is first needed: on the Board, the search's filter is
   in it, so a key typed under Slow 4G at the moment the board shows waits about a second for the download to finish. A call
   waits on the Worker; the page itself (the field's text, scrolling) does not.
+- Data moves only when the check of section 2 passes at every profiled viewport, and never with `--no-verify`. A first
+  screen that the profile run does not see (a route, a signed-in state) can read moved data the analysis did not name; the second
+  module's arrival (right after the first screen in the Worker) ends that window, and the analysis is written to keep data
+  whenever an address might name it.
 - The total is larger than one module (the moved functions' exports and placeholders, the second module's element segments,
   and two compressed streams).
 - A module that needs reference types, lists a feature `FEATURE_FLAGS` does not know, or has code that writes its function

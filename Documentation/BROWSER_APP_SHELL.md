@@ -291,6 +291,7 @@ CONFIGURATION=release make run site                                  # split; SW
 |---|---|
 | `SWIFTUIWEB_WASM_SPLIT` | Absent: a release splits, or ships one `app.wasm` with a warning when it cannot. `0`: one `app.wasm`. `1`: a split that cannot be made fails the build. Debug never splits. |
 | `SWIFTUIWEB_WASM_SPLIT_CACHE` | `0` makes every build profile again instead of reusing the split of unchanged inputs (`.build/wasm-split-cache`). |
+| `SWIFTUIWEB_WASM_SPLIT_DATA` | `0` leaves the data that only `app-rest.wasm` uses in `app.wasm` and asks the linker for no map (Documentation/Architecture/WASM_SPLIT.md, "Data that moves with the code"). |
 | `SWIFTUIWEB_WASM_SPLIT_ROUTE` | The route whose first screen is profiled (default `/`). |
 | `SWIFTUIWEB_WASM_SPLIT_VIEWPORTS` | The viewports profiled, `WIDTHxHEIGHT,...` (default `1280x800,390x844`: the regular and the compact layout). |
 

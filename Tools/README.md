@@ -49,7 +49,7 @@ flowchart TB
 | `precompress-bundle.mjs`, `hash-release-bundle.mjs`, `measure-bundle.mjs` | Compress, fingerprint and measure the release bundle. |
 | `delta-compress-bundle.mjs`, `dictionary-transport.mjs` | Write the files that update a visitor's cached wasm module by sending only the difference (`SWIFTUIWEB_PREVIOUS_BUNDLES`), and the rules a host follows to serve them. |
 | `fetch-live-modules.mjs`, `check-dictionary-host.mjs` | Download the content-hashed modules a deployed site serves (the earlier modules of the next build), and check on a live host that it delivers a difference file unchanged. |
-| `wasm-split-release.mjs`, `wasm-split-loader.js` | Split a release app.wasm by what the first screen runs, and load the rest behind it (the release default; `SWIFTUIWEB_WASM_SPLIT=0` turns it off). |
+| `wasm-split-release.mjs`, `wasm-split-loader.js`, `wasm-data-split.mjs` | Split a release app.wasm by what the first screen runs, and load the rest behind it (the release default; `SWIFTUIWEB_WASM_SPLIT=0` turns it off); `wasm-data-split.mjs` moves the data only the second module uses into it (`SWIFTUIWEB_WASM_SPLIT_DATA=0` turns that off). |
 | `bun-server.ts`, `dev-watch.mjs`, `live-reload.mjs` | The local server and the watch/reload loop. |
 
 ## Checks

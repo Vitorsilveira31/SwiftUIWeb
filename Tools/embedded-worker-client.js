@@ -70,8 +70,8 @@ export async function createWorkerInstance(module, { baseURL, secondary = null, 
     };
   }
   // Diagnostics: `window.__renderWorker.forceOverflow()` makes the worker's next call fail as if its stack had run out, to
-  // exercise the move to the main thread on any app.
-  if (hostWindow && diagnostics) hostWindow.__renderWorker = { forceOverflow: () => send({ t: 'force-overflow' }), get migrated() { return migrated; } };
+  // exercise the move to the main thread on any app; `holds(address, word)` says whether a 32-bit word of the memory the app moved to is `word`.
+  if (hostWindow && diagnostics) hostWindow.__renderWorker = { forceOverflow: () => send({ t: 'force-overflow' }), holds: (address, word) => localCore?.holds(address, word) ?? false, get migrated() { return migrated; } };
   let firstPublish;
   // The worker has no document: WebMount elements are reported to it and its
   // writes come back as `dom` messages (see remote-dom-host.js).

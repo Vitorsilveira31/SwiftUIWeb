@@ -368,6 +368,14 @@ case "${SWIFTUIWEB_WASM_SPLIT:-}" in
   "") [[ "$configuration" != release || "$release_profile" == fast || -n "${SWIFTUIWEB_DEV_CACHE:-}" ]] || wasm_split=auto ;;
   *) echo "SWIFTUIWEB_WASM_SPLIT is 0 or 1, not ${SWIFTUIWEB_WASM_SPLIT}" >&2; exit 2 ;;
 esac
+# The data only the second module's code uses moves into the second module (Documentation/Architecture/WASM_SPLIT.md, "Data that
+# moves with the code"). It needs the linker's map for the exact extent of every object; SWIFTUIWEB_WASM_SPLIT_DATA=0 leaves the
+# data in app.wasm and asks for no map.
+link_map=""
+if [[ "$wasm_split" != off && "${SWIFTUIWEB_WASM_SPLIT_DATA:-1}" != 0 ]]; then
+  link_map="$BUILD_ROOT/wasm-link-maps/$product.map"; mkdir -p "$(dirname "$link_map")"
+  flags+=(-Xlinker "-Map=$link_map")
+fi
 # Package.swift reads this while SwiftPM evaluates the manifest; it only affects the framework's own library targets.
 if [[ "$configuration" == release && "$release_profile" == balanced ]]; then export SWIFTUIWEB_LIBRARY_OPTIMIZATION=none; else unset SWIFTUIWEB_LIBRARY_OPTIMIZATION; fi
 if [[ "$configuration" == release ]]; then flags+=(-Xswiftc "$wasm_optimization" -Xlinker --strip-debug -Xswiftc -D -Xswiftc SWIFTUIWEB_RELEASE); while IFS= read -r d; do [[ -z "$d" || "$d" == SWIFTUIWEB_RELEASE ]] || flags+=(-Xswiftc -D -Xswiftc "$d"); done < <(bun -e 'const m=await Bun.file(process.argv[1]).json(); for(const d of m.swiftDefines||[]) console.log(d)' "$manifest"); fi
@@ -685,6 +693,7 @@ bun "$ROOT/Tools/scope-resize-transitions.mjs" "$final"
 if [[ "$wasm_split" != off ]]; then
   split_args=(--route "${SWIFTUIWEB_WASM_SPLIT_ROUTE:-/}" --viewports "${SWIFTUIWEB_WASM_SPLIT_VIEWPORTS:-1280x800,390x844}" --log-dir "$build_logs")
   [[ "$wasm_split" != auto ]] || split_args+=(--fallback)
+  [[ -z "$link_map" || ! -s "$link_map" ]] || split_args+=(--link-map "$link_map")
   [[ "${SWIFTUIWEB_WASM_SPLIT_CACHE:-1}" != 1 ]] || split_args+=(--cache-dir "$BUILD_ROOT/wasm-split-cache")
   split_status=0; bun "$ROOT/Tools/wasm-split-release.mjs" "$final" "${split_args[@]}" || split_status=$?
   # 3: the split fell back to one app.wasm. The runtime scripts were built with the split loader, which on the main thread

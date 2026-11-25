@@ -19,7 +19,7 @@ import { createServiceForwarder } from './BrowserIO/service-host.mjs';
 import { createWasiHost } from './wasi-host.js';
 import { createHeadroomMeter } from './stack-probe.js';
 import { writeEventValue, readSecureBytes, readSecureIDs } from './event-value.js';
-import { createSplitLoader, isSplitModule } from './wasm-split-loader.js';
+import { createSplitLoader, isSplitModule, loadAroundCopy } from './wasm-split-loader.js';
 
 const PREFIX = 'embedded_browser_';
 /** The frames a trap ran through (a trap carries no message): they name the Swift code that hit it. */
@@ -228,10 +228,12 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
     if (!canMigrate || !exports) return;
     const length = exports.memory.buffer.byteLength;
     if (length > SNAPSHOT_LIMIT) { snapshot = null; return; }
-    if (!snapshot || snapshot.bytes.length < length) snapshot = { bytes: new Uint8Array(length + (length >> 3)), length: 0, calls: 0, inflight: [] };
+    if (!snapshot || snapshot.bytes.length < length) snapshot = { bytes: new Uint8Array(length + (length >> 3)), length: 0, calls: 0, inflight: [], secondaryLoaded: false };
     const started = diagnostics ? performance.now() : 0;
     snapshot.bytes.set(new Uint8Array(exports.memory.buffer, 0, length));
     snapshot.length = length; snapshot.calls = callsProcessed;
+    // The second module's data segments (the data only its code uses) are in this memory once it is instantiated.
+    snapshot.secondaryLoaded = split ? split.loaded : true;
     snapshot.inflight = browserIO ? browserIO.inflight() : [];
     snapshotSeq = lastSeq;
     if (diagnostics) {
@@ -253,7 +255,7 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
 
   function migrateOut(failing) {
     const state = {
-      memory: snapshot.bytes.buffer, length: snapshot.length, calls: snapshot.calls, seq: snapshotSeq,
+      memory: snapshot.bytes.buffer, length: snapshot.length, calls: snapshot.calls, seq: snapshotSeq, secondaryLoaded: snapshot.secondaryLoaded,
       inflight: snapshot.inflight, log: sinceSnapshot, failing: failing && failing.t !== 'init' ? failing : null,
       // The side-effecting fetches this thread already sent since the snapshot: the replay must not send them again.
       sent: browserIO?.sentSinceSnapshot() ?? [],
@@ -358,14 +360,17 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
     // shift this thread's monotonic clock so it continues from the Worker's.
     clock.monotonicOffsetMs = performance.timeOrigin - state.clock.origin;
     await instantiateModule(module);
-    // The snapshot may be anywhere in the app, so the whole module is here before the replay.
-    if (globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER !== false && split) await split.load();
+    // The snapshot may be anywhere in the app, so the whole module is here before the replay. Which of the two, the second half's
+    // data or the snapshot, writes memory last depends on when the snapshot was taken (loadAroundCopy).
     const memory = exports.memory;
-    const missing = Math.ceil(state.length / 65536) - memory.buffer.byteLength / 65536;
-    if (missing > 0) memory.grow(missing);
-    new Uint8Array(memory.buffer, 0, state.length).set(new Uint8Array(state.memory, 0, state.length));
-    // The snapshot can hold what a SecureField held; the instance's memory is the only copy that stays.
-    new Uint8Array(state.memory, 0, state.length).fill(0);
+    await loadAroundCopy(globalThis.SWIFTUIWEB_WASM_SPLIT_LOADER !== false ? split : null, state.secondaryLoaded, () => {
+      const missing = Math.ceil(state.length / 65536) - memory.buffer.byteLength / 65536;
+      if (missing > 0) memory.grow(missing);
+      new Uint8Array(memory.buffer, 0, state.length).set(new Uint8Array(state.memory, 0, state.length));
+      // The snapshot can hold what a SecureField held; the instance's memory is the only copy that stays. It goes at once: the
+      // second module's instantiation, which may follow, can fail.
+      new Uint8Array(state.memory, 0, state.length).fill(0);
+    });
     lastSeq = state.seq; callsProcessed = callsReported = state.calls;
     if (state.dom) browserIO.domTable(state.dom.seq, state.dom.table);
     drainTimer = setInterval(scheduleTaskDrain, 250);
@@ -489,5 +494,8 @@ export function createHostCore({ post: send, scope, canMigrate: mayMigrate = fal
     if (stackMeter) { const stats = stackMeter.snapshot(); if (stats.samples !== stackSamples) { stackSamples = stats.samples; post({ t: 'stack-stats', stats }); } }
   }
 
-  return { handle, adopt, get halted() { return halted; } };
+  /** Whether the 32-bit word at `address` of this instance's memory is `word` (diagnostics: the tests ask it about the data a
+   * moved app carries; the answer is a yes or no, not the memory). */
+  const holds = (address, word) => exports ? new DataView(exports.memory.buffer).getUint32(address, true) === (word >>> 0) : false;
+  return { handle, adopt, holds, get halted() { return halted; } };
 }

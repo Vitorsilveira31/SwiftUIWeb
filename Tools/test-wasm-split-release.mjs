@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { cacheKey, FELL_BACK, FEATURE_FLAGS, planLayout, readTargetFeatures, splitBundle, whyNotOwnTable, withoutTargetFeatures } from "./wasm-split-release.mjs";
+import { cacheKey, dataHook, dataReadsOnce, FELL_BACK, FEATURE_FLAGS, instrumentation, planLayout, readTargetFeatures, splitBundle, whyNotOwnTable, withoutTargetFeatures } from "./wasm-split-release.mjs";
 
 const SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), "wasm-split-release.mjs");
 const VIEWPORTS = [{ width: 1280, height: 800 }];
@@ -166,3 +166,79 @@ test.skipIf(!hasBinaryen)("a module takes the placeholders into its own table un
   }
   rmSync(directory, { recursive: true, force: true });
 });
+
+test("the cache key follows what the link map says about the data, not the paths of the build that wrote it", () => {
+  const map = (directory, size) => `    Addr      Off     Size Out     In      Symbol
+       -   275cf4    25c0e DATA
+    1000   275cf5    185b0 .rodata
+    1000   275cfd ${size}         ${directory}/Site.o:(.rodata..L.str.4.name)
+    1000   275cfd ${size}                 .L.str.4.name
+`;
+  const keyOf = (text) => {
+    const file = join(mkdtempSync(join(tmpdir(), "wasm-split-map-test-")), "app.map");
+    writeFileSync(file, text);
+    return cacheKey(bundle(), { route: "/", viewports: VIEWPORTS, linkMap: file });
+  };
+  const key = keyOf(map("/work/.embedded-browser.AAAAAA/scratch", "      14"));
+  expect(keyOf(map("/work/.embedded-browser.BBBBBB/scratch", "      14"))).toBe(key);
+  expect(keyOf(map("/work/.embedded-browser.AAAAAA/scratch", "      18"))).not.toBe(key);
+  expect(cacheKey(bundle(), { route: "/", viewports: VIEWPORTS })).not.toBe(key);
+});
+
+test("the check of a data move notes an access that touches a moved range, wherever the access starts and ends", () => {
+  // The hook wraps WebAssembly.instantiate; run it against a stand-in that hands back the imports it adds.
+  const marks = [];
+  class Module {}
+  Module.imports = () => [{ module: "env", name: "load_ptr" }];
+  let added = null;
+  const stand = { Module, instantiate: (module, imports) => { added = imports; } };
+  const scope = {};
+  // No BroadcastChannel in the stand-in: the hook only uses it to tell the page a Worker was instrumented.
+  new Function("WebAssembly", "performance", "globalThis", "BroadcastChannel", dataHook([[4096, 4100], [8192, 8200]]))(stand, { getEntriesByName: () => marks }, scope, undefined);
+  stand.instantiate(new Module(), {});
+  const { load_ptr: read, store_ptr: write } = added.env;
+  // An eight-byte access from 4094 covers the four moved bytes although neither of its ends is inside them.
+  expect(read(1, 8, 0, 4094)).toBe(4094);
+  expect(write(2, 4, 1, 8195)).toBe(8195);
+  expect(scope.__swiftuiwebDataReads).toEqual(["read 4094", "write 8196"]);
+  // Next to a range, not inside it; and after the second module is instantiated, anything goes.
+  read(3, 4, 0, 4100); read(4, 2, 0, 4094); read(5, 4, 0, 8200); read(6, 4, 0, 8188);
+  expect(scope.__swiftuiwebDataReads.length).toBe(2);
+  marks.push({});
+  read(7, 4, 0, 4096);
+  expect(scope.__swiftuiwebDataReads.length).toBe(2);
+});
+
+test("the module is instrumented after its bulk copies and fills became loops the instrumentation can see", () => {
+  expect(instrumentation(["--mvp-features", "--enable-bulk-memory"])).toEqual(["--mvp-features", "--enable-bulk-memory", "--llvm-memory-copy-fill-lowering", "--instrument-memory"]);
+});
+
+test("the check of a data move refuses a run that measured nothing: no hook, no second module, a Worker that ended", async () => {
+  // A page double: `hook` says the instrumented module reported, `mark` that the second module was instantiated, `closing` that
+  // the Worker closed while the first screen was up.
+  // `closing`: a Worker told the page it instrumented the module and is gone when the run ends; `alive`: the same Worker, still there with
+  // its record; `probe`: Workers that came and went without instrumenting anything (the stack probe's).
+  const run = async ({ closing = false, alive = false, probe = false, hook = true, mark = true } = {}) => {
+    const worker = { evaluate: async (callback) => (String(callback).includes("getEntriesByName") ? 1 : []) };
+    const page = {
+      on: () => {},
+      goto: async () => {},
+      waitForSelector: async () => {},
+      workers: () => (alive ? [worker] : []),
+      evaluate: async (callback) => {
+        const source = String(callback);
+        if (source.includes("getEntriesByName")) return mark ? 1 : 0;
+        if (source.includes("__swiftuiwebDataReads")) return hook ? [] : null;
+        if (source.includes("__swiftuiwebWorkersInstrumented")) return closing || alive ? 1 : 0;
+        return undefined;
+      },
+    };
+    const browser = { newContext: async () => ({ newPage: async () => page, close: async () => {} }) };
+    return dataReadsOnce(browser, "http://127.0.0.1:1", "/", { width: 1, height: 1 });
+  };
+  expect(await run()).toEqual([]);
+  expect(await run({ closing: true })).toEqual(["the Worker ended during the run, with what it had recorded"]);
+  expect(await run({ probe: true })).toEqual([]);
+  expect(await run({ alive: true })).toEqual([]);
+  expect(await run({ hook: false })).toEqual(["the instrumented module did not report"]);
+}, 30_000);
