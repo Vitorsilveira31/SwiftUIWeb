@@ -185,7 +185,7 @@ export class SemanticLayoutHost {
     this.mutations.disconnect();
     // The page's scroll view follows the pass: which one it is, what sticks and how tall the chain stays.
     const scroll=this.documentScroll.active,scrollKey=scroll?.key;
-    try{this.css.fitTexts();this.css.extendUnderBars();this.documentScroll.sync();}finally{this.observeMutations();}
+    try{this.css.fitTexts();this.css.extendUnderBars();this.css.alignGridColumns();this.documentScroll.sync();}finally{this.observeMutations();}
     // The page's scroll view moved to the document or back, or what sticks there changed: the page is laid out anew.
     if(this.documentScroll.active!==scroll||this.documentScroll.active?.key!==scrollKey)this.css.invalidateLayouts?.();
     this.metrics.passes++;
@@ -326,5 +326,5 @@ export class SemanticLayoutHost {
     try{this.update();}catch(e){this.onError(e);}
   }
   get pending(){return this.scheduled!==0;}
-  dispose(){this.disposed=true;this.abort.abort();this.documentScroll.dispose();this.window.clearTimeout(this.resizeTimer);this.document.documentElement.removeAttribute(RESIZING_ATTRIBUTE);this.mutations.disconnect();this.globals.disconnect();if(this.scheduled)this.window.cancelAnimationFrame(this.scheduled);}
+  dispose(){this.disposed=true;this.abort.abort();this.documentScroll.dispose();this.window.clearTimeout(this.resizeTimer);this.document.documentElement.removeAttribute(RESIZING_ATTRIBUTE);this.mutations.disconnect();this.globals.disconnect();this.css.dispose?.();if(this.scheduled)this.window.cancelAnimationFrame(this.scheduled);}
 }

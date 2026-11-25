@@ -59,6 +59,8 @@ struct LazyCellStateRootView: View {
         .tabItem { Label("Adaptive", systemImage: "house") }.tag(2)
       VerticalGridFixture(kind: "mixed", columns: [GridItem(.fixed(90), spacing: 8), GridItem(.adaptive(minimum: 120), spacing: 8)])
         .tabItem { Label("Mixed", systemImage: "house") }.tag(3)
+      AlignedGridFixture(kind: "aligned")
+        .tabItem { Label("Aligned", systemImage: "house") }.tag(7)
       VerticalGridFixture(kind: "flexible", columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3))
         .tabItem { Label("Flexible", systemImage: "house") }.tag(4)
       HorizontalGridFixture(kind: "across")
