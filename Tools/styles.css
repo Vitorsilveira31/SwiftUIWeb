@@ -4637,6 +4637,9 @@
 
   .tab-sidebar-list > .tab-section-header {
     display: block;
+    /* The list is a column of fixed height that scrolls; without this a list taller than the sidebar shrank each title
+       (min-height 0, overflow hidden) to a sliver, while the tabs kept their height. */
+    flex: none;
     align-self: stretch;
     min-height: 0;
     margin: 18px 0 0;
