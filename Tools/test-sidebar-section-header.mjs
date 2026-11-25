@@ -3,7 +3,7 @@
 // squeezing the titles (they were flexible items with `min-height: 0` and `overflow: hidden`, cut to a few points).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { chromium } from "playwright";
+import { launch } from "./browser-test-support.mjs";
 
 const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 const tabs = (count) => Array.from({ length: count }, (_, index) =>
@@ -11,7 +11,7 @@ const tabs = (count) => Array.from({ length: count }, (_, index) =>
 const section = (title, count) =>
   `<span class="tab-section-header" data-tab-section="${title}" data-tab-section-title="${title}">${title}</span>${tabs(count)}`;
 
-const browser = await chromium.launch();
+const browser = await launch();
 try {
   const page = await browser.newPage({ viewport: { width: 1200, height: 400 } });
   await page.setContent(`<!doctype html><html><head><style>${css}</style></head><body style="margin:0">
