@@ -245,6 +245,9 @@ public struct Image: @unchecked Sendable {
   var imageStyles: _NodeValues = .init()
   package init(_ source: String, alt: String?) { self.source = source; self.alt = alt; systemName = nil; allowsRemoteSource = true }
   public init(_ source: String, bundle: Bundle? = nil) { self.source = source; self.alt = source; systemName = nil }
+  /// An image that assistive technologies skip, as SwiftUI's decorative images are: the same asset, path or `data:` URL
+  /// as `Image(_:bundle:)`, with an empty `alt`, so the name is neither announced nor shown in place of a failed image.
+  public init(decorative name: String, bundle: Bundle? = nil) { source = name; alt = ""; systemName = nil }
   public init(systemName: String) { source = "symbol:\(systemName)"; alt = systemName; self.systemName = systemName }
   @MainActor public func _render(in context: _RenderContext) -> _RenderNode {
     let node = renderElement(in: context)
@@ -283,8 +286,13 @@ public struct Image: @unchecked Sendable {
       // A custom SF Symbol from the asset catalog: a mask over the current text color, as symbols are tinted.
       let node = _RenderNode.element("span")
       node.classes = ["symbol-icon", "custom-symbol"]
-      node.attributes["role"] = "img"
-      _AccessibilityBackend.setLabel(alt ?? self.source, on: node)
+      if alt == "" {
+        // A decorative symbol (`Image(decorative:)`) is left out of the accessibility tree.
+        node.attributes["aria-hidden"] = "true"
+      } else {
+        node.attributes["role"] = "img"
+        _AccessibilityBackend.setLabel(alt ?? self.source, on: node)
+      }
       node.styles["display"] = "inline-block"
       // 1.4 times the text, unless a container sizes its symbols (a sidebar row, `--custom-symbol-width` and `-height`).
       node.styles["width"] = "var(--custom-symbol-width, 1.4em)"
