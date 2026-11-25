@@ -193,8 +193,8 @@ test("the check of a data move notes an access that touches a moved range, where
   let added = null;
   const stand = { Module, instantiate: (module, imports) => { added = imports; } };
   const scope = {};
-  // No BroadcastChannel in the stand-in: the hook only uses it to tell the page a Worker was instrumented.
-  new Function("WebAssembly", "performance", "globalThis", "BroadcastChannel", dataHook([[4096, 4100], [8192, 8200]]))(stand, { getEntriesByName: () => marks }, scope, undefined);
+  // No BroadcastChannel in the stand-in: the hook only uses it to hand a Worker's accesses to the page.
+  new Function("WebAssembly", "performance", "globalThis", "BroadcastChannel", "document", dataHook([[4096, 4100], [8192, 8200]]))(stand, { getEntriesByName: () => marks }, scope, undefined, undefined);
   stand.instantiate(new Module(), {});
   const { load_ptr: read, store_ptr: write } = added.env;
   // An eight-byte access from 4094 covers the four moved bytes although neither of its ends is inside them.
@@ -213,13 +213,47 @@ test("the module is instrumented after its bulk copies and fills became loops th
   expect(instrumentation(["--mvp-features", "--enable-bulk-memory"])).toEqual(["--mvp-features", "--enable-bulk-memory", "--llvm-memory-copy-fill-lowering", "--instrument-memory"]);
 });
 
-test("the check of a data move refuses a run that measured nothing: no hook, no second module, a Worker that ended", async () => {
-  // A page double: `hook` says the instrumented module reported, `mark` that the second module was instantiated, `closing` that
-  // the Worker closed while the first screen was up.
-  // `closing`: a Worker told the page it instrumented the module and is gone when the run ends; `alive`: the same Worker, still there with
-  // its record; `probe`: Workers that came and went without instrumenting anything (the stack probe's).
-  const run = async ({ closing = false, alive = false, probe = false, hook = true, mark = true } = {}) => {
-    const worker = { evaluate: async (callback) => (String(callback).includes("getEntriesByName") ? 1 : []) };
+test("what a Worker records is posted to the page as it happens, so the page keeps it when the Worker is gone", () => {
+  // A BroadcastChannel stand-in that delivers to every other channel of the same name; `document` tells the hook it runs in the page.
+  const channels = [];
+  class Channel {
+    constructor(name) { this.name = name; channels.push(this); }
+    postMessage(data) { for (const other of channels) if (other !== this && other.name === this.name) other.onmessage?.({ data }); }
+  }
+  const install = (document, marks = []) => {
+    class Module {}
+    Module.imports = () => [{ module: "env", name: "load_ptr" }];
+    let added = null;
+    const stand = { Module, instantiate: (module, imports) => { added = imports; } };
+    const scope = {};
+    new Function("WebAssembly", "performance", "globalThis", "BroadcastChannel", "document", dataHook([[4096, 4100], [8192, 8200]]))(stand, { getEntriesByName: () => marks }, scope, Channel, document);
+    stand.instantiate(new Module(), {});
+    return { scope, read: added.env.load_ptr, write: added.env.store_ptr };
+  };
+  const page = install({});
+  const worker = install(undefined);
+  worker.read(1, 8, 0, 4094);
+  worker.write(2, 4, 0, 8192);
+  worker.read(3, 4, 0, 4100); // not in a range: not recorded, not posted
+  expect(worker.scope.__swiftuiwebDataReads).toEqual(["read 4094", "write 8192"]);
+  // The page has both without asking the Worker, which can be gone by now; its own accesses join them and are not posted back.
+  expect(page.scope.__swiftuiwebDataReads).toEqual(["read 4094", "write 8192"]);
+  page.read(4, 4, 0, 8196);
+  expect(page.scope.__swiftuiwebDataReads).toEqual(["read 4094", "write 8192", "read 8196"]);
+  expect(worker.scope.__swiftuiwebDataReads).toEqual(["read 4094", "write 8192"]);
+  // Once the second module is instantiated in the Worker nothing is posted; the page keeps no more than sixteen.
+  const late = install(undefined, [{}]);
+  late.read(5, 4, 0, 4096);
+  expect(page.scope.__swiftuiwebDataReads.length).toBe(3);
+  for (let i = 0; i < 20; i++) worker.read(6, 1, 0, 4096);
+  expect(page.scope.__swiftuiwebDataReads.length).toBe(16);
+});
+
+test("the check of a data move refuses a run that measured nothing: no hook, no second module", async () => {
+  // A page double. `hook`: the instrumented module reported (its record exists); `mark`: the second module was instantiated;
+  // `record`: what the page holds, whether its own or posted by a Worker; `alive`: a Worker still there with its own copy of it.
+  const run = async ({ record = [], alive = false, hook = true, mark = true } = {}) => {
+    const worker = { evaluate: async (callback) => (String(callback).includes("getEntriesByName") ? 1 : record) };
     const page = {
       on: () => {},
       goto: async () => {},
@@ -228,8 +262,7 @@ test("the check of a data move refuses a run that measured nothing: no hook, no 
       evaluate: async (callback) => {
         const source = String(callback);
         if (source.includes("getEntriesByName")) return mark ? 1 : 0;
-        if (source.includes("__swiftuiwebDataReads")) return hook ? [] : null;
-        if (source.includes("__swiftuiwebWorkersInstrumented")) return closing || alive ? 1 : 0;
+        if (source.includes("__swiftuiwebDataReads")) return hook ? record : null;
         return undefined;
       },
     };
@@ -237,8 +270,9 @@ test("the check of a data move refuses a run that measured nothing: no hook, no 
     return dataReadsOnce(browser, "http://127.0.0.1:1", "/", { width: 1, height: 1 });
   };
   expect(await run()).toEqual([]);
-  expect(await run({ closing: true })).toEqual(["the Worker ended during the run, with what it had recorded"]);
-  expect(await run({ probe: true })).toEqual([]);
-  expect(await run({ alive: true })).toEqual([]);
+  // An access a Worker forwarded counts although no Worker is left to be asked; one a live Worker also holds counts once.
+  expect(await run({ record: ["read 8192"] })).toEqual(["read 8192"]);
+  expect(await run({ record: ["read 8192"], alive: true })).toEqual(["read 8192"]);
   expect(await run({ hook: false })).toEqual(["the instrumented module did not report"]);
+  expect(await run({ mark: false })).toEqual(["the second module was not instantiated within the run"]);
 }, 30_000);

@@ -113,6 +113,18 @@ globalThis.runWatched = async (variant, hook) => {
   instance.exports.callCold(2);
   return { before, after: [...globalThis.__swiftuiwebDataReads] };
 };
+// The same check with the instrumented module in a Worker that the page ends as soon as it has run: what the Worker recorded is posted to
+// the page as it happens, so the page has it after the Worker is gone.
+globalThis.runForwarded = (hook) => new Promise((done, fail) => {
+  (0, eval)(hook);
+  const worker = new Worker('./watch-worker.js', { type: 'module' });
+  worker.onmessage = (event) => {
+    worker.terminate();
+    setTimeout(() => done({ error: event.data.error ?? null, worker: event.data.own ?? null, page: [...globalThis.__swiftuiwebDataReads] }), 150);
+  };
+  worker.onerror = (event) => fail(new Error(event.message));
+  worker.postMessage({ hook });
+});
 globalThis.runWorker = (background, variant) => new Promise((done, fail) => {
   const worker = new Worker('./worker.js', { type: 'module' });
   worker.onmessage = (event) => { worker.terminate(); done(event.data); };
@@ -136,6 +148,19 @@ self.onmessage = async ({ data }) => {
     const indirect = instance.exports.indirect(4);
     const mark = performance.getEntriesByName('swiftuiweb-app-rest')[0]?.detail ?? null;
     self.postMessage({ before, cold, again, indirect, loaded: loader.loaded, mark });
+  } catch (error) { self.postMessage({ error: String(error) }); }
+};`;
+
+const WATCH_WORKER = `import { createSplitLoader } from './wasm-split-loader.js';
+self.onmessage = async ({ data }) => {
+  try {
+    (0, eval)(data.hook);
+    const module = await WebAssembly.compileStreaming(fetch('./primary-wrong.wasm'));
+    const loader = createSplitLoader(module, { url: new URL('./secondary-wrong.wasm', location.href).href, canBlock: true });
+    const instance = await WebAssembly.instantiate(module, loader.imports);
+    loader.attach(instance);
+    instance.exports.hot();
+    self.postMessage({ own: [...globalThis.__swiftuiwebDataReads] });
   } catch (error) { self.postMessage({ error: String(error) }); }
 };`;
 
@@ -187,6 +212,7 @@ async function synthetic(browser) {
     copyFileSync(join(ROOT, "Tools/wasm-split-loader.js"), join(dir, "wasm-split-loader.js"));
     writeFileSync(join(dir, "index.html"), PAGE);
     writeFileSync(join(dir, "worker.js"), WORKER);
+    writeFileSync(join(dir, "watch-worker.js"), WATCH_WORKER);
     const server = serveStatic(dir);
     try {
       const page = await browser.newPage();
@@ -226,6 +252,13 @@ async function synthetic(browser) {
         assert.deepEqual(await watching.evaluate(([name, source]) => globalThis.runWatched(name, source), [variant, hook]), expected, `the check of the moved data (${variant})`);
         await watching.close();
       }
+      // What a Worker's instrumented module touches reaches the page as it happens, and stays there when the Worker is ended.
+      const forwarding = await browser.newPage();
+      await forwarding.goto(`${server.base}/index.html`);
+      await forwarding.waitForFunction(() => globalThis.ready === true);
+      assert.deepEqual(await forwarding.evaluate((source) => globalThis.runForwarded(source), dataHook([[4096, 5120], [8192, 8196]])), { error: null, worker: ["read 8192"], page: ["read 8192"] },
+        "the page has what the Worker's check recorded, after the Worker ended");
+      await forwarding.close();
       // A bulk copy of moved data is lowered to loads before the instrumentation, so it is seen as well.
       const bulk = await browser.newPage();
       await bulk.goto(`${server.base}/index.html`);

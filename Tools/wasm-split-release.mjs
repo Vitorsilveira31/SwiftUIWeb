@@ -78,12 +78,16 @@ export function instrumentation(flags) {
 
 export function dataHook(runs) {
   return `{const runs=${JSON.stringify(runs)};const reads=globalThis.__swiftuiwebDataReads=[];` +
+    `const channel=typeof BroadcastChannel==="function"?new BroadcastChannel("swiftuiweb-data-check"):null;const inPage=typeof document!=="undefined";` +
+    // What a Worker records it also posts, as it happens, so that a Worker that is terminated (the app moves to the main thread when
+    // a stack runs out) takes nothing with it that the page does not have; the page appends what arrives to its own record.
+    `if(channel&&inPage)channel.onmessage=event=>{if(reads.length<16)reads.push(String(event.data));};` +
     `const touches=(a,n)=>{let lo=0,hi=runs.length-1,k=runs.length;while(lo<=hi){const m=(lo+hi)>>1;if(runs[m][1]>a){k=m;hi=m-1;}else lo=m+1;}return k<runs.length&&runs[k][0]<a+n;};` +
     `const loaded=()=>performance.getEntriesByName("swiftuiweb-app-rest").length>0;` +
-    `const touch=kind=>(id,bytes,offset,ptr)=>{const a=(ptr+offset)>>>0;if(reads.length<16&&!loaded()&&touches(a,bytes))reads.push(kind+" "+a);return ptr;};` +
+    `const touch=kind=>(id,bytes,offset,ptr)=>{const a=(ptr+offset)>>>0;if(reads.length<16&&!loaded()&&touches(a,bytes)){const entry=kind+" "+a;reads.push(entry);if(channel&&!inPage)channel.postMessage(entry);}return ptr;};` +
     `const keep=(id,value)=>value;` +
     `const imports={load_ptr:touch("read"),store_ptr:touch("write"),load_val_i32:keep,load_val_i64:keep,load_val_f32:keep,load_val_f64:keep,store_val_i32:keep,store_val_i64:keep,store_val_f32:keep,store_val_f64:keep,memory_grow_pre:keep,memory_grow_post:keep};` +
-    `const channel=typeof BroadcastChannel==="function"?new BroadcastChannel("swiftuiweb-data-check"):null;if(channel&&typeof document!=="undefined")channel.onmessage=()=>{globalThis.__swiftuiwebWorkersInstrumented=(globalThis.__swiftuiwebWorkersInstrumented||0)+1;};const instantiate=WebAssembly.instantiate;WebAssembly.instantiate=function(module,env){if(module instanceof WebAssembly.Module&&env&&WebAssembly.Module.imports(module).some(e=>e.module==="env"&&e.name==="load_ptr")){env.env=Object.assign({},env.env,imports);if(channel)channel.postMessage("instrumented");}return instantiate.apply(this,arguments);};}\n`;
+    `const instantiate=WebAssembly.instantiate;WebAssembly.instantiate=function(module,env){if(module instanceof WebAssembly.Module&&env&&WebAssembly.Module.imports(module).some(e=>e.module==="env"&&e.name==="load_ptr"))env.env=Object.assign({},env.env,imports);return instantiate.apply(this,arguments);};}\n`;
 }
 
 // Runs in the scope that holds the instrumented instance: the profile is written into fresh pages of its memory.
@@ -347,10 +351,6 @@ export async function dataReadsOnce(browser, base, route, viewport) {
     const page = await context.newPage();
     const errors = [];
     page.on("pageerror", (error) => errors.push(String(error)));
-    // A Worker whose stack runs out moves the app to the main thread and is terminated, with what its hook recorded: a check
-    // that lost it cannot say the first screen touched nothing. Each Worker that instruments the module says so to the page over a
-    // BroadcastChannel as it does, whether or not it lives to be asked, and the Workers still alive that hold a record are
-    // counted against them; the page's short-lived Workers (the stack probe) never instrument anything, so they do not count.
     await page.goto(`${base}${route}`, { waitUntil: "domcontentloaded" });
     await settle(page);
     // The second module arrives behind the first screen; what the first module touches until then is what counts.
@@ -361,19 +361,20 @@ export async function dataReadsOnce(browser, base, route, viewport) {
       await new Promise((done) => setTimeout(done, 100));
     }
     if (errors.length) throw new Error(`the instrumented bundle reported page errors: ${errors.join("; ")}`);
-    // A check that measured nothing has not passed: the hook must have run (its record exists in a Worker or in the page) and the
+    // What a Worker recorded was posted to the page as it happened (dataHook), so it is in the page's record even if that Worker is
+    // gone; a few turns of the page's event loop let the last of it arrive.
+    await page.evaluate(() => new Promise((done) => setTimeout(done, 150))).catch(() => {});
+    // A check that measured nothing has not passed: the hook must have run (its record exists in the page or in a Worker) and the
     // second module must have been instantiated by the end, or the run says so.
     const reads = [];
-    let hooked = false, loaded = false, workersWithRecords = 0;
-    for (const scope of [...page.workers(), page]) {
+    let hooked = false, loaded = false;
+    for (const scope of [page, ...page.workers()]) {
       const record = await scope.evaluate(() => globalThis.__swiftuiwebDataReads ?? null).catch(() => null);
-      if (Array.isArray(record)) { hooked = true; reads.push(...record); if (scope !== page) workersWithRecords++; }
+      if (Array.isArray(record)) { hooked = true; for (const entry of record) if (!reads.includes(entry)) reads.push(entry); }
       loaded ||= (await scope.evaluate(() => performance.getEntriesByName("swiftuiweb-app-rest").length).catch(() => 0)) > 0;
     }
     if (!hooked) reads.push("the instrumented module did not report");
-    if (!loaded) reads.push(`the second module was not instantiated within the run`);
-    const instrumentedWorkers = await page.evaluate(() => globalThis.__swiftuiwebWorkersInstrumented ?? 0).catch(() => 0);
-    if (instrumentedWorkers > workersWithRecords) reads.push("the Worker ended during the run, with what it had recorded");
+    if (!loaded) reads.push("the second module was not instantiated within the run");
     return reads;
   } finally {
     await context.close();
