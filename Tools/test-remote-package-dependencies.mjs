@@ -125,3 +125,11 @@ test("an explicit package name survives the rewrite, since target dependencies m
     '.package(name: "BrowserLibrary", path: "../../remote/Inner")',
   );
 });
+
+test("a comment before the explicit name does not lose it", () => {
+  const manifest = '.package(/* browser library */ name: "BrowserLibrary", url: "https://github.com/o/Inner.git", from: "1.0.0")';
+  assert.equal(
+    rewriteURLDependency(manifest, "/s/level0/consumer", "https://github.com/o/Inner", "/s/remote/Inner"),
+    '.package(name: "BrowserLibrary", path: "../../remote/Inner")',
+  );
+});

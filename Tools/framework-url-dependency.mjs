@@ -29,7 +29,9 @@ function declaredURL(call) {
 
 // The explicit package name of a `.package(name: "…", url: …)` call, or undefined: target dependencies may refer to it.
 function declaredName(call) {
-  return /^\.package\(\s*name:\s*"([^"]*)"/u.exec(call)?.[1];
+  // Comments count as spaces: `.package(/* browser library */ name: "X", …)` keeps its name too.
+  const code = call.replace(/\/\*[\s\S]*?\*\//gu, " ").replace(/\/\/[^\n]*/gu, " ");
+  return /^\.package\(\s*name:\s*"([^"]*)"/u.exec(code)?.[1];
 }
 
 // The last component of a repository URL, without `.git` and slashes: the package identity SwiftPM derives (in lower case).
