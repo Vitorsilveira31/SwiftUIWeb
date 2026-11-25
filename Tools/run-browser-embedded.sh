@@ -296,7 +296,9 @@ else
     # A lowering that fails or is interrupted can have written some files before it stopped, and the next run, with the
     # source fixed, then writes nothing and reports no change. The marker stays until a build of this tree passes, so the
     # next run of a run that stopped earlier builds instead of trusting a stamp or a count that no longer describe the tree.
-    lowering_marker="$build_cache/lowering-in-progress"
+    # One marker for both ways of writing the tree (the lowerer's own sync and Tools/sync-tree.mjs), so a run that switches
+    # between them (SWIFTUIWEB_SYNC_WORKSPACE) still finds the build an earlier run owed.
+    lowering_marker="$build_cache/build-owed"
     lowering_interrupted=0; [[ ! -e "$lowering_marker" ]] || lowering_interrupted=1
     : > "$lowering_marker"
     "$LOWERER" "${lower_args[@]}" | tee "$tmp/lowering-summary.json"
@@ -394,7 +396,7 @@ if [[ -n "$build_cache" ]]; then
       # and the next run rewrites every file that differs. The files it did write are not in that run's list, so the marker
       # left here (removed once a build passes) makes that run neither skip the build nor trust the list (an unknown count
       # is a `swift build`, which compiles by modification time).
-      sync_marker="$build_cache/sync-incomplete"
+      sync_marker="$build_cache/build-owed"
       sync_incomplete=0; [[ ! -e "$sync_marker" ]] || sync_incomplete=1
       : > "$sync_marker"
       if ! tree_summary="$(bun Tools/sync-tree.mjs "$sync_from" "$build_cache/tree" --list 2> "$tmp/sync-changes.txt")"; then
