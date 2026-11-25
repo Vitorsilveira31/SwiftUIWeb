@@ -265,6 +265,12 @@ if [[ "$EXTERNAL_PACKAGE" == 1 ]]; then
       while IFS= read -r staged_manifest; do remote_manifests+=("$staged_manifest"); done < <(package_manifests "$dependency_workspace")
     done <<< "${dependency_workspaces:-}"
     if bun Tools/remote-package-dependencies.mjs --declares-url "${remote_manifests[@]}"; then
+      # The consumer's and the local packages' SwiftUIWeb declarations point at the lowered framework before SwiftPM
+      # resolves, so that root path dependency wins over the version a remote library asks for; the remote packages' own
+      # declarations are rewritten below, once they are staged.
+      for staged_manifest in ${remote_manifests[@]+"${remote_manifests[@]}"}; do
+        bun Tools/framework-url-dependency.mjs rewrite "$staged_manifest" "$framework_workspace" >/dev/null
+      done
       remote_work="$(mktemp -d "$BUILD_ROOT/.embedded-remote.XXXXXX")"
       resolve_scratch="${build_cache:+$build_cache/resolve}"; [[ -n "$resolve_scratch" ]] || resolve_scratch="$remote_work/resolve"
       if ! "$swift" package --package-path "$workspace" --scratch-path "$resolve_scratch" show-dependencies --format json > "$remote_work/dependencies.json" 2> "$remote_work/resolve.log"; then
