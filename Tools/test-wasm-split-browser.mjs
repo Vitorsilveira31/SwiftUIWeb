@@ -29,7 +29,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { launch, runSuite, serveBundle, serveStatic, ROOT } from "./browser-test-support.mjs";
 import { moveData, readDataSegments, splitData } from "./wasm-data-split.mjs";
-import { dataHook, instrumentation } from "./wasm-split-release.mjs";
+import { dataHook, instrumentation, startReportSink } from "./wasm-split-release.mjs";
 
 const MODULE = `(module
   (memory (export "memory") 1)
@@ -113,6 +113,14 @@ globalThis.runWatched = async (variant, hook) => {
   instance.exports.callCold(2);
   return { before, after: [...globalThis.__swiftuiwebDataReads] };
 };
+// The same check with the instrumented module in a Worker that the page ends the moment it has run: the hook reports to the sink of
+// the check before the access goes on, so nothing is left in the Worker to lose, and the answer comes back only when the Worker is gone.
+globalThis.runEnded = (hook) => new Promise((done, fail) => {
+  const worker = new Worker('./watch-worker.js', { type: 'module' });
+  worker.onmessage = (event) => { worker.terminate(); done({ error: event.data.error ?? null, own: event.data.own ?? null }); };
+  worker.onerror = (event) => fail(new Error(event.message));
+  worker.postMessage({ hook });
+});
 globalThis.runWorker = (background, variant) => new Promise((done, fail) => {
   const worker = new Worker('./worker.js', { type: 'module' });
   worker.onmessage = (event) => { worker.terminate(); done(event.data); };
@@ -136,6 +144,19 @@ self.onmessage = async ({ data }) => {
     const indirect = instance.exports.indirect(4);
     const mark = performance.getEntriesByName('swiftuiweb-app-rest')[0]?.detail ?? null;
     self.postMessage({ before, cold, again, indirect, loaded: loader.loaded, mark });
+  } catch (error) { self.postMessage({ error: String(error) }); }
+};`;
+
+const WATCH_WORKER = `import { createSplitLoader } from './wasm-split-loader.js';
+self.onmessage = async ({ data }) => {
+  try {
+    (0, eval)(data.hook);
+    const module = await WebAssembly.compileStreaming(fetch('./primary-wrong.wasm'));
+    const loader = createSplitLoader(module, { url: new URL('./secondary-wrong.wasm', location.href).href, canBlock: true });
+    const instance = await WebAssembly.instantiate(module, loader.imports);
+    loader.attach(instance);
+    instance.exports.hot();
+    self.postMessage({ own: [...globalThis.__swiftuiwebDataReads] });
   } catch (error) { self.postMessage({ error: String(error) }); }
 };`;
 
@@ -187,6 +208,7 @@ async function synthetic(browser) {
     copyFileSync(join(ROOT, "Tools/wasm-split-loader.js"), join(dir, "wasm-split-loader.js"));
     writeFileSync(join(dir, "index.html"), PAGE);
     writeFileSync(join(dir, "worker.js"), WORKER);
+    writeFileSync(join(dir, "watch-worker.js"), WATCH_WORKER);
     const server = serveStatic(dir);
     try {
       const page = await browser.newPage();
@@ -225,6 +247,19 @@ async function synthetic(browser) {
         const hook = dataHook(variant === "wrong" ? [[4096, 5120], [8192, 8196]] : runs);
         assert.deepEqual(await watching.evaluate(([name, source]) => globalThis.runWatched(name, source), [variant, hook]), expected, `the check of the moved data (${variant})`);
         await watching.close();
+      }
+      // What a Worker's instrumented module touches is with the check before the Worker is ended, whatever the page's event loop does.
+      const sink = await startReportSink();
+      try {
+        const ending = await browser.newPage();
+        await ending.goto(`${server.base}/index.html`);
+        await ending.waitForFunction(() => globalThis.ready === true);
+        assert.deepEqual(await ending.evaluate((source) => globalThis.runEnded(source), dataHook([[4096, 5120], [8192, 8196]], sink.url)), { error: null, own: ["read 8192"] },
+          "the Worker with the wrong move ran its first screen and was ended");
+        assert.deepEqual(sink.entries, ["instrumented", "read 8192"], "the check has the instantiation and the access of the Worker that ended");
+        await ending.close();
+      } finally {
+        await sink.stop();
       }
       // A bulk copy of moved data is lowered to loads before the instrumentation, so it is seen as well.
       const bulk = await browser.newPage();

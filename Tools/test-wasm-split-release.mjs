@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { cacheKey, dataHook, dataReadsOnce, FELL_BACK, FEATURE_FLAGS, instrumentation, planLayout, readTargetFeatures, splitBundle, whyNotOwnTable, withoutTargetFeatures } from "./wasm-split-release.mjs";
+import { cacheKey, dataHook, dataReadsOnce, FELL_BACK, FEATURE_FLAGS, instrumentation, planLayout, readTargetFeatures, splitBundle, startReportSink, whyNotOwnTable, withoutTargetFeatures } from "./wasm-split-release.mjs";
 
 const SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), "wasm-split-release.mjs");
 const VIEWPORTS = [{ width: 1280, height: 800 }];
@@ -193,8 +193,8 @@ test("the check of a data move notes an access that touches a moved range, where
   let added = null;
   const stand = { Module, instantiate: (module, imports) => { added = imports; } };
   const scope = {};
-  // No BroadcastChannel in the stand-in: the hook only uses it to tell the page a Worker was instrumented.
-  new Function("WebAssembly", "performance", "globalThis", "BroadcastChannel", dataHook([[4096, 4100], [8192, 8200]]))(stand, { getEntriesByName: () => marks }, scope, undefined);
+  // No sink: the hook only records, in the scope.
+  new Function("WebAssembly", "performance", "globalThis", "XMLHttpRequest", dataHook([[4096, 4100], [8192, 8200]]))(stand, { getEntriesByName: () => marks }, scope, undefined);
   stand.instantiate(new Module(), {});
   const { load_ptr: read, store_ptr: write } = added.env;
   // An eight-byte access from 4094 covers the four moved bytes although neither of its ends is inside them.
@@ -213,13 +213,68 @@ test("the module is instrumented after its bulk copies and fills became loops th
   expect(instrumentation(["--mvp-features", "--enable-bulk-memory"])).toEqual(["--mvp-features", "--enable-bulk-memory", "--llvm-memory-copy-fill-lowering", "--instrument-memory"]);
 });
 
-test("the check of a data move refuses a run that measured nothing: no hook, no second module, a Worker that ended", async () => {
-  // A page double: `hook` says the instrumented module reported, `mark` that the second module was instantiated, `closing` that
-  // the Worker closed while the first screen was up.
-  // `closing`: a Worker told the page it instrumented the module and is gone when the run ends; `alive`: the same Worker, still there with
-  // its record; `probe`: Workers that came and went without instrumenting anything (the stack probe's).
-  const run = async ({ closing = false, alive = false, probe = false, hook = true, mark = true } = {}) => {
-    const worker = { evaluate: async (callback) => (String(callback).includes("getEntriesByName") ? 1 : []) };
+test("what the hook records is also reported, before the access goes on, to the sink of the check", async () => {
+  // A stand-in for XMLHttpRequest that keeps the synchronous requests the hook makes and answers with `status`.
+  const requests = [];
+  let status = 204;
+  class Request {
+    open(method, url, asynchronous) { this.sent = { method, url, asynchronous }; }
+    send() { requests.push(this.sent); this.status = status; }
+  }
+  const install = (marks = []) => {
+    class Module {}
+    Module.imports = () => [{ module: "env", name: "load_ptr" }];
+    let added = null;
+    const stand = { Module, instantiate: (module, imports) => { added = imports; } };
+    const scope = {};
+    new Function("WebAssembly", "performance", "globalThis", "XMLHttpRequest", dataHook([[4096, 4100], [8192, 8200]], "http://127.0.0.1:9/"))(stand, { getEntriesByName: () => marks }, scope, Request);
+    stand.instantiate(new Module(), {});
+    return { scope, read: added.env.load_ptr, write: added.env.store_ptr };
+  };
+  const worker = install();
+  expect(requests).toEqual([{ method: "GET", url: "http://127.0.0.1:9/instrumented", asynchronous: false }]);
+  expect(worker.read(1, 8, 0, 4094)).toBe(4094);
+  expect(worker.write(2, 4, 0, 8192)).toBe(8192);
+  worker.read(3, 4, 0, 4100); // not in a range: not reported
+  expect(requests.slice(1)).toEqual([
+    { method: "GET", url: "http://127.0.0.1:9/read%204094", asynchronous: false },
+    { method: "GET", url: "http://127.0.0.1:9/write%208192", asynchronous: false },
+  ]);
+  expect(worker.scope.__swiftuiwebDataReads).toEqual(["read 4094", "write 8192"]);
+  // Once the second module is instantiated in that scope nothing is reported; no more than sixteen are.
+  const late = install([{}]);
+  const before = requests.length;
+  late.read(5, 4, 0, 4096);
+  expect(requests.length).toBe(before);
+  for (let i = 0; i < 20; i++) worker.read(6, 1, 0, 4096);
+  expect(requests.filter((request) => request.url.endsWith("/read%204096")).length).toBe(14);
+  // A report the sink did not take is an error out of the import, which stops the first screen: the check does not go on without it.
+  status = 500;
+  expect(() => install()).toThrow("did not take the report instrumented");
+});
+
+test("the sink of the check keeps every report, in order, before it answers", async () => {
+  const sink = await startReportSink();
+  try {
+    for (const entry of ["instrumented", "read 8192", "write 4096"]) {
+      const response = await fetch(sink.url + encodeURIComponent(entry));
+      expect(response.status).toBe(204);
+      expect(response.headers.get("access-control-allow-origin")).toBe("*");
+      // The report is on the list by the time the answer is: nothing is in flight that a Worker ending now could lose.
+      expect(sink.entries.at(-1)).toBe(entry);
+    }
+    expect(sink.entries).toEqual(["instrumented", "read 8192", "write 4096"]);
+  } finally {
+    await sink.stop();
+  }
+});
+
+test("the check of a data move refuses a run that measured nothing: no hook, no second module", async () => {
+  // A page double. `hook`: the instrumented module reported (its record exists); `mark`: the second module was instantiated; `record`:
+  // what a live scope holds; `alive`: a Worker still there with its own copy of it; `sink`: what the check's sink received, which is all
+  // there is of a Worker that ended.
+  const run = async ({ record = [], alive = false, hook = true, mark = true, sink = undefined } = {}) => {
+    const worker = { evaluate: async (callback) => (String(callback).includes("getEntriesByName") ? 1 : record) };
     const page = {
       on: () => {},
       goto: async () => {},
@@ -228,17 +283,23 @@ test("the check of a data move refuses a run that measured nothing: no hook, no 
       evaluate: async (callback) => {
         const source = String(callback);
         if (source.includes("getEntriesByName")) return mark ? 1 : 0;
-        if (source.includes("__swiftuiwebDataReads")) return hook ? [] : null;
-        if (source.includes("__swiftuiwebWorkersInstrumented")) return closing || alive ? 1 : 0;
+        if (source.includes("__swiftuiwebDataReads")) return hook ? record : null;
         return undefined;
       },
     };
     const browser = { newContext: async () => ({ newPage: async () => page, close: async () => {} }) };
-    return dataReadsOnce(browser, "http://127.0.0.1:1", "/", { width: 1, height: 1 });
+    return dataReadsOnce(browser, "http://127.0.0.1:1", "/", { width: 1, height: 1 }, sink ? { entries: [...sink] } : null);
   };
+  // Without a sink the live scopes are all there is.
   expect(await run()).toEqual([]);
-  expect(await run({ closing: true })).toEqual(["the Worker ended during the run, with what it had recorded"]);
-  expect(await run({ probe: true })).toEqual([]);
-  expect(await run({ alive: true })).toEqual([]);
+  expect(await run({ record: ["read 8192"], alive: true })).toEqual(["read 8192"]);
   expect(await run({ hook: false })).toEqual(["the instrumented module did not report"]);
+  expect(await run({ mark: false })).toEqual(["the second module was not instantiated within the run"]);
+  // With one, an access of a Worker that is gone counts, one a live scope also holds counts once, and an instrumented module that never
+  // told the sink it was instantiated is a hook that did not run, whatever the page's own record says.
+  expect(await run({ sink: ["instrumented", "read 8192"] })).toEqual(["read 8192"]);
+  expect(await run({ sink: ["instrumented", "read 8192"], record: ["read 8192"], alive: true })).toEqual(["read 8192"]);
+  expect(await run({ sink: ["instrumented"] })).toEqual([]);
+  expect(await run({ sink: [] })).toEqual(["the instrumented module did not report"]);
+  expect(await run({ sink: ["read 8192"] })).toEqual(["read 8192", "the instrumented module did not report"]);
 }, 30_000);
