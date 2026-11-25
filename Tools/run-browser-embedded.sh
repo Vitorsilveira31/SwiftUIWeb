@@ -303,6 +303,8 @@ else
     rm -f "$lowering_marker"
     tree_changes="$(bun -e 'const m = await Bun.file(process.argv[1]).json(); if (Number.isInteger(m.workspaceChanges)) console.log(m.workspaceChanges)' "$tmp/lowering-summary.json" 2>/dev/null || true)"
     [[ "$lowering_interrupted" == 0 ]] || tree_changes=""
+    # As after a sync below: a tree the last build did not see drops its stamp now, not only when the build starts.
+    [[ "$tree_changes" == 0 ]] || rm -f "$build_cache/last-build.stamp"
   else
     "$LOWERER" "${lower_args[@]}"
   fi
