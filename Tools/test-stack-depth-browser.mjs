@@ -76,10 +76,12 @@ const CASES = [
 // square (25, 64, 100 and 11), so each limit is three times the size ratio: more than the 1.3 times by which load raised a
 // ratio, less than the square. `plain` is the exception: WebKit lays out the 512 levels the HTML nests (the leaf of a
 // deeper tree follows as siblings) for 3.1 s on the main thread whatever the size, so 5000/1000 is 1.15 there, quiet and loaded,
-// and about 5 in Chromium.
+// and about 5 in Chromium. An engine without its own limit (Firefox, which no machine here could start to measure) takes the
+// rule: a fixed cost only lowers a ratio, so three times the size ratio cannot fail an engine that has one, and still catches
+// a quadratic cost where it has none.
 const SCALING = [
   ["depth-1000", "depth-5000", 15], ["depth-1000", "depth-8000", 24],
-  ["plain-1000", "plain-5000", { webkit: 3, chromium: 15 }],
+  ["plain-1000", "plain-5000", { webkit: 3, default: 15 }],
   ["wide-1000", "wide-10000", 30],
   ["nav-300", "nav-1000", 10], ["forcing-300", "forcing-1000", 10], ["chain-300", "chain-1000", 10], ["mods-300", "mods-1000", 10],
   ["labeled-300", "labeled-1000", 10],
@@ -181,7 +183,7 @@ await runSuite(async () => {
       }
       const fastest = { [small]: Math.min(...seconds[small]), [large]: Math.min(...seconds[large]) };
       const ratio = fastest[large] / fastest[small];
-      const allowed = typeof limit === "number" ? limit : limit[engine];
+      const allowed = typeof limit === "number" ? limit : (limit[engine] ?? limit.default);
       const sizes = Number(large.split("-").pop()) / Number(small.split("-").pop());
       console.log(`${large}: ${fastest[large].toFixed(2)} s, ${ratio.toFixed(1)} times ${small}'s ${fastest[small].toFixed(2)} s (limit ${allowed})`);
       assert.ok(
