@@ -14,6 +14,9 @@
 //   - `load()` waits for it (the main thread, which cannot block, loads both modules before the application starts);
 //   - a placeholder that is called before the second module arrived loads it synchronously (`loadSync`, a synchronous
 //     request and compile, which a Worker may do), then calls the real function: the call waits, it does not fail.
+//   - `hold()` keeps `load()` from instantiating the module, and `release()` instantiates it. Instantiating writes the data
+//     segments the second module carries (the data only its code uses, see Tools/wasm-data-split.mjs) into the shared memory,
+//     so a thread that copies a snapshot of memory over its own (a move from the Worker) instantiates after the copy.
 // A module that is not split has no placeholder import, and none of this runs.
 //
 // The thread's performance timeline gets the mark `swiftuiweb-app-rest` when the second module is instantiated; its
@@ -31,12 +34,30 @@ export function isSplitModule(module) {
 }
 
 /**
+ * Loads a split module's second half around the copy of a snapshot of another instance's memory into this one (the move from
+ * the Worker to the main thread). Instantiating the second half writes the data segments it carries, so the order decides which
+ * bytes win: a snapshot taken before the Worker loaded the second half has zeros where that data goes, so the half is
+ * instantiated after the copy; one taken after it holds the data, and whatever the program did to it, so the half is
+ * instantiated first and the snapshot has the last word. `copy` does the copy; `split` is null for a module that is not split.
+ */
+export async function loadAroundCopy(split, snapshotHadSecondary, copy) {
+  const after = split != null && snapshotHadSecondary === false;
+  if (after) split.hold();
+  try {
+    if (split) await split.load();
+    copy();
+  } finally {
+    if (after) split.release();
+  }
+}
+
+/**
  * The loader of the second module for one instance of the first. `url` is the second module's address; `canBlock` says
  * whether this thread may load it synchronously (a Worker), `response` is a request for it already on its way (a promise
  * of a Response), and `onLoaded` runs once it is instantiated.
  */
 export function createSplitLoader(module, { url, canBlock = false, response: early = null, onLoaded = null } = {}) {
-  let primary = null, table = null, secondary = null, compiled = null, pending = null;
+  let primary = null, table = null, secondary = null, compiled = null, pending = null, held = false;
   // The placeholders, by namespace: what the first module's imports are completed with.
   const placeholders = Object.create(null);
   let slots = 0, firstSlot = -1, firstPlaceholder = null;
@@ -99,7 +120,7 @@ export function createSplitLoader(module, { url, canBlock = false, response: ear
       // A placeholder may have loaded it synchronously in the meantime.
       if (secondary) return secondary;
       compiled = secondaryModule;
-      return primary ? instantiateNow(secondaryModule) : null;
+      return primary && !held ? instantiateNow(secondaryModule) : null;
     }, error => { pending = null; throw error; });
     return pending;
   }
@@ -112,9 +133,13 @@ export function createSplitLoader(module, { url, canBlock = false, response: ear
       primary = instance.exports;
       table = placeholderTable(primary);
       if (!table) throw new Error('the split module exports no table that holds its placeholders');
-      if (compiled) instantiateNow(compiled);
+      if (compiled && !held) instantiateNow(compiled);
     },
     load,
+    /** The next `load()` compiles the second module but leaves it uninstantiated until `release()`. */
+    hold() { held = true; },
+    /** Instantiates a second module that was compiled while held (or does nothing). */
+    release() { held = false; if (compiled && primary && !secondary) instantiateNow(compiled); },
     /** A background download that reports its failure instead of rejecting: a placeholder still loads synchronously. */
     prefetch() {
       load().catch(error => console.warn('[SwiftUIWeb] app-rest.wasm did not load in the background:', error?.message ?? error));

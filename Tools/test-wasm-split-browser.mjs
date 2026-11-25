@@ -13,6 +13,13 @@
 //    forced overflow), it keeps working. WASM_SPLIT_ROUTE (default /) is the page it opens. The first module must declare
 //    one table and import its placeholders (the module's own table holds them, with no forwarding stubs);
 //    WASM_SPLIT_LAYOUT=two-tables expects the other layout, for a module that needs reference types.
+//    The check the build runs on that move (the first module instrumented with `--instrument-memory`, `dataHook` counting the accesses to
+//    the moved ranges before the second module is instantiated) reports nothing for that module, and reports the read of a module whose
+//    hot function reads data that was moved.
+//    A module whose cold function reads 1 KB of data nothing else reads has that data moved into the second module
+//    (Tools/wasm-data-split.mjs): the first module alone holds none of it, a call that loads the second module reads it, and a thread that
+//    copies a snapshot of memory over its own (the move from the Worker) can instantiate the second module after the copy
+//    (`hold` and `release`) and still end up with the data.
 //
 // Needs Binaryen (wasm-as, wasm-split); without it part 1 is skipped with a message.
 import assert from "node:assert/strict";
@@ -21,6 +28,8 @@ import { copyFileSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFile
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { launch, runSuite, serveBundle, serveStatic, ROOT } from "./browser-test-support.mjs";
+import { moveData, readDataSegments, splitData } from "./wasm-data-split.mjs";
+import { dataHook } from "./wasm-split-release.mjs";
 
 const MODULE = `(module
   (memory (export "memory") 1)
@@ -34,8 +43,22 @@ const MODULE = `(module
   (func $cold (param $x i32) (result i32) (i32.add (local.get $x) (global.get $offset)))
   (func $callCold (export "callCold") (param $x i32) (result i32) (call $cold (local.get $x))))`;
 
+// The same module with data: 1 KB at 4096 that only $cold reads (its first word is 100), and a word at 8192 that $hot reads.
+const COLD_DATA = "\\64\\00\\00\\00" + "\\07".repeat(1020);
+const DATA_MODULE = MODULE
+  .replace('(memory (export "memory") 1)', `(memory (export "memory") 1)\n  (data (i32.const 4096) "${COLD_DATA}")\n  (data (i32.const 8192) "\\05\\00\\00\\00")`)
+  .replace('(func $hot (export "hot") (result i32) (i32.const 1))', '(func $hot (export "hot") (result i32) (i32.add (i32.const 1) (i32.load (i32.const 8192))))')
+  .replace('(i32.add (local.get $x) (global.get $offset))', '(i32.add (i32.add (local.get $x) (global.get $offset)) (i32.load (i32.const 4096)))');
+// The linker's map of that module, in wasm-ld's columns.
+const mapRow = (address, size, text, depth = 0) => `${address.toString(16).padStart(8)} ${"275cf5".padStart(8)} ${size.toString(16).padStart(8)} ${" ".repeat(depth)}${text}`;
+const DATA_MAP = [
+  "    Addr      Off     Size Out     In      Symbol", mapRow(0, 0x25c0e, "DATA").replace(/^ {7}0/, "       -"),
+  mapRow(4096, 1024, ".rodata"), mapRow(4096, 1024, "/app/A.o:(.rodata.cold)", 8), mapRow(4096, 1024, "cold", 16),
+  mapRow(8192, 4, ".data"), mapRow(8192, 4, "/app/A.o:(.data.hot)", 8), mapRow(8192, 4, "hot", 16),
+].join("\n") + "\n";
+
 const PAGE = `<!doctype html><meta charset="utf-8"><script type="module">
-import { createSplitLoader, isSplitModule } from './wasm-split-loader.js';
+import { createSplitLoader, isSplitModule, loadAroundCopy } from './wasm-split-loader.js';
 globalThis.runPage = async (variant) => {
   const module = await WebAssembly.compileStreaming(fetch('./primary' + variant + '.wasm'));
   const plain = await WebAssembly.compileStreaming(fetch('./plain.wasm'));
@@ -45,6 +68,48 @@ globalThis.runPage = async (variant) => {
   loader.attach(instance);
   await loading;
   return { split: isSplitModule(module), plainSplit: isSplitModule(plain), hot: instance.exports.hot(), cold: instance.exports.callCold(2), indirect: instance.exports.indirect(4), loaded: loader.loaded };
+};
+// The second module's data segments are written when it is instantiated: not by the first module, not while it is held.
+globalThis.runData = async () => {
+  const start = async () => {
+    const module = await WebAssembly.compileStreaming(fetch('./primary-data.wasm'));
+    const loader = createSplitLoader(module, { url: new URL('./secondary-data.wasm', location.href).href });
+    const instance = await WebAssembly.instantiate(module, loader.imports);
+    loader.attach(instance);
+    return { loader, instance, word: (at) => new DataView(instance.exports.memory.buffer).getUint32(at, true) };
+  };
+  const { loader, instance, word } = await start();
+  const alone = { cold: word(4096), hot: word(8192) };
+  loader.hold();
+  await loader.load();
+  const held = { loaded: loader.loaded, cold: word(4096) };
+  loader.release();
+  const released = { loaded: loader.loaded, cold: word(4096), last: new Uint8Array(instance.exports.memory.buffer)[5119], hot: instance.exports.hot(), call: instance.exports.callCold(2) };
+  // The move from the Worker: a snapshot taken before the second half was loaded holds zeros where its data goes, and the half
+  // is instantiated after the copy, which leaves the data; one taken after holds the data (here, a value the program wrote), and
+  // the half is instantiated before the copy, which leaves the snapshot's bytes.
+  const before = await start();
+  await loadAroundCopy(before.loader, false, () => new Uint8Array(before.instance.exports.memory.buffer).fill(0, 4096, 5120));
+  const snapshotBefore = { loaded: before.loader.loaded, cold: before.word(4096), last: new Uint8Array(before.instance.exports.memory.buffer)[5119] };
+  const after = await start();
+  await loadAroundCopy(after.loader, true, () => new Uint8Array(after.instance.exports.memory.buffer).set([171, 0, 0, 0], 4096));
+  const snapshotAfter = { loaded: after.loader.loaded, cold: after.word(4096), last: new Uint8Array(after.instance.exports.memory.buffer)[5119] };
+  let copied = false;
+  await loadAroundCopy(null, undefined, () => { copied = true; });
+  return { alone, held, released, snapshotBefore, snapshotAfter, copied };
+};
+// The check of a data move: the first module's accesses to the moved ranges before its second module is instantiated.
+globalThis.runWatched = async (variant, hook) => {
+  (0, eval)(hook);
+  const module = await WebAssembly.compileStreaming(fetch('./primary-' + variant + '.wasm'));
+  const loader = createSplitLoader(module, { url: new URL('./secondary-' + variant + '.wasm', location.href).href });
+  const instance = await WebAssembly.instantiate(module, loader.imports);
+  loader.attach(instance);
+  instance.exports.hot();
+  const before = [...globalThis.__swiftuiwebDataReads];
+  await loader.load();
+  instance.exports.callCold(2);
+  return { before, after: [...globalThis.__swiftuiwebDataReads] };
 };
 globalThis.runWorker = (background, variant) => new Promise((done, fail) => {
   const worker = new Worker('./worker.js', { type: 'module' });
@@ -91,6 +156,23 @@ async function synthetic(browser) {
       binaryen("wasm-split", ["--split", join(dir, "plain.wasm"), "--split-funcs", "cold", "-o1", join(dir, `primary${variant}.wasm`), "-o2", join(dir, `secondary${variant}.wasm`),
         "--placeholder-namespace", "p", "--import-namespace", "primary", ...features]);
     }
+    // The data module: split by Binaryen, then its data moved by Tools/wasm-data-split.mjs.
+    writeFileSync(join(dir, "data.wat"), DATA_MODULE);
+    binaryen("wasm-as", [join(dir, "data.wat"), "-g", "-o", join(dir, "data.wasm")]);
+    binaryen("wasm-split", ["--split", join(dir, "data.wasm"), "--split-funcs", "cold", "-o1", join(dir, "primary-data0.wasm"), "-o2", join(dir, "secondary-data0.wasm"),
+      "--placeholder-namespace", "p", "--import-namespace", "primary"]);
+    const moved = splitData({ primary: new Uint8Array(readFileSync(join(dir, "primary-data0.wasm"))), secondary: new Uint8Array(readFileSync(join(dir, "secondary-data0.wasm"))), linkMap: DATA_MAP });
+    assert.equal(moved.reason, undefined, "the data of the test module moves");
+    assert.equal(moved.moved.bytes, 1024, "the 1 KB only $cold reads moves, the word $hot reads stays");
+    writeFileSync(join(dir, "primary-data.wasm"), moved.primary);
+    writeFileSync(join(dir, "secondary-data.wasm"), moved.secondary);
+    // The same split with the word $hot reads moved as well, which a correct plan never does, and both of them instrumented.
+    const wrong = moveData(new Uint8Array(readFileSync(join(dir, "primary-data0.wasm"))), new Uint8Array(readFileSync(join(dir, "secondary-data0.wasm"))), [[4096, 5120], [8192, 8196]]);
+    writeFileSync(join(dir, "primary-wrong0.wasm"), wrong.primary);
+    writeFileSync(join(dir, "secondary-wrong.wasm"), wrong.secondary);
+    binaryen("wasm-opt", ["--instrument-memory", join(dir, "primary-data.wasm"), "-o", join(dir, "primary-watched.wasm")]);
+    binaryen("wasm-opt", ["--instrument-memory", join(dir, "primary-wrong0.wasm"), "-o", join(dir, "primary-wrong.wasm")]);
+    writeFileSync(join(dir, "secondary-watched.wasm"), moved.secondary);
     copyFileSync(join(ROOT, "Tools/wasm-split-loader.js"), join(dir, "wasm-split-loader.js"));
     writeFileSync(join(dir, "index.html"), PAGE);
     writeFileSync(join(dir, "worker.js"), WORKER);
@@ -114,8 +196,27 @@ async function synthetic(browser) {
         assert.deepEqual(background, { before: true, cold: 45, again: 46, indirect: 8, loaded: true, mark: { waited: false } }, `${label}: a background load fills the table first`);
         assert.ok(requests.filter((path) => path === `/secondary${variant}.wasm`).length >= 3, `${label}: each instance fetched the second half`);
       }
+      // The data that moved with the cold function.
+      assert.deepEqual(await page.evaluate(() => globalThis.runData()), {
+        alone: { cold: 0, hot: 5 }, held: { loaded: false, cold: 0 },
+        released: { loaded: true, cold: 100, last: 7, hot: 6, call: 142 },
+        snapshotBefore: { loaded: true, cold: 100, last: 7 }, snapshotAfter: { loaded: true, cold: 171, last: 7 }, copied: true,
+      }, "the first module alone has none of the moved data; held, the second module is not instantiated; released, its data is written; around a copy, the data or the snapshot wins by when the snapshot was taken");
+      const dataWorker = await page.evaluate(() => globalThis.runWorker(false, "-data"));
+      assert.equal(dataWorker.error, undefined, dataWorker.error);
+      assert.deepEqual(dataWorker, { before: false, cold: 145, again: 146, indirect: 8, loaded: true, mark: { waited: true } }, "a call that waits for the second module reads its data");
+      // The check the build runs on a move: nothing for a correct one, and the read of a wrong one.
+      const runs = moved.moved.ranges;
+      for (const [variant, expected] of [["watched", { before: [], after: [] }], ["wrong", { before: ["read 8192"], after: ["read 8192"] }]]) {
+        const watching = await browser.newPage();
+        await watching.goto(`${server.base}/index.html`);
+        await watching.waitForFunction(() => globalThis.ready === true);
+        const hook = dataHook(variant === "wrong" ? [[4096, 5120], [8192, 8196]] : runs);
+        assert.deepEqual(await watching.evaluate(([name, source]) => globalThis.runWatched(name, source), [variant, hook]), expected, `the check of the moved data (${variant})`);
+        await watching.close();
+      }
       await page.close();
-      console.log("ok: a module split by wasm-split loads its second half in a Worker (waiting or in the background) and on the page");
+      console.log("ok: a module split by wasm-split loads its second half in a Worker (waiting or in the background) and on the page, and its data comes with it");
     } finally {
       await server.stop();
     }
@@ -152,8 +253,23 @@ function checkLayout(bundle) {
   console.log(`ok: ${name} has ${tables} table${tables === 1 ? "" : "s"} and ${placeholders} placeholder imports`);
 }
 
+/** A word the second module's data segments write (address, value), or null when the bundle moved no data. */
+function movedWord(bundle) {
+  const name = readdirSync(bundle).find((file) => /^app-rest(\.[0-9a-f]{8})?\.wasm$/.test(file));
+  const bytes = new Uint8Array(readFileSync(join(bundle, name)));
+  for (const segment of readDataSegments(bytes).segments) {
+    for (let at = 0; at + 4 <= segment.size; at += 4) {
+      const value = new DataView(bytes.buffer, bytes.byteOffset + segment.at + at, 4).getUint32(0, true);
+      if (value !== 0 && (segment.offset + at) % 4 === 0) return { address: segment.offset + at, value };
+    }
+  }
+  return null;
+}
+
 async function splitBundle(browser, bundle) {
   checkLayout(bundle);
+  const moved = movedWord(bundle);
+  console.log(moved ? `ok: app-rest.wasm carries data (for example the word ${moved.value} at ${moved.address})` : "note: this bundle moved no data into app-rest.wasm");
   const route = process.env.WASM_SPLIT_ROUTE ?? "/";
   const server = await serveBundle({ bundle, logName: null });
   const marks = async (page) => {
@@ -200,6 +316,7 @@ async function splitBundle(browser, bundle) {
         // The Worker is gone; the mark is the main thread's own.
         const after = await page.evaluate(() => performance.getEntriesByName("swiftuiweb-app-rest").length);
         assert.ok(after >= 1, `${label}: the main thread loaded app-rest.wasm for the instance it adopted`);
+        if (moved) assert.equal(await page.evaluate((address) => window.__renderWorker.peek(address), moved.address), moved.value, `${label}: the adopted memory holds the data app-rest.wasm carries`);
       }
       assert.deepEqual(errors, [], `${label}: no page error`);
       await context.close();

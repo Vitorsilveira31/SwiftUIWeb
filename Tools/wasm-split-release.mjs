@@ -20,7 +20,9 @@
 //   3. `wasm-split --split --profile` moves every function no run reached into app-rest.wasm; the profiles of the
 //      viewports are merged first. The modules do not go through `wasm-opt` again: on the Board that made both larger
 //      over the wire (+0.9 KB brotli) for 5 KB less raw.
-//   4. Unless --no-verify, the split bundle is loaded once more and must reach a first screen with no page error.
+//   4. With --link-map, the data only the second module's code uses moves into the second module (Tools/wasm-data-split.mjs):
+//      vtables, witness tables, type metadata and string literals of code the first screen does not run.
+//   5. Unless --no-verify, the split bundle is loaded once more and must reach a first screen with no page error.
 //
 // The profile is tied to the exact binary. With --cache-dir, the split of a module is kept under a key of everything it
 // depends on (the module, the runtime scripts and the page, this script, Binaryen's version, the route and the viewports),
@@ -34,7 +36,7 @@
 // the launcher's default, the way Tools/strip-wasm-release.sh goes on without wasm-opt.
 //
 // usage: wasm-split-release.mjs <bundle-directory> [--route /] [--viewports 1280x800,390x844] [--log-dir DIR] [--no-verify]
-//                               [--cache-dir DIR] [--fallback]
+//                               [--cache-dir DIR] [--link-map FILE] [--fallback]
 //        wasm-split-release.mjs --check
 // Run the tests with: bun test ./Tools/test-wasm-split-release.mjs and bun Tools/test-wasm-split-browser.mjs
 
@@ -47,6 +49,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { brotliCompressSync, constants } from "node:zlib";
 import { seal } from "./seal-csp.mjs";
+import { linkMapKey, splitData } from "./wasm-data-split.mjs";
 
 export const PRIMARY = "app.wasm";
 export const SECONDARY = "app-rest.wasm";
@@ -60,6 +63,22 @@ const QUIET_MS = 400;
 // Keeps the instance of an instrumented module where the evaluation below finds it. Prepended to the copy of the
 // worker's and the page's script that the profiling run loads, never to the bundle that ships.
 const PROFILE_HOOK = `{const instantiate=WebAssembly.instantiate;WebAssembly.instantiate=function(...args){return instantiate.apply(this,args).then(result=>{const instance=result instanceof WebAssembly.Instance?result:result.instance;if(instance&&instance.exports&&instance.exports.__write_profile)globalThis.__swiftuiwebProfiled=instance;return result;});};}\n`;
+
+/**
+ * What the check of the data move prepends to the worker's and the page's script: the first module is instrumented
+ * (Binaryen's `--instrument-memory` calls an import for every load and store), and these imports note the accesses that touch
+ * the moved ranges `runs` (address pairs, sorted) before the second module is instantiated, which is when the first module must
+ * not need that data. They go to `globalThis.__swiftuiwebDataReads`.
+ */
+export function dataHook(runs) {
+  return `{const runs=${JSON.stringify(runs)};const reads=globalThis.__swiftuiwebDataReads=[];` +
+    `const inside=a=>{let lo=0,hi=runs.length-1;while(lo<=hi){const m=(lo+hi)>>1;if(a<runs[m][0])hi=m-1;else if(a>=runs[m][1])lo=m+1;else return true;}return false;};` +
+    `const loaded=()=>performance.getEntriesByName("swiftuiweb-app-rest").length>0;` +
+    `const touch=kind=>(id,bytes,offset,ptr)=>{const a=(ptr+offset)>>>0;if(reads.length<16&&!loaded()&&(inside(a)||inside(a+bytes-1)))reads.push(kind+" "+a);return ptr;};` +
+    `const keep=(id,value)=>value;` +
+    `const imports={load_ptr:touch("read"),store_ptr:touch("write"),load_val_i32:keep,load_val_i64:keep,load_val_f32:keep,load_val_f64:keep,store_val_i32:keep,store_val_i64:keep,store_val_f32:keep,store_val_f64:keep,memory_grow_pre:keep,memory_grow_post:keep};` +
+    `const instantiate=WebAssembly.instantiate;WebAssembly.instantiate=function(module,env){if(module instanceof WebAssembly.Module&&env&&WebAssembly.Module.imports(module).some(e=>e.module==="env"&&e.name==="load_ptr"))env.env=Object.assign({},env.env,imports);return instantiate.apply(this,arguments);};}\n`;
+}
 
 // Runs in the scope that holds the instrumented instance: the profile is written into fresh pages of its memory.
 const READ_PROFILE = () => {
@@ -77,6 +96,7 @@ const NEEDED_OPTIONS = ["--instrument", "--merge-profiles", "--profile", "--plac
 // The files of the bundle the profile run's code paths depend on, besides the module.
 const PAGE_FILES = ["index.html", "index.js", "render-worker.js", "runtime-shared.js", "runtime-deferred.js"];
 const SPLIT_SOURCE = fileURLToPath(import.meta.url);
+const DATA_SPLIT_SOURCE = fileURLToPath(new URL("./wasm-data-split.mjs", import.meta.url));
 /** The exit status of a --fallback run that left the bundle unsplit. */
 export const FELL_BACK = 3;
 
@@ -202,12 +222,14 @@ export function whyNotOwnTable(path, flags) {
 }
 
 /** The cache key of a split: every input the profile run and the split depend on. */
-export function cacheKey(bundle, { route, viewports }) {
+export function cacheKey(bundle, { route, viewports, linkMap = null }) {
   const hash = createHash("sha256");
   const add = (label, bytes) => { hash.update(label); hash.update("\0"); hash.update(createHash("sha256").update(bytes).digest("hex")); hash.update("\n"); };
   add(PRIMARY, readFileSync(join(bundle, PRIMARY)));
   for (const name of PAGE_FILES) if (existsSync(join(bundle, name))) add(name, readFileSync(join(bundle, name)));
   add("script", readFileSync(SPLIT_SOURCE));
+  add("data-script", readFileSync(DATA_SPLIT_SOURCE));
+  add("link-map", linkMap ? linkMapKey(readFileSync(linkMap, "utf8")) : "none");
   add("binaryen", binaryenVersion());
   // The layout follows from the module's bytes and Binaryen's version, both hashed above; its flags are hashed too, so a
   // change in how they are chosen cannot match an entry made under another layout.
@@ -220,7 +242,7 @@ export function cacheKey(bundle, { route, viewports }) {
 function pruneCache(cacheDir) {
   const entries = readdirSync(cacheDir).filter((name) => name.endsWith(".rest.wasm")).map((name) => name.slice(0, -".rest.wasm".length));
   const byAge = entries.map((key) => ({ key, time: statSync(join(cacheDir, `${key}.rest.wasm`)).mtimeMs })).sort((a, b) => b.time - a.time);
-  for (const { key } of byAge.slice(8)) for (const suffix of [".app.wasm", ".rest.wasm", ".prof", ".layout"]) rmSync(join(cacheDir, key + suffix), { force: true });
+  for (const { key } of byAge.slice(8)) for (const suffix of [".app.wasm", ".rest.wasm", ".prof", ".layout", ".data"]) rmSync(join(cacheDir, key + suffix), { force: true });
 }
 
 function run(command, args) {
@@ -309,6 +331,34 @@ async function profileOnce(browser, base, route, viewport) {
   }
 }
 
+/**
+ * Runs the first screen of the bundle `checked` (a copy whose first module is instrumented and carries `dataHook` in its scripts) at
+ * one viewport and returns the accesses to the moved data that happened before the second module was instantiated.
+ */
+async function dataReadsOnce(browser, base, route, viewport) {
+  const context = await browser.newContext({ viewport, deviceScaleFactor: 1 });
+  try {
+    const page = await context.newPage();
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(String(error)));
+    await page.goto(`${base}${route}`, { waitUntil: "domcontentloaded" });
+    await settle(page);
+    // The second module arrives behind the first screen; what the first module touches until then is what counts.
+    for (let tries = 0; tries < 100; tries++) {
+      const loaded = [];
+      for (const scope of [...page.workers(), page]) loaded.push(await scope.evaluate(() => performance.getEntriesByName("swiftuiweb-app-rest").length).catch(() => 0));
+      if (loaded.some((count) => count > 0)) break;
+      await new Promise((done) => setTimeout(done, 100));
+    }
+    if (errors.length) throw new Error(`the instrumented bundle reported page errors: ${errors.join("; ")}`);
+    const reads = [];
+    for (const scope of [...page.workers(), page]) reads.push(...(await scope.evaluate(() => globalThis.__swiftuiwebDataReads ?? []).catch(() => [])));
+    return reads;
+  } finally {
+    await context.close();
+  }
+}
+
 /** Loads the split bundle and checks it reaches a first screen with no page error; returns whether a call had to wait
  * for app-rest.wasm on the way (a function the profile missed, loaded synchronously). */
 async function verifyOnce(browser, base, route, viewport) {
@@ -325,6 +375,39 @@ async function verifyOnce(browser, base, route, viewport) {
     return { waited: marks.some((detail) => detail?.waited === true) };
   } finally {
     await context.close();
+  }
+}
+
+/**
+ * Runs the first screen with the moved data watched and returns why the move must not be shipped, or null. The first module (the
+ * one that leaves the data out) is instrumented with Binaryen's `--instrument-memory`, and the hook `dataHook` notes every load
+ * and store that touches the moved ranges before the second module is instantiated: the analysis in Tools/wasm-data-split.mjs
+ * says there are none, and this run, over the first screen at each viewport, says whether it was right.
+ */
+async function checkDataMove({ browser, serveBundle, bundle, work, route, viewports, primary, secondary, runs, flags, log }) {
+  try {
+    const checked = servableCopy(bundle, join(work, "data-check"));
+    const first = join(work, "first-with-data-moved.wasm");
+    writeFileSync(first, primary);
+    run("wasm-opt", [...flags, "--instrument-memory", first, "-o", join(checked, PRIMARY)]);
+    writeFileSync(join(checked, SECONDARY), secondary);
+    for (const script of ["render-worker.js", "index.js"]) {
+      const path = join(checked, script);
+      if (existsSync(path)) writeFileSync(path, dataHook(runs) + readFileSync(path, "utf8"));
+    }
+    const server = await serveBundle({ bundle: checked, logName: null });
+    try {
+      for (const viewport of viewports) {
+        const reads = await dataReadsOnce(browser, server.base, route, viewport);
+        if (reads.length > 0) return `the first screen at ${viewport.width}x${viewport.height} touched moved data before ${SECONDARY} arrived (${reads.slice(0, 3).join(", ")})`;
+      }
+    } finally {
+      await server.stop();
+    }
+    return null;
+  } catch (error) {
+    log(`warning: the data move could not be checked (${String(error?.message ?? error).split("\n")[0]})`);
+    return "the check of the moved data did not run";
   }
 }
 
@@ -351,22 +434,24 @@ const report = ({ before, first, rest, layout }, log, how = "") =>
 const SINGLE_TABLE = "placeholders in the module's own table";
 const twoTables = (reason) => `two-table layout (${reason})`;
 
-export async function splitBundle(bundle, { route = "/", viewports = parseViewports("1280x800,390x844"), logDir = null, verify = true, cacheDir = null, log = console.log } = {}) {
+export async function splitBundle(bundle, { route = "/", viewports = parseViewports("1280x800,390x844"), logDir = null, verify = true, cacheDir = null, linkMap = null, log = console.log } = {}) {
   const input = join(bundle, PRIMARY);
   if (!existsSync(input)) throw new Error(`no ${PRIMARY} in ${bundle}`);
   if (existsSync(join(bundle, SECONDARY))) throw new Error(`${bundle} is split already`);
   // A build whose inputs did not change takes the split an earlier build made, and runs no browser.
-  const key = cacheDir ? cacheKey(bundle, { route, viewports }) : null;
-  const cached = key ? { primary: join(cacheDir, `${key}.app.wasm`), secondary: join(cacheDir, `${key}.rest.wasm`), profile: join(cacheDir, `${key}.prof`), layout: join(cacheDir, `${key}.layout`) } : null;
+  const key = cacheDir ? cacheKey(bundle, { route, viewports, linkMap }) : null;
+  const cached = key ? { primary: join(cacheDir, `${key}.app.wasm`), secondary: join(cacheDir, `${key}.rest.wasm`), profile: join(cacheDir, `${key}.prof`), layout: join(cacheDir, `${key}.layout`), data: join(cacheDir, `${key}.data`) } : null;
   if (cached && existsSync(cached.primary) && existsSync(cached.secondary)) {
     const layout = existsSync(cached.layout) ? readFileSync(cached.layout, "utf8") : null;
-    const measured = { ...sizes(input, cached.primary, cached.secondary), layout };
+    const data = existsSync(cached.data) ? readFileSync(cached.data, "utf8") : null;
+    const measured = { ...sizes(input, cached.primary, cached.secondary), layout, data };
     cpSync(cached.primary, input);
     cpSync(cached.secondary, join(bundle, SECONDARY));
     const now = new Date();
     utimesSync(cached.secondary, now, now);
     if (logDir && existsSync(cached.profile)) { mkdirSync(logDir, { recursive: true }); cpSync(cached.profile, join(logDir, "first-screen.prof")); }
     report(measured, log, " (the split of an earlier build from the same inputs)");
+    if (data) log(data);
     return measured;
   }
   const { launch, serveBundle } = await import("./browser-test-support.mjs");
@@ -419,7 +504,23 @@ export async function splitBundle(bundle, { route = "/", viewports = parseViewpo
       }
       const moved = ownMutableGlobals(readFileSync(secondary));
       if (moved > 0) throw new Error(`wasm-split moved ${moved} mutable global(s) into ${SECONDARY}; a move from the Worker to the main thread would start them over, so this module cannot be split`);
-      const measured = { ...sizes(input, primary, secondary), layout };
+      // 3b. The data only the second module uses goes with it. A map that does not fit, or any doubt, leaves the data where it was.
+      let data = null;
+      if (linkMap) {
+        let result;
+        try {
+          result = splitData({ primary: readFileSync(primary), secondary: readFileSync(secondary), linkMap: readFileSync(linkMap, "utf8") });
+        } catch (error) {
+          result = { reason: `the move failed (${String(error?.message ?? error).split("\n")[0]})` };
+        }
+        const problem = result.moved && !verify ? "--no-verify skips the check of the move" : result.moved ? await checkDataMove({ browser, serveBundle, bundle, work, route, viewports, primary: result.primary, secondary: result.secondary, runs: result.moved.ranges, flags: source === input ? [] : flags, log }) : null;
+        if (result.moved && !problem) {
+          writeFileSync(primary, result.primary);
+          writeFileSync(secondary, result.secondary);
+          data = `wasm split: ${kb(result.moved.bytes)} of data (${result.moved.objects} objects: vtables, metadata and strings only ${SECONDARY} uses) moved from ${PRIMARY} to ${SECONDARY}`;
+        } else data = `wasm split: the data stays in ${PRIMARY} (${problem ?? result.reason})`;
+      }
+      const measured = { ...sizes(input, primary, secondary), layout, data };
       // 4. The split bundle still starts. It is checked in a copy, so the bundle itself only ever holds a split that passed.
       if (verify) {
         const checked = servableCopy(bundle, join(work, "split"));
@@ -440,7 +541,8 @@ export async function splitBundle(bundle, { route = "/", viewports = parseViewpo
       if (cached) {
         mkdirSync(cacheDir, { recursive: true });
         writeFileSync(join(work, "layout.txt"), layout);
-        for (const [from, to] of [[join(work, "layout.txt"), cached.layout], [profile, cached.profile], [primary, cached.primary], [secondary, cached.secondary]]) {
+        writeFileSync(join(work, "data.txt"), data ?? "");
+        for (const [from, to] of [[join(work, "layout.txt"), cached.layout], [join(work, "data.txt"), cached.data], [profile, cached.profile], [primary, cached.primary], [secondary, cached.secondary]]) {
           cpSync(from, `${to}.${process.pid}`);
           // The rest goes last: a split is in the cache once its second module is.
           cpSync(`${to}.${process.pid}`, to);
@@ -449,6 +551,7 @@ export async function splitBundle(bundle, { route = "/", viewports = parseViewpo
         pruneCache(cacheDir);
       }
       report(measured, log);
+      if (data) log(data);
       return measured;
     } finally {
       await browser.close();
@@ -463,7 +566,7 @@ export async function main(argv) {
     args: argv, allowPositionals: true,
     options: {
       route: { type: "string", default: "/" }, viewports: { type: "string", default: "1280x800,390x844" }, "log-dir": { type: "string" },
-      "no-verify": { type: "boolean", default: false }, "cache-dir": { type: "string" }, fallback: { type: "boolean", default: false },
+      "no-verify": { type: "boolean", default: false }, "cache-dir": { type: "string" }, "link-map": { type: "string" }, fallback: { type: "boolean", default: false },
       check: { type: "boolean", default: false },
     },
   });
@@ -473,12 +576,12 @@ export async function main(argv) {
     return reason ? 1 : 0;
   }
   if (positionals.length !== 1) {
-    console.error("usage: wasm-split-release.mjs <bundle-directory> [--route /] [--viewports 1280x800,390x844] [--log-dir DIR] [--no-verify] [--cache-dir DIR] [--fallback]\n       wasm-split-release.mjs --check");
+    console.error("usage: wasm-split-release.mjs <bundle-directory> [--route /] [--viewports 1280x800,390x844] [--log-dir DIR] [--no-verify] [--cache-dir DIR] [--link-map FILE] [--fallback]\n       wasm-split-release.mjs --check");
     return 2;
   }
   const bundle = resolve(positionals[0]);
   try {
-    await splitBundle(bundle, { route: values.route, viewports: parseViewports(values.viewports), logDir: values["log-dir"] ?? null, verify: !values["no-verify"], cacheDir: values["cache-dir"] ?? null });
+    await splitBundle(bundle, { route: values.route, viewports: parseViewports(values.viewports), logDir: values["log-dir"] ?? null, verify: !values["no-verify"], cacheDir: values["cache-dir"] ?? null, linkMap: values["link-map"] ?? null });
   } catch (error) {
     if (!values.fallback) throw error;
     // The bundle is only written once a split passed, so it still holds the one module it had. Its runtime scripts were

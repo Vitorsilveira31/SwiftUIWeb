@@ -166,3 +166,21 @@ test.skipIf(!hasBinaryen)("a module takes the placeholders into its own table un
   }
   rmSync(directory, { recursive: true, force: true });
 });
+
+test("the cache key follows what the link map says about the data, not the paths of the build that wrote it", () => {
+  const map = (directory, size) => `    Addr      Off     Size Out     In      Symbol
+       -   275cf4    25c0e DATA
+    1000   275cf5    185b0 .rodata
+    1000   275cfd ${size}         ${directory}/Site.o:(.rodata..L.str.4.name)
+    1000   275cfd ${size}                 .L.str.4.name
+`;
+  const keyOf = (text) => {
+    const file = join(mkdtempSync(join(tmpdir(), "wasm-split-map-test-")), "app.map");
+    writeFileSync(file, text);
+    return cacheKey(bundle(), { route: "/", viewports: VIEWPORTS, linkMap: file });
+  };
+  const key = keyOf(map("/work/.embedded-browser.AAAAAA/scratch", "      14"));
+  expect(keyOf(map("/work/.embedded-browser.BBBBBB/scratch", "      14"))).toBe(key);
+  expect(keyOf(map("/work/.embedded-browser.AAAAAA/scratch", "      18"))).not.toBe(key);
+  expect(cacheKey(bundle(), { route: "/", viewports: VIEWPORTS })).not.toBe(key);
+});
