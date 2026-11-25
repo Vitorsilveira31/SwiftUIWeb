@@ -309,19 +309,23 @@ export function planDataMove({ primary, secondary, objects, readOnly = isReadOnl
   // the first character less the 20 bytes of header (`_StringObject.nativeBias` on a 32-bit target), and the compiler writes that
   // address as the constant, so the constant lies before the literal, in the padding or in the end of the one before it.
   const search = (address) => { let lo = 0, hi = data.length - 1, found = -1; while (lo <= hi) { const mid = (lo + hi) >> 1; if (data[mid].address <= address) { found = mid; lo = mid + 1; } else hi = mid - 1; } return found; };
-  const ownersOf = (address) => {
+  // `wide` adds the objects an address one past an end may name: what keeps data in the first module errs towards keeping, and what
+  // the second module names to be moved does not stretch to the neighbors of the objects it names.
+  const ownersOf = (address, wide = true) => {
     const at = search(address);
     const found = [];
     if (at >= 0) {
       const inside = data[at];
-      if (address < inside.address + inside.size || inside.address + inside.size === address) found.push(inside);
+      if (address < inside.address + inside.size || (wide && inside.address + inside.size === address)) found.push(inside);
+      // At the start of an object that touches the one before it, the address is also the end of that one.
+      if (wide && at > 0 && inside.address === address && data[at - 1].address + data[at - 1].size === address) found.push(data[at - 1]);
     }
     for (let next = at + 1; next < data.length && data[next].address <= address + STRING_BIAS; next++) if (data[next].string) found.push(data[next]);
     return found;
   };
   for (const object of data) { object.byFirst = false; object.bySecond = false; object.stays = !object.readOnly; object.points = []; }
   for (const address of primaryRefs.keys()) for (const owner of ownersOf(address)) owner.byFirst = true;
-  for (const address of secondaryRefs.keys()) for (const owner of ownersOf(address)) owner.bySecond = true;
+  for (const address of secondaryRefs.keys()) for (const owner of ownersOf(address, false)) owner.bySecond = true;
   // Pointer-looking words, at every byte offset: the objects each object may point at.
   for (const object of data) {
     const base = object.address - image.low;
@@ -330,6 +334,15 @@ export function planDataMove({ primary, secondary, objects, readOnly = isReadOnl
       const word = (image.bytes[base + at] | (image.bytes[base + at + 1] << 8) | (image.bytes[base + at + 2] << 16) | (image.bytes[base + at + 3] << 24)) >>> 0;
       if (word >= image.low && word <= image.high) for (const owner of ownersOf(word)) if (owner !== object) object.points.push(owner);
     }
+  }
+  // Initialized bytes the map gives to no object (the header before a string literal, say) stay in the first module, and a word in
+  // them that looks like an address keeps what it points at.
+  const claimed = new Uint8Array(image.high - image.low);
+  for (const object of data) claimed.fill(1, object.address - image.low, object.address - image.low + object.size);
+  for (let at = 0; at + 4 <= claimed.length; at++) {
+    if (!image.present[at] || !image.present[at + 3] || (claimed[at] && claimed[at + 1] && claimed[at + 2] && claimed[at + 3])) continue;
+    const word = (image.bytes[at] | (image.bytes[at + 1] << 8) | (image.bytes[at + 2] << 16) | (image.bytes[at + 3] << 24)) >>> 0;
+    if (word >= image.low && word <= image.high) for (const target of ownersOf(word)) target.stays = true;
   }
   // A candidate is a read-only object the first module's code does not name that the second module's code names, or that only
   // such objects point at. It moves unless some object that stays in the first module (whatever the reason, and an object

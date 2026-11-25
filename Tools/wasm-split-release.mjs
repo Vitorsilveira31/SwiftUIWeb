@@ -70,11 +70,17 @@ const PROFILE_HOOK = `{const instantiate=WebAssembly.instantiate;WebAssembly.ins
  * the moved ranges `runs` (address pairs, sorted) before the second module is instantiated, which is when the first module must
  * not need that data. They go to `globalThis.__swiftuiwebDataReads`.
  */
+/** The wasm-opt passes that make a module report its loads and stores: bulk copies and fills become loops first, which the
+ * instrumentation does not otherwise see. `flags` enable the module's features. */
+export function instrumentation(flags) {
+  return [...flags, "--llvm-memory-copy-fill-lowering", "--instrument-memory"];
+}
+
 export function dataHook(runs) {
   return `{const runs=${JSON.stringify(runs)};const reads=globalThis.__swiftuiwebDataReads=[];` +
-    `const inside=a=>{let lo=0,hi=runs.length-1;while(lo<=hi){const m=(lo+hi)>>1;if(a<runs[m][0])hi=m-1;else if(a>=runs[m][1])lo=m+1;else return true;}return false;};` +
+    `const touches=(a,n)=>{let lo=0,hi=runs.length-1,k=runs.length;while(lo<=hi){const m=(lo+hi)>>1;if(runs[m][1]>a){k=m;hi=m-1;}else lo=m+1;}return k<runs.length&&runs[k][0]<a+n;};` +
     `const loaded=()=>performance.getEntriesByName("swiftuiweb-app-rest").length>0;` +
-    `const touch=kind=>(id,bytes,offset,ptr)=>{const a=(ptr+offset)>>>0;if(reads.length<16&&!loaded()&&(inside(a)||inside(a+bytes-1)))reads.push(kind+" "+a);return ptr;};` +
+    `const touch=kind=>(id,bytes,offset,ptr)=>{const a=(ptr+offset)>>>0;if(reads.length<16&&!loaded()&&touches(a,bytes))reads.push(kind+" "+a);return ptr;};` +
     `const keep=(id,value)=>value;` +
     `const imports={load_ptr:touch("read"),store_ptr:touch("write"),load_val_i32:keep,load_val_i64:keep,load_val_f32:keep,load_val_f64:keep,store_val_i32:keep,store_val_i64:keep,store_val_f32:keep,store_val_f64:keep,memory_grow_pre:keep,memory_grow_post:keep};` +
     `const instantiate=WebAssembly.instantiate;WebAssembly.instantiate=function(module,env){if(module instanceof WebAssembly.Module&&env&&WebAssembly.Module.imports(module).some(e=>e.module==="env"&&e.name==="load_ptr"))env.env=Object.assign({},env.env,imports);return instantiate.apply(this,arguments);};}\n`;
@@ -389,7 +395,7 @@ async function checkDataMove({ browser, serveBundle, bundle, work, route, viewpo
     const checked = servableCopy(bundle, join(work, "data-check"));
     const first = join(work, "first-with-data-moved.wasm");
     writeFileSync(first, primary);
-    run("wasm-opt", [...flags, "--instrument-memory", first, "-o", join(checked, PRIMARY)]);
+    run("wasm-opt", [...instrumentation(flags), first, "-o", join(checked, PRIMARY)]);
     writeFileSync(join(checked, SECONDARY), secondary);
     for (const script of ["render-worker.js", "index.js"]) {
       const path = join(checked, script);

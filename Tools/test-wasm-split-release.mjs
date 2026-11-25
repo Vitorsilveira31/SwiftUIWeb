@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { cacheKey, FELL_BACK, FEATURE_FLAGS, planLayout, readTargetFeatures, splitBundle, whyNotOwnTable, withoutTargetFeatures } from "./wasm-split-release.mjs";
+import { cacheKey, dataHook, FELL_BACK, FEATURE_FLAGS, instrumentation, planLayout, readTargetFeatures, splitBundle, whyNotOwnTable, withoutTargetFeatures } from "./wasm-split-release.mjs";
 
 const SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), "wasm-split-release.mjs");
 const VIEWPORTS = [{ width: 1280, height: 800 }];
@@ -183,4 +183,31 @@ test("the cache key follows what the link map says about the data, not the paths
   expect(keyOf(map("/work/.embedded-browser.BBBBBB/scratch", "      14"))).toBe(key);
   expect(keyOf(map("/work/.embedded-browser.AAAAAA/scratch", "      18"))).not.toBe(key);
   expect(cacheKey(bundle(), { route: "/", viewports: VIEWPORTS })).not.toBe(key);
+});
+
+test("the check of a data move notes an access that touches a moved range, wherever the access starts and ends", () => {
+  // The hook wraps WebAssembly.instantiate; run it against a stand-in that hands back the imports it adds.
+  const marks = [];
+  class Module {}
+  Module.imports = () => [{ module: "env", name: "load_ptr" }];
+  let added = null;
+  const stand = { Module, instantiate: (module, imports) => { added = imports; } };
+  const scope = {};
+  new Function("WebAssembly", "performance", "globalThis", dataHook([[4096, 4100], [8192, 8200]]))(stand, { getEntriesByName: () => marks }, scope);
+  stand.instantiate(new Module(), {});
+  const { load_ptr: read, store_ptr: write } = added.env;
+  // An eight-byte access from 4094 covers the four moved bytes although neither of its ends is inside them.
+  expect(read(1, 8, 0, 4094)).toBe(4094);
+  expect(write(2, 4, 1, 8195)).toBe(8195);
+  expect(scope.__swiftuiwebDataReads).toEqual(["read 4094", "write 8196"]);
+  // Next to a range, not inside it; and after the second module is instantiated, anything goes.
+  read(3, 4, 0, 4100); read(4, 2, 0, 4094); read(5, 4, 0, 8200); read(6, 4, 0, 8188);
+  expect(scope.__swiftuiwebDataReads.length).toBe(2);
+  marks.push({});
+  read(7, 4, 0, 4096);
+  expect(scope.__swiftuiwebDataReads.length).toBe(2);
+});
+
+test("the module is instrumented after its bulk copies and fills became loops the instrumentation can see", () => {
+  expect(instrumentation(["--mvp-features", "--enable-bulk-memory"])).toEqual(["--mvp-features", "--enable-bulk-memory", "--llvm-memory-copy-fill-lowering", "--instrument-memory"]);
 });

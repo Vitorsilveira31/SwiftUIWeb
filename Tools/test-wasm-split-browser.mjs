@@ -29,7 +29,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { launch, runSuite, serveBundle, serveStatic, ROOT } from "./browser-test-support.mjs";
 import { moveData, readDataSegments, splitData } from "./wasm-data-split.mjs";
-import { dataHook } from "./wasm-split-release.mjs";
+import { dataHook, instrumentation } from "./wasm-split-release.mjs";
 
 const MODULE = `(module
   (memory (export "memory") 1)
@@ -49,6 +49,8 @@ const DATA_MODULE = MODULE
   .replace('(memory (export "memory") 1)', `(memory (export "memory") 1)\n  (data (i32.const 4096) "${COLD_DATA}")\n  (data (i32.const 8192) "\\05\\00\\00\\00")`)
   .replace('(func $hot (export "hot") (result i32) (i32.const 1))', '(func $hot (export "hot") (result i32) (i32.add (i32.const 1) (i32.load (i32.const 8192))))')
   .replace('(i32.add (local.get $x) (global.get $offset))', '(i32.add (i32.add (local.get $x) (global.get $offset)) (i32.load (i32.const 4096)))');
+// The same, whose $hot copies 16 bytes out of the data that moved (a bulk copy, which the instrumentation only sees as loops).
+const COPY_MODULE = DATA_MODULE.replace('(i32.add (i32.const 1) (i32.load (i32.const 8192)))', '(i32.add (i32.const 1) (block (result i32) (memory.copy (i32.const 8200) (i32.const 4096) (i32.const 16)) (i32.const 0)))');
 // The linker's map of that module, in wasm-ld's columns.
 const mapRow = (address, size, text, depth = 0) => `${address.toString(16).padStart(8)} ${"275cf5".padStart(8)} ${size.toString(16).padStart(8)} ${" ".repeat(depth)}${text}`;
 const DATA_MAP = [
@@ -166,6 +168,15 @@ async function synthetic(browser) {
     assert.equal(moved.moved.bytes, 1024, "the 1 KB only $cold reads moves, the word $hot reads stays");
     writeFileSync(join(dir, "primary-data.wasm"), moved.primary);
     writeFileSync(join(dir, "secondary-data.wasm"), moved.secondary);
+    // A bulk copy of moved data by $hot: the check must see it.
+    writeFileSync(join(dir, "copy.wat"), COPY_MODULE);
+    binaryen("wasm-as", [join(dir, "copy.wat"), "--enable-bulk-memory", "-g", "-o", join(dir, "copy.wasm")]);
+    binaryen("wasm-split", ["--split", join(dir, "copy.wasm"), "--split-funcs", "cold", "-o1", join(dir, "primary-copy0.wasm"), "-o2", join(dir, "secondary-copy0.wasm"),
+      "--placeholder-namespace", "p", "--import-namespace", "primary", "--enable-bulk-memory"]);
+    const copied = moveData(new Uint8Array(readFileSync(join(dir, "primary-copy0.wasm"))), new Uint8Array(readFileSync(join(dir, "secondary-copy0.wasm"))), [[4096, 5120]]);
+    writeFileSync(join(dir, "primary-copy1.wasm"), copied.primary);
+    writeFileSync(join(dir, "secondary-copy.wasm"), copied.secondary);
+    binaryen("wasm-opt", [...instrumentation(["--enable-bulk-memory"]), join(dir, "primary-copy1.wasm"), "-o", join(dir, "primary-copy.wasm")]);
     // The same split with the word $hot reads moved as well, which a correct plan never does, and both of them instrumented.
     const wrong = moveData(new Uint8Array(readFileSync(join(dir, "primary-data0.wasm"))), new Uint8Array(readFileSync(join(dir, "secondary-data0.wasm"))), [[4096, 5120], [8192, 8196]]);
     writeFileSync(join(dir, "primary-wrong0.wasm"), wrong.primary);
@@ -215,6 +226,13 @@ async function synthetic(browser) {
         assert.deepEqual(await watching.evaluate(([name, source]) => globalThis.runWatched(name, source), [variant, hook]), expected, `the check of the moved data (${variant})`);
         await watching.close();
       }
+      // A bulk copy of moved data is lowered to loads before the instrumentation, so it is seen as well.
+      const bulk = await browser.newPage();
+      await bulk.goto(`${server.base}/index.html`);
+      await bulk.waitForFunction(() => globalThis.ready === true);
+      const bulkReads = await bulk.evaluate(([name, source]) => globalThis.runWatched(name, source), ["copy", dataHook([[4096, 5120]])]);
+      assert.ok(bulkReads.before.length > 0 && bulkReads.before.every((entry) => /^read 41(0[0-9]|1[01])$|^read 409[6-9]$/.test(entry)), "the check sees a bulk copy out of moved data");
+      await bulk.close();
       await page.close();
       console.log("ok: a module split by wasm-split loads its second half in a Worker (waiting or in the background) and on the page, and its data comes with it");
     } finally {

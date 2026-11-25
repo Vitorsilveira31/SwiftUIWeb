@@ -329,3 +329,39 @@ test("the map is checked against the text Swift puts in the name of a string lit
   expect(splitData({ primary, secondary, linkMap: map(0) }).reason).toMatch(/could move/);
   expect(splitData({ primary, secondary, linkMap: map(16) }).reason).toMatch(/does not describe/);
 });
+
+/** Three read-only objects of 1 KB that touch (4096, 5120 and 6144), the last two named by the second module only, and any
+ * extra bytes of the first module's memory (`unmapped`: address and bytes the map gives to no object). */
+function neighbours({ first, second, unmapped = [] }) {
+  const map = rows(
+    "       -   275cf4    25c0e DATA",
+    segmentRow(0x1000, 0xc00, ".rodata"),
+    objectRow(0x1000, 0x400, "/app/A.o", ".rodata.a", "a"),
+    objectRow(0x1400, 0x400, "/app/A.o", ".rodata.b", "b"),
+    objectRow(0x1800, 0x400, "/app/A.o", ".rodata.c", "c"),
+  );
+  const data = [4096, 5120, 6144].map((at) => ({ at, bytes: fill(1024, 5) })).concat(unmapped.map(([at, bytes]) => ({ at, bytes })));
+  return {
+    map,
+    primary: wasm({ bodies: [body(...first.map(NAMED))], data }),
+    secondary: wasm({ imported: true, bodies: [body(...second.map(NAMED))] }),
+  };
+}
+
+test("an address that ends one object and starts the next names both, for the first module and not for the second", () => {
+  // The first module holds 5120: the end of a, which a loop over a may stop at, and the start of b. a and b stay; c moves.
+  const touching = neighbours({ first: [5120], second: [4096, 5120, 6144] });
+  expect(planDataMove({ primary: touching.primary, secondary: touching.secondary, objects: parseLinkMap(touching.map) }).objects.map((object) => object.symbol)).toEqual(["c"]);
+  // The second module naming 5120 names b alone: a is not carried along by it.
+  const alone = neighbours({ first: [], second: [5120] });
+  expect(planDataMove({ primary: alone.primary, secondary: alone.secondary, objects: parseLinkMap(alone.map) }).objects.map((object) => object.symbol)).toEqual(["b"]);
+});
+
+test("initialized bytes the map gives to no object keep what they point at", () => {
+  // Nothing but a word at 9000, in no object, holds the address of a (4096); the second module names a and b.
+  const word4096 = word(4096);
+  const held = neighbours({ first: [6144 + 4], second: [4096, 5120], unmapped: [[9000, [...word4096, 1, 2, 3, 4]]] });
+  expect(planDataMove({ primary: held.primary, secondary: held.secondary, objects: parseLinkMap(held.map) }).objects.map((object) => object.symbol)).toEqual(["b"]);
+  const free = neighbours({ first: [6144 + 4], second: [4096, 5120], unmapped: [[9000, [1, 2, 3, 4, 1, 2, 3, 4]]] });
+  expect(planDataMove({ primary: free.primary, secondary: free.secondary, objects: parseLinkMap(free.map) }).objects.map((object) => object.symbol)).toEqual(["a", "b"]);
+});

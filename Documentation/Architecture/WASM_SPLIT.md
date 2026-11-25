@@ -113,7 +113,9 @@ What decides that an object moves, all of it from the two modules and the linker
   of the Showcase or of a large application hits one). Variables stay.
 - **Who names it.** An object stays when the first module's code names an address inside it (an `i32.const`, or the offset of a load or
   a store, where LLVM folds a global's address), when a global's initializer does, when an object that stays holds a word that looks like
-  its address (read at every byte offset, so a packed pointer counts), or when something names the address one past its end. A string
+  its address (read at every byte offset, so a packed pointer counts), or when something names the address one past its end (which is
+  also the start of the object that touches it). Initialized bytes the map gives to no object stay in the first module, and a word in
+  them that looks like an address keeps what it points at. A string
   literal is also named by an address up to 24 bytes before it: a `String` holds the address of its native object, the first character
   less a 20-byte header (`_StringObject.nativeBias` on a 32-bit target). Objects the linker made share bytes (a string that is the tail of
   another) are one object. An object moves when the second module's code names it, or when only moving objects point at it, unless an
@@ -125,7 +127,8 @@ What decides that an object moves, all of it from the two modules and the linker
 - **The build checks it.** The analysis reads addresses out of code, and an address can be built in ways no scan sees (the string bias
   above was one: the first version moved a string the first screen then read as zeros). So the move is run before it ships: the first
   module, with the data moved, is instrumented with Binaryen's `--instrument-memory` (an import is called for every load and store),
-  and the first screen runs at each viewport of the profile run; every access to a moved range before `app-rest.wasm` is instantiated
+  (`--llvm-memory-copy-fill-lowering` runs first, so a bulk copy is seen as the loads it is) and the first screen runs at each viewport
+  of the profile run; every access that touches a moved range, whatever bytes it starts and ends at, before `app-rest.wasm` is instantiated
   fails the check, and then the data stays in `app.wasm` and the build says what was touched. The check covers the first screen the
   profile run sees, as the split does, so it is a net under the analysis and not a proof for every later interaction; the analysis
   is the rule, and it errs towards keeping data.
