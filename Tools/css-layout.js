@@ -984,6 +984,7 @@ export class CssLayout {
    * runs after every pass (a patch brings cells, a resize of the window changes the columns) and when the grid's own size changes (a
    * pane that moves). Aligning moves a cell inside its track and changes no track, so it cannot start another measure. */
   alignGridColumns() {
+    if (this.disposed) return;
     const view = this.document.defaultView;
     for (const grid of this.columned) {
       const node = this.cache.get(grid);
@@ -1005,6 +1006,14 @@ export class CssLayout {
         }
       }
     }
+  }
+  /** The host that owns this mapper is disposed while its DOM stays mounted: the grids' observer stops, so a later resize neither runs
+   * this mapper nor keeps its analysis alive. The cells keep the alignment they have. */
+  dispose() {
+    this.disposed = true;
+    this.columnObserver?.disconnect();
+    this.columnObserver = null;
+    this.columned.clear();
   }
   /** `grid` stopped being aligned by column (it left the page, was released, or its items changed): its cells fall back to the alignment
    * their blocks hold. */

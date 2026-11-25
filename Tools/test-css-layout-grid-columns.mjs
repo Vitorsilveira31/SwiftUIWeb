@@ -127,6 +127,19 @@ try {
   assert.equal(moved.columns, 3);
   for (const cell of moved.cells) assert.ok(cell.along == null || near(cell.along, cell.column === 0 ? 0 : 1), `a grid that changed size: cell ${cell.index} in column ${cell.column} at ${cell.along}`);
 
+  // The host is disposed while its DOM stays mounted: the grid's observer is disconnected, so a later resize leaves the cells as they are
+  // (cell 3 is in the last of four columns, trailing, and would be in the first of three, leading) and the mapper holds no grid.
+  await lay({ tracks: [fix(90, 0, 0.5), adapt(120, 1, 0.5)].join("|") });
+  const disposed = await page.evaluate(async () => {
+    const cell = document.getElementById("grid").children[3], before = cell.style.getPropertyValue("--cl-col-x");
+    window.mapper.dispose();
+    document.getElementById("root").style.setProperty("width", "400px", "important");
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    window.mapper.alignGridColumns();
+    return { before, after: cell.style.getPropertyValue("--cl-col-x"), columns: getComputedStyle(document.getElementById("grid")).gridTemplateColumns.split(" ").length, held: window.mapper.columned.size };
+  });
+  assert.deepEqual(disposed, { before: "flex-end", after: "flex-end", columns: 3, held: 0 }, `a disposed mapper leaves the cells alone: ${JSON.stringify(disposed)}`);
+
   // Items that align the same way, or none that is adaptive: the alignment stays in the block, and nothing is observed or written.
   for (const tracks of [[fix(90, 1, 0.5), adapt(120, 1, 0.5)], [fix(90, "", ""), adapt(120, "", "")], [fix(90, 0, 0.5), flex(1, 0.5), flex(1, 0.5)]]) {
     const result = await lay({ tracks: tracks.join("|") });

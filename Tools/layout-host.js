@@ -326,5 +326,5 @@ export class SemanticLayoutHost {
     try{this.update();}catch(e){this.onError(e);}
   }
   get pending(){return this.scheduled!==0;}
-  dispose(){this.disposed=true;this.abort.abort();this.documentScroll.dispose();this.window.clearTimeout(this.resizeTimer);this.document.documentElement.removeAttribute(RESIZING_ATTRIBUTE);this.mutations.disconnect();this.globals.disconnect();if(this.scheduled)this.window.cancelAnimationFrame(this.scheduled);}
+  dispose(){this.disposed=true;this.abort.abort();this.documentScroll.dispose();this.window.clearTimeout(this.resizeTimer);this.document.documentElement.removeAttribute(RESIZING_ATTRIBUTE);this.mutations.disconnect();this.globals.disconnect();this.css.dispose?.();if(this.scheduled)this.window.cancelAnimationFrame(this.scheduled);}
 }
