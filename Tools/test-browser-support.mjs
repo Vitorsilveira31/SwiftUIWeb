@@ -5,8 +5,10 @@ import assert from "node:assert/strict";
 import { launch, runSuite } from "./browser-test-support.mjs";
 
 await runSuite(async () => {
+  // Bound to 127.0.0.1, where the page is opened (see Tools/test-check-dictionary-host.mjs for what the wildcard bind risks).
   const server = Bun.serve({
     port: 0,
+    hostname: "127.0.0.1",
     fetch: (request) => new URL(request.url).pathname === "/s.js"
       ? new Response('try { new Function("return 1")(); window.pageEval = "allowed"; } catch { window.pageEval = "refused"; }', { headers: { "content-type": "text/javascript" } })
       : new Response(

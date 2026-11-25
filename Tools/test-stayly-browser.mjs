@@ -42,20 +42,51 @@ async function checkSearch(page) {
   assert.match(await page.evaluate(() => document.body.innerText), /total for 2 nights/);
 }
 
+// What the results show: how many stays they say they found, the first card's title and every card's rating. Each filter below waits
+// for the list to show its result before the next step: the stay page is opened by pressing the first card, and a press that lands
+// while the Worker is still replacing the list (29 stays with a rating of 4.5 and up, then all 100) is released on a card that
+// is not the one it began on, so the browser sends the click to their common ancestor and nothing opens.
+const results = (page) => page.evaluate(() => {
+  const text = document.body.innerText;
+  const card = [...document.querySelectorAll("button")].find((button) => button.textContent.includes("per night"));
+  return { found: Number(/(\d+) stays? found/.exec(text)?.[1] ?? 0), first: card?.innerText.split("\n")[0] ?? "", ratings: [...text.matchAll(/^(\d\.\d)$/gm)].map((match) => Number(match[1])) };
+});
+
 async function checkFilters(page) {
   await page.getByText("Price per night").waitFor({ timeout: 10_000 });
+  const all = await results(page);
+  assert.ok(all.found >= 3 && all.first, `the results show ${JSON.stringify(all)}`);
   const sort = page.getByRole("combobox", { name: "Sort by" });
   await sort.selectOption({ label: "Price: high to low" });
   await page.waitForFunction(() => { const values = [...document.body.innerText.matchAll(/\$(\d+) per night/g)].map((match) => Number(match[1])); return values.length >= 3 && values.every((value, index) => index === 0 || values[index - 1] >= value); }, undefined, { timeout: 10_000 });
   await sort.selectOption({ label: "Recommended" });
+  await page.waitForFunction((first) => [...document.querySelectorAll("button")].find((button) => button.textContent.includes("per night"))?.innerText.split("\n")[0] === first, all.first, { timeout: 10_000 });
   await page.getByRole("combobox", { name: "Minimum rating" }).selectOption({ label: "4.5 and up" });
-  await page.waitForFunction(() => !/\b[34]\.\d\b/.test(document.body.innerText.split("Minimum rating")[0] ?? ""), undefined, { timeout: 5_000 }).catch(() => {});
+  await page.waitForFunction((total) => {
+    const text = document.body.innerText;
+    const found = Number(/(\d+) stays? found/.exec(text)?.[1] ?? 0), ratings = [...text.matchAll(/^(\d\.\d)$/gm)].map((match) => Number(match[1]));
+    return found > 0 && found < total && ratings.length > 0 && ratings.every((rating) => rating >= 4.5);
+  }, all.found, { timeout: 10_000 });
   await page.getByRole("combobox", { name: "Minimum rating" }).selectOption({ label: "Any rating" });
+  await page.waitForFunction(({ found, first }) => {
+    const card = [...document.querySelectorAll("button")].find((button) => button.textContent.includes("per night"));
+    return Number(/(\d+) stays? found/.exec(document.body.innerText)?.[1] ?? 0) === found && card?.innerText.split("\n")[0] === first;
+  }, { found: all.found, first: all.first }, { timeout: 10_000 });
 }
 
 async function checkDetail(page) {
+  // What the pointer did, for the failure when the stay page does not open: a press and a release on different elements show here.
+  await page.evaluate(() => {
+    window.__pointer = [];
+    const numbers = new WeakMap();
+    let last = 0;
+    const name = (node) => { if (!numbers.has(node)) numbers.set(node, ++last); return `${node.tagName.toLowerCase()} ${numbers.get(node)}${node.isConnected ? "" : " (removed)"}`; };
+    for (const type of ["pointerdown", "pointerup", "click"]) document.addEventListener(type, (event) => window.__pointer.push(`${type} on ${name(event.target)}`), true);
+  });
   await page.locator("button").filter({ hasText: "per night" }).first().click();
-  await page.getByText("About this stay").waitFor({ timeout: 30_000 });
+  await page.getByText("About this stay").waitFor({ timeout: 30_000 }).catch(async (error) => {
+    throw new Error(`the stay page did not open; the pointer: ${(await page.evaluate(() => window.__pointer)).join(", ")}; the list shows ${JSON.stringify(await results(page))}`, { cause: error });
+  });
   await page.getByText(/^Hosted by /).waitFor({ timeout: 10_000 });
   await page.waitForFunction(() => [...document.querySelectorAll("img")].filter((image) => image.getBoundingClientRect().width > 0).length >= 3, undefined, { timeout: 30_000 });
   await page.getByRole("button", { name: /Show photo/ }).nth(1).click();

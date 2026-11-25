@@ -384,6 +384,26 @@ await bootFailure(w => w.onmessage({ data: { t: "error", message: "Embedded brow
   const answered = api.embedded_browser_calls_sent();
   coalescingWorker.onmessage({ data: { t: "ack", calls: answered } });
   assert.equal(api.embedded_browser_calls_reflected(), answered);
+
+  // A host that waits for the answer to its measurement takes `calls_sent_flushed`, not `calls_sent`: while Swift is behind the
+  // measurement is held, `calls_sent` does not count it, and Swift answering the call before it would read as its answer
+  // (a sheet's panel was shown at its unmeasured size when the load kept Swift a call behind).
+  mark = posted.length;
+  api.embedded_browser_dispatch(15, 1);
+  const behindBy = api.embedded_browser_calls_sent();
+  api.embedded_browser_batch_begin();
+  named(12, "geometryChange", "84");
+  api.embedded_browser_batch_end();
+  assert.deepEqual(sent(mark), ["dispatch"], "the measurement is held behind the call Swift is running");
+  assert.equal(api.embedded_browser_calls_sent(), behindBy, "and calls_sent does not count it");
+  const awaited = api.embedded_browser_calls_sent_flushed();
+  assert.deepEqual(sent(mark), ["dispatch", "dispatch_named:12:geometryChange84"], "the flush sends it now, after the call it waits behind");
+  assert.equal(awaited, behindBy + 1, "the count taken includes it");
+  coalescingWorker.onmessage({ data: { t: "ack", calls: behindBy } });
+  assert.ok(api.embedded_browser_calls_reflected() < awaited, "Swift's answer to the call before it is not an answer to the measurement");
+  coalescingWorker.onmessage({ data: { t: "ack", calls: awaited } });
+  assert.ok(api.embedded_browser_calls_reflected() >= awaited, "its own answer is");
+  assert.equal(api.embedded_browser_calls_sent_flushed(), awaited, "with nothing held the count is calls_sent");
   coalesced.dispose();
 }
 

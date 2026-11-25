@@ -286,7 +286,7 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   const swui = instance.exports;
   const required = ['start','dispatch','event_value_reset','event_value_push','html_length','html_byte'];
   const api = Object.fromEntries(required.map(name => [name, swui['embedded_browser_' + name]]));
-  for (const name of ['calls_sent','calls_reflected','dispatch_named','timeline_tick','batch_begin','batch_end','lazy_collection_count','lazy_item_count','lazy_estimated_extent','lazy_window','webmount_reconcile','viewport','scroll_ack','scroll_prepare','history_ack','history_restore','history_location','secure_value','secure_value_reset','secure_value_byte','secure_value_pointer','secure_value_bytes','secure_ids_length','event_value_alloc','event_value_commit','event_value_write','publish_seq','publish_ack','publish_full']) api[name] = swui['embedded_browser_' + name];
+  for (const name of ['calls_sent','calls_sent_flushed','calls_reflected','dispatch_named','timeline_tick','batch_begin','batch_end','lazy_collection_count','lazy_item_count','lazy_estimated_extent','lazy_window','webmount_reconcile','viewport','scroll_ack','scroll_prepare','history_ack','history_restore','history_location','secure_value','secure_value_reset','secure_value_byte','secure_value_pointer','secure_value_bytes','secure_ids_length','event_value_alloc','event_value_commit','event_value_write','publish_seq','publish_ack','publish_full']) api[name] = swui['embedded_browser_' + name];
   api.fiber_metric=swui.embedded_browser_fiber_metric;
   if (required.some(name => typeof api[name] !== 'function')) throw new Error('SwiftUIWeb Embedded interactive exports missing');
   const encoder = new TextEncoder(), decoder = new TextDecoder('utf-8', {fatal: true});
@@ -1821,18 +1821,32 @@ export function mountEmbeddedBrowser(instance, options = {}) {
   // what it moved after their delivery ("ResizeObserver loop completed with undelivered notifications").
   // From a Worker the answer arrives later: in a presentation (a sheet, a dialog, an alert) the piece the commit inserted
   // around such a view stays hidden (`data-measuring`, which keeps its layout box, so the measurement holds) until Swift
-  // has answered the measurement calls, at most `MEASURING_LIMIT_MS`. Elsewhere it shows a frame before its answer:
+  // has answered the measurement calls. Elsewhere it shows a frame before its answer:
   // content a screen brings on (a tab's lazy rows, the board's columns) arrives in the commits after the one that shows
   // the screen, and hiding it showed an empty screen for up to three frames.
-  const MEASURING_LIMIT_MS = 100, MEASURING = 'data-measuring', PRESENTATION = '.presentation-root,.presentation-content';
+  // What ends the wait when no answer is coming is not a time from the commit: the page's own delay before it takes the
+  // measurement (a ResizeObserver delivery after the next layout) is not Swift being slow, and a main thread running 40 to 80
+  // times slower than this machine's used 100 to 150 ms of it, so a piece was shown at its unmeasured size before its
+  // measurement had left the page. Two limits, each in what it counts:
+  //  - the measurement never reaches Swift (a view with no size is never reported): `MEASURING_FRAMES` rendering updates, the
+  //    unit a delivery comes in, after the commit;
+  //  - Swift does not answer it: `MEASURING_LIMIT_MS` after it was sent. This is a net for an answer that is lost, not a pace:
+  //    the answer took 1 ms (5 ms with the page's CPU 10 times slower, 55 ms at 40, 123 ms at 80), and a piece shown before it is
+  //    wrong for as long as Swift takes (Tools/test-geometry-browser.mjs runs the check with the CPU throttled).
+  const MEASURING_LIMIT_MS = 1000, MEASURING_FRAMES = 6, MEASURING = 'data-measuring', PRESENTATION = '.presentation-root,.presentation-content';
   const inPresentation = piece => piece.closest(PRESENTATION) !== null || piece.querySelector(PRESENTATION) !== null;
   const measuring = new Set();
   // `measuringCall` is known once the measurements were sent: the ResizeObserver delivers them after the next layout, which
-  // can come after the next animation frame (a commit that ran outside one).
-  let measuringCall = 0, measuringSent = false, measuringSince = 0, measuringFrame = 0;
+  // can come after the next animation frame (a commit that ran outside one). `measuringSince` is when the first was sent.
+  let measuringCall = 0, measuringSent = false, measuringSince = 0, measuringFrames = 0, measuringFrame = 0;
   const swiftInWorker = () => typeof instance.htmlBytes === 'function' && instance.migrated !== true;
   function answerMeasurements() {
-    if (!disposed && !failed && measuring.size && swiftInWorker()) { measuringCall = Number(api.calls_sent?.() || 0); measuringSent = true; }
+    // The count includes the measurements the client still holds because Swift is behind: they are what the answer is for.
+    if (!disposed && !failed && measuring.size && swiftInWorker()) {
+      measuringCall = Number((api.calls_sent_flushed ?? api.calls_sent)?.() || 0);
+      if (!measuringSent) measuringSince = performance.now();
+      measuringSent = true;
+    }
   }
   function syncGeometryReaders() {
     const added = geometry.sync();
@@ -1861,14 +1875,16 @@ export function mountEmbeddedBrowser(instance, options = {}) {
       measuring.add(piece);
     }
     if (!measuring.size) return;
-    measuringSent = false; measuringSince = performance.now();
+    measuringSent = false; measuringFrames = 0;
     if (!measuringFrame) measuringFrame = window.requestAnimationFrame(revealMeasured);
   }
   function revealMeasured() {
     measuringFrame = 0;
     if (disposed || !measuring.size) return;
+    measuringFrames++;
     const answered = measuringSent && Number(api.calls_reflected?.() ?? Infinity) >= measuringCall;
-    if (!answered && performance.now() - measuringSince < MEASURING_LIMIT_MS) { measuringFrame = window.requestAnimationFrame(revealMeasured); return; }
+    const lost = measuringSent ? performance.now() - measuringSince >= MEASURING_LIMIT_MS : measuringFrames >= MEASURING_FRAMES;
+    if (!answered && !lost) { measuringFrame = window.requestAnimationFrame(revealMeasured); return; }
     for (const piece of measuring) piece.removeAttribute(MEASURING);
     measuring.clear();
   }
