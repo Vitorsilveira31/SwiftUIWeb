@@ -341,12 +341,16 @@ async function profileOnce(browser, base, route, viewport) {
  * Runs the first screen of the bundle `checked` (a copy whose first module is instrumented and carries `dataHook` in its scripts) at
  * one viewport and returns the accesses to the moved data that happened before the second module was instantiated.
  */
-async function dataReadsOnce(browser, base, route, viewport) {
+export async function dataReadsOnce(browser, base, route, viewport) {
   const context = await browser.newContext({ viewport, deviceScaleFactor: 1 });
   try {
     const page = await context.newPage();
     const errors = [];
     page.on("pageerror", (error) => errors.push(String(error)));
+    // A Worker whose stack runs out moves the app to the main thread and is terminated, with what its hook recorded: a check
+    // that lost it cannot say the first screen touched nothing.
+    let workerEnded = false;
+    page.on("worker", (worker) => worker.on("close", () => { workerEnded = true; }));
     await page.goto(`${base}${route}`, { waitUntil: "domcontentloaded" });
     await settle(page);
     // The second module arrives behind the first screen; what the first module touches until then is what counts.
@@ -359,6 +363,7 @@ async function dataReadsOnce(browser, base, route, viewport) {
     if (errors.length) throw new Error(`the instrumented bundle reported page errors: ${errors.join("; ")}`);
     const reads = [];
     for (const scope of [...page.workers(), page]) reads.push(...(await scope.evaluate(() => globalThis.__swiftuiwebDataReads ?? []).catch(() => [])));
+    if (workerEnded) reads.push("the Worker ended during the run, with what it had recorded");
     return reads;
   } finally {
     await context.close();

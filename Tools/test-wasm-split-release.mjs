@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { cacheKey, dataHook, FELL_BACK, FEATURE_FLAGS, instrumentation, planLayout, readTargetFeatures, splitBundle, whyNotOwnTable, withoutTargetFeatures } from "./wasm-split-release.mjs";
+import { cacheKey, dataHook, dataReadsOnce, FELL_BACK, FEATURE_FLAGS, instrumentation, planLayout, readTargetFeatures, splitBundle, whyNotOwnTable, withoutTargetFeatures } from "./wasm-split-release.mjs";
 
 const SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), "wasm-split-release.mjs");
 const VIEWPORTS = [{ width: 1280, height: 800 }];
@@ -210,4 +210,24 @@ test("the check of a data move notes an access that touches a moved range, where
 
 test("the module is instrumented after its bulk copies and fills became loops the instrumentation can see", () => {
   expect(instrumentation(["--mvp-features", "--enable-bulk-memory"])).toEqual(["--mvp-features", "--enable-bulk-memory", "--llvm-memory-copy-fill-lowering", "--instrument-memory"]);
+});
+
+test("the check of a data move refuses a run in which the Worker ended, whose record is gone", async () => {
+  // A page that never reports a Worker, and one whose Worker closes while the first screen is up.
+  const run = async (closing) => {
+    const handlers = {};
+    const worker = { on: (event, handler) => { handlers[`worker-${event}`] = handler; } };
+    const page = {
+      on: (event, handler) => { handlers[event] = handler; },
+      goto: async () => { if (closing) { handlers.worker?.(worker); handlers["worker-close"]?.(); } },
+      waitForSelector: async () => {},
+      workers: () => [],
+      // The mark of the second module is there, and nothing was recorded.
+      evaluate: async (callback) => (String(callback).includes("getEntriesByName") ? 1 : String(callback).includes("__swiftuiwebDataReads") ? [] : undefined),
+    };
+    const browser = { newContext: async () => ({ newPage: async () => page, close: async () => {} }) };
+    return dataReadsOnce(browser, "http://127.0.0.1:1", "/", { width: 1, height: 1 });
+  };
+  expect(await run(false)).toEqual([]);
+  expect(await run(true)).toEqual(["the Worker ended during the run, with what it had recorded"]);
 });

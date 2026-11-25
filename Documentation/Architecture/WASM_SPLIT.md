@@ -129,7 +129,7 @@ What decides that an object moves, all of it from the two modules and the linker
   module, with the data moved, is instrumented with Binaryen's `--instrument-memory` (an import is called for every load and store),
   (`--llvm-memory-copy-fill-lowering` runs first, so a bulk copy is seen as the loads it is) and the first screen runs at each viewport
   of the profile run; every access that touches a moved range, whatever bytes it starts and ends at, before `app-rest.wasm` is instantiated
-  fails the check, and then the data stays in `app.wasm` and the build says what was touched. The check covers the first screen the
+  fails the check (so does a run in which the Worker ended, because the app moved to the main thread and what the Worker had recorded is gone), and then the data stays in `app.wasm` and the build says what was touched. The check covers the first screen the
   profile run sees, as the split does, so it is a net under the analysis and not a proof for every later interaction; the analysis
   is the rule, and it errs towards keeping data.
 
