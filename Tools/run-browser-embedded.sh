@@ -294,8 +294,8 @@ else
   if [[ -n "$sync_workspace" ]]; then
     # A sync run's summary counts the workspace files it changed (`workspaceChanges`); the build below reads it.
     # A lowering that fails or is interrupted can have written some files before it stopped, and the next run, with the
-    # source fixed, then writes nothing and reports no change. The marker stays until a lowering finishes, so that next
-    # run builds instead of trusting a stamp that no longer describes the tree.
+    # source fixed, then writes nothing and reports no change. The marker stays until a build of this tree passes, so the
+    # next run of a run that stopped earlier builds instead of trusting a stamp or a count that no longer describe the tree.
     lowering_marker="$build_cache/lowering-in-progress"
     lowering_interrupted=0; [[ ! -e "$lowering_marker" ]] || lowering_interrupted=1
     : > "$lowering_marker"
@@ -304,8 +304,6 @@ else
     [[ "$lowering_interrupted" == 0 ]] || tree_changes=""
     # As after a sync below: a tree the last build did not see drops its stamp now, not only when the build starts.
     [[ "$tree_changes" == 0 ]] || rm -f "$build_cache/last-build.stamp"
-    # Only now: a run stopped before the stamp is dropped must still find the marker.
-    rm -f "$lowering_marker"
   else
     "$LOWERER" "${lower_args[@]}"
   fi
@@ -525,8 +523,9 @@ if grep -E 'warning: .*(Sendable|actor-isolated|nonisolated|data race)' "$tmp/sw
 fi
 # The stamp is written after the concurrency check, so a build with warnings or data-race errors never becomes one that is skipped.
 if [[ "$dev_tree" == 1 && "$skip_swift_build" == 0 && ! -s "$tmp/concurrency-warnings.log" ]]; then printf '%s\n' "$stamp_text" > "$stamp"; fi
-# The build passed (or had nothing to do): the tree it saw is the whole synced tree.
+# The build passed (or had nothing to do): the tree it saw is the whole lowered and synced tree.
 [[ -z "${sync_marker:-}" ]] || rm -f "$sync_marker"
+[[ -z "${lowering_marker:-}" ]] || rm -f "$lowering_marker"
 artifact="$(find "$scratch" -path '*Products*' -name "$product.wasm" -print | head -1)"; [[ -f "$artifact" ]] || { echo "Could not locate $product.wasm" >&2; exit 1; }
 # A save of Swift sources that the direct build compiled changes one file of the bundle, app.wasm, as long as the
 # application uses the same framework features as before (the reachability manifest decides which host files and icons the
