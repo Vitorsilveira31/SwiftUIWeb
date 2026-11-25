@@ -100,3 +100,19 @@ test("a consumer without local packages leaves the bundle as it is", () => {
     assert.equal(existsSync(join(root, "bundle", HEAD_FILE)), false);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test("a remote browser package's checkout ships its files and head fragment after the local packages, once", () => {
+  const t = tree();
+  try {
+    const remote = join(t.root, "checkouts", "skip-sentry");
+    manifest(remote, []);
+    write(join(remote, "Web", "Resources", "sentry", "bundle.js"), "sentry");
+    write(join(remote, "Web", "Resources", "head.html"), '<script defer src="./sentry/bundle.js"></script>');
+    copyPackageResources(t.app, t.bundle, () => {}, [remote, t.lib]);
+    assert.equal(readFileSync(join(t.bundle, "sentry", "bundle.js"), "utf8"), "sentry");
+    const heads = readFileSync(join(t.bundle, HEAD_FILE), "utf8");
+    assert.ok(heads.indexOf("sdk/sdk.js") < heads.indexOf("sentry/bundle.js"), heads);
+    assert.match(heads, /<!-- skip-sentry \(its Web\/Resources\/head\.html\) -->/);
+    assert.equal(heads.match(/lib-service\.js/g).length, 1, "a package listed twice is copied once");
+  } finally { t.cleanup(); }
+});

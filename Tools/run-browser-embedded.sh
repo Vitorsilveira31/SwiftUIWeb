@@ -143,6 +143,10 @@ state="$BUILD_ROOT/embedded-source-lowering/state.json"; [[ ! -f "$state" ]] || 
 tmp="$(mktemp -d "$BUILD_ROOT/.embedded-browser.XXXXXX")"
 workspace="$tmp/workspace"; scratch="$tmp/scratch"
 framework_workspace=""
+# The checkouts of the remote browser packages the staged build lowered (their browser resources go into the bundle too).
+remote_checkouts=()
+# Where the remote packages are resolved and copied when there is no build cache; removed after the bundle is made.
+remote_work=""
 server_pid=""
 mock_pid=""
 restore_external_sources() {
@@ -162,6 +166,7 @@ cleanup(){
     kill -TERM "$mock_pid" 2>/dev/null || true
     wait "$mock_pid" 2>/dev/null || true
   fi
+  [[ -z "$remote_work" ]] || rm -rf "$remote_work"
   restore_external_sources
   if [[ -n "$lock_waiter_pid" ]]; then kill -TERM "$lock_waiter_pid" 2>/dev/null || true; fi
   release_build_cache
@@ -244,12 +249,69 @@ if [[ "$EXTERNAL_PACKAGE" == 1 ]]; then
       "$LOWERER" --apply ${SWIFTUIWEB_LIVE_LITERALS:+--live-literals} ${development_exports:+"$development_exports"} --root "$dependency_source" --product "$product" --lower-codable --workspace "$dependency_workspace" --report "$LOWERING_REPORT_ROOT/dependency-$dependency_name-report.json" ${lowering_cache:+--cache "$lowering_cache/dependency-$dependency_name"} ${stable_source_locations:+"$stable_source_locations"} ${full_swift:+"$full_swift"} ${application_export_args[@]+"${application_export_args[@]}"}
       dependency_workspaces="$dependency_workspaces$dependency_workspace"$'\n'
     done < <(bun Tools/local-package-dependencies.mjs "$PACKAGE_ROOT" "$workspace" "$staging_root" "$ROOT")
+    # Remote browser packages: a URL dependency that itself depends on SwiftUIWeb (a library with a browser target) has to
+    # be lowered like a local one, or SwiftPM would build its unlowered sources. SwiftPM resolves the staged graph with the
+    # browser build's environment (its checkouts are kept in the build cache, so a later build fetches nothing new),
+    # Tools/remote-package-dependencies.mjs picks those packages, each checkout is lowered into STAGING/remote/<name>, and
+    # every staged manifest's declaration of its URL becomes a path dependency on that copy. A remote package that only
+    # leads to one is staged unlowered ("copy"), so its manifest is rewritten too. Nothing is resolved when no staged
+    # manifest declares a URL other than SwiftUIWeb's. The work files live outside $tmp, which becomes the bundle.
+    # Every manifest SwiftPM may pick in a staged package: Package.swift and the version-specific Package@swift-*.swift.
+    package_manifests() { local manifest; for manifest in "$1"/Package.swift "$1"/Package@swift-*.swift; do [[ ! -f "$manifest" ]] || printf '%s\n' "$manifest"; done; }
+    remote_manifests=()
+    while IFS= read -r staged_manifest; do remote_manifests+=("$staged_manifest"); done < <(package_manifests "$workspace")
+    while IFS= read -r dependency_workspace; do
+      [[ -z "$dependency_workspace" ]] && continue
+      while IFS= read -r staged_manifest; do remote_manifests+=("$staged_manifest"); done < <(package_manifests "$dependency_workspace")
+    done <<< "${dependency_workspaces:-}"
+    if bun Tools/remote-package-dependencies.mjs --declares-url "${remote_manifests[@]}"; then
+      # The consumer's and the local packages' SwiftUIWeb declarations point at the lowered framework before SwiftPM
+      # resolves, so that root path dependency wins over the version a remote library asks for; the remote packages' own
+      # declarations are rewritten below, once they are staged.
+      for staged_manifest in ${remote_manifests[@]+"${remote_manifests[@]}"}; do
+        bun Tools/framework-url-dependency.mjs rewrite "$staged_manifest" "$framework_workspace" >/dev/null
+      done
+      remote_work="$(mktemp -d "$BUILD_ROOT/.embedded-remote.XXXXXX")"
+      resolve_scratch="${build_cache:+$build_cache/resolve}"; [[ -n "$resolve_scratch" ]] || resolve_scratch="$remote_work/resolve"
+      if ! "$swift" package --package-path "$workspace" --scratch-path "$resolve_scratch" show-dependencies --format json > "$remote_work/dependencies.json" 2> "$remote_work/resolve.log"; then
+        cat "$remote_work/resolve.log" >&2
+        echo "error: SwiftPM could not resolve the dependencies of the staged package $workspace for the browser build." >&2
+        exit 1
+      fi
+      bun Tools/remote-package-dependencies.mjs "$remote_work/dependencies.json" "$staging_root" > "$remote_work/remote-packages.tsv"
+      remote_lowered=0
+      while IFS=$'\t' read -r remote_url remote_checkout remote_workspace remote_mode; do
+        [[ -n "$remote_url" ]] || continue
+        remote_name="$(basename "$remote_workspace")"
+        # SwiftPM keeps its checkouts read-only, and the lowerer keeps the modes of the files it copies: work on a writable
+        # copy, so the staged files (and the build cache's tree after them) can be rewritten.
+        remote_source="$remote_work/sources/$remote_name"
+        mkdir -p "$remote_work/sources"; cp -R "$remote_checkout" "$remote_source"; chmod -R u+w "$remote_source"
+        if [[ "$remote_mode" == copy ]]; then
+          rm -rf "$remote_source/.git" "$remote_source/.build"; mkdir -p "$(dirname "$remote_workspace")"; rm -rf "$remote_workspace"
+          mv "$remote_source" "$remote_workspace"
+        else
+          "$LOWERER" --apply ${SWIFTUIWEB_LIVE_LITERALS:+--live-literals} ${development_exports:+"$development_exports"} --root "$remote_source" --product "$product" --lower-codable --workspace "$remote_workspace" --report "$LOWERING_REPORT_ROOT/remote-$remote_name-report.json" ${lowering_cache:+--cache "$lowering_cache/remote-$remote_name"} ${stable_source_locations:+"$stable_source_locations"} ${full_swift:+"$full_swift"} ${application_export_args[@]+"${application_export_args[@]}"}
+        fi
+        while IFS= read -r staged_manifest; do remote_manifests+=("$staged_manifest"); done < <(package_manifests "$remote_workspace")
+        [[ "$remote_mode" != copy ]] || continue
+        dependency_workspaces="$dependency_workspaces$remote_workspace"$'\n'
+        remote_checkouts+=("$remote_checkout")
+        remote_lowered=$((remote_lowered + 1))
+      done < "$remote_work/remote-packages.tsv"
+      if [[ -s "$remote_work/remote-packages.tsv" ]]; then
+        bun Tools/remote-package-dependencies.mjs --rewrite "$remote_work/remote-packages.tsv" "${remote_manifests[@]}" >/dev/null
+        echo "Remote browser packages lowered: $remote_lowered"
+      fi
+    fi
     # A manifest that names SwiftUIWeb by URL (`.package(url: ".../swiftuiweb.git", from: "0.1.0")`) would make SwiftPM fetch
     # the original framework; in the staged copies it points at the lowered framework instead, as a path dependency.
-    bun Tools/framework-url-dependency.mjs rewrite "$workspace/Package.swift" "$framework_workspace" >/dev/null
-    while IFS= read -r dependency_workspace; do
-      [[ -z "$dependency_workspace" ]] || bun Tools/framework-url-dependency.mjs rewrite "$dependency_workspace/Package.swift" "$framework_workspace" >/dev/null
-    done <<< "${dependency_workspaces:-}"
+    while IFS= read -r staged_workspace; do
+      [[ -n "$staged_workspace" ]] || continue
+      while IFS= read -r staged_manifest; do
+        bun Tools/framework-url-dependency.mjs rewrite "$staged_manifest" "$framework_workspace" >/dev/null
+      done < <(package_manifests "$staged_workspace")
+    done <<< "$workspace"$'\n'"${dependency_workspaces:-}"
     # Debug development loop: the application's library targets get the framework's DeferredCodeGen model too, in the
     # staged manifests only (Tools/dev-consumer-manifest.mjs). SWIFTUIWEB_CONSUMER_CODEGEN=0 leaves them as they are.
     if [[ -n "$export_interface" && "${SWIFTUIWEB_CONSUMER_CODEGEN:-1}" != 0 ]]; then
@@ -622,6 +684,8 @@ done
 rm -rf "$tmp/staging"
 final_tmp="$tmp"
 final="$BUNDLE_ROOT/$product"; rm -rf "$final"; mkdir -p "$(dirname "$final")"; mv "$tmp" "$final"; trap - EXIT
+# The remote work folder stays until the package resources below are copied, and goes if that step fails too.
+[[ -z "$remote_work" ]] || trap 'rm -rf "$remote_work"' EXIT
 # The manifest this bundle was made from (read by the app.wasm-only path above).
 [[ -z "${SWIFTUIWEB_DEV_CACHE:-}" ]] || sed "s|${final_tmp##*/}|.embedded-browser|g" "$manifest" > "$bundle_manifest"
 # Consumer packages can keep browser-only static files in a package-level
@@ -634,7 +698,8 @@ final="$BUNDLE_ROOT/$product"; rm -rf "$final"; mkdir -p "$(dirname "$final")"; 
 # The local packages the consumer depends on can ship browser files of their own in `Web/Resources/` (the script of a
 # page service, a JavaScript SDK): they are copied first, and their head.html fragments go before the application's
 # (Tools/package-web-resources.mjs), so an application never keeps copies of a library's files.
-[[ "$EXTERNAL_PACKAGE" != 1 ]] || bun "$ROOT/Tools/package-web-resources.mjs" "$PACKAGE_ROOT" "$final"
+[[ "$EXTERNAL_PACKAGE" != 1 ]] || bun "$ROOT/Tools/package-web-resources.mjs" "$PACKAGE_ROOT" "$final" ${remote_checkouts[@]+"${remote_checkouts[@]}"}
+[[ -z "$remote_work" ]] || { rm -rf "$remote_work"; trap - EXIT; }
 if [[ "$EXTERNAL_PACKAGE" == 1 ]]; then
   resources_dir="${SWIFTUIWEB_RESOURCES:-}"
   if [[ -z "$resources_dir" ]]; then
