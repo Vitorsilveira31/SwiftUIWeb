@@ -979,6 +979,35 @@ struct CorePublicViewContractTests {
   }
 
   @Test
+  func hoverEffectDisabledTurnsOffAPlainControlsShapeHighlight() {
+    // `.hoverEffectDisabled()` on a plain button or link, or around it, marks the control element itself so the
+    // highlight it takes from its label's shape is not painted, as it turns off the pointer effect on iPadOS. Without it
+    // the control is not marked and keeps the highlight.
+    func openingTag(_ name: String, in html: String) -> String {
+      guard let start = html.range(of: "<\(name) ") else { return "" }
+      return String(html[start.lowerBound...].prefix { $0 != ">" })
+    }
+    let onButton = StaticHTMLFiberRenderer().render(
+      Button(action: {}) { Text("Abrir").contentShape(Rectangle()) }.buttonStyle(.plain).hoverEffectDisabled()
+    )
+    #expect(openingTag("button", in: onButton).contains("data-visible-shape=\"true\""))
+    #expect(openingTag("button", in: onButton).contains("data-hover-disabled=\"true\""))
+    let around = StaticHTMLFiberRenderer().render(
+      VStack { Button(action: {}) { Text("Abrir").contentShape(Rectangle()) }.buttonStyle(.plain) }.hoverEffectDisabled()
+    )
+    #expect(openingTag("button", in: around).contains("data-hover-disabled=\"true\""))
+    let link = StaticHTMLFiberRenderer().render(NavigationStack {
+      VStack { NavigationLink(value: 1) { Text("Editar perfil").contentShape(Rectangle()) }.buttonStyle(.plain) }
+        .hoverEffectDisabled()
+    })
+    #expect(openingTag("a", in: link).contains("data-hover-disabled=\"true\""))
+    let enabled = StaticHTMLFiberRenderer().render(
+      Button(action: {}) { Text("Abrir").contentShape(Rectangle()) }.buttonStyle(.plain)
+    )
+    #expect(!openingTag("button", in: enabled).contains("data-hover-disabled"))
+  }
+
+  @Test
   func resizableImageStretchesAndAFitKeepsItsRatio() {
     // `resizable()` alone stretches the image to its frame, as in SwiftUI; `scaledToFit` / `scaledToFill` set their fit.
     let stretched = StaticHTMLFiberRenderer().render(Image("ledge.png").resizable().frame(width: 300, height: 200))

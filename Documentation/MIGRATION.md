@@ -9,6 +9,14 @@ before/after comparison.
 
 ## Unreleased
 
+### `.hoverEffectDisabled()` turns off a plain control's shape highlight
+
+- **A plain or borderless `Button`, or a plain `NavigationLink`, under `.hoverEffectDisabled()` no longer paints the
+  highlight it takes from its label's `contentShape` when the pointer is over it**, as `.hoverEffectDisabled()` turns off
+  the pointer effect on iPadOS. The modifier may sit on the control or around it: the control element is marked
+  `data-hover-disabled`. Use it where a row draws its own hover (a list row whose background lights up) so the control
+  inside does not add a second fill. Controls without the modifier keep the highlight; nothing else changes.
+
 ### `Image(decorative:bundle:)`
 
 - **Added, with Apple's signature: `Image(decorative:bundle:)`.** It shows what `Image(_:bundle:)` shows (an asset-catalog
