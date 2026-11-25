@@ -410,6 +410,9 @@ if [[ -n "$build_cache" ]]; then
       elif [[ "$tree_summary" =~ ^changed\ ([0-9]+),\ removed\ 0, ]]; then tree_changes="${BASH_REMATCH[1]}"
       else tree_changes=""; fi
       [[ "$sync_incomplete" == 0 ]] || tree_changes=""
+      # A tree the last build did not see has no valid stamp, even if this run stops before it builds: drop it now, so the
+      # next run (whose sync then writes nothing) cannot skip the build. A sync that wrote nothing keeps it.
+      [[ "$tree_changes" == 0 ]] || rm -f "$build_cache/last-build.stamp"
       rm -f "$sync_marker"
       package_path="$build_cache/tree${package_path#"$sync_from"}"
     fi
