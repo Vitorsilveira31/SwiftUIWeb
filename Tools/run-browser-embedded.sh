@@ -163,12 +163,13 @@ cleanup(){
     wait "$mock_pid" 2>/dev/null || true
   fi
   restore_external_sources
+  if [[ -n "$lock_waiter_pid" ]]; then kill -TERM "$lock_waiter_pid" 2>/dev/null || true; fi
   release_build_cache
   # SWIFTUIWEB_KEEP_WORKSPACE=1 leaves the lowered sources and build products for inspection.
   if [[ "${SWIFTUIWEB_KEEP_WORKSPACE:-0}" == 1 ]]; then echo "Kept lowered workspace: $tmp" >&2; else rm -rf "$tmp"; fi
   exit "$exit_code"
 }
-build_cache_locked=0
+lock_waiter_pid=""; build_cache_locked=0
 # The lock is a `flock` on descriptor 9, which this shell keeps open (Tools/build-cache-lock.mjs): closing it, or this
 # shell ending, frees the cache. A process this shell started inherits the descriptor and keeps the cache while it runs.
 release_build_cache() {
@@ -182,7 +183,12 @@ trap 'exit 143' TERM HUP
 # Held from the first write into the build cache until the bundle is ready (the server below does not need it).
 if [[ -n "$build_cache" ]]; then
   mkdir -p "$build_cache"; exec 9>>"$build_cache/lock"
-  bun "$ROOT/Tools/build-cache-lock.mjs" acquire "$build_cache" --fd 9 --pid "$$" || exit 1
+  # In the background, so a signal reaches the traps above at once instead of after the wait (bash runs a trap only
+  # between commands); cleanup stops the waiting tool.
+  bun "$ROOT/Tools/build-cache-lock.mjs" acquire "$build_cache" --fd 9 --pid "$$" &
+  lock_waiter_pid=$!
+  wait "$lock_waiter_pid" || exit 1
+  lock_waiter_pid=""
   build_cache_locked=1
 fi
 if [[ "$EXTERNAL_PACKAGE" == 1 ]]; then

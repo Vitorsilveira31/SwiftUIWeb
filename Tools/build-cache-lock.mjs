@@ -70,6 +70,11 @@ if (import.meta.main) {
     console.error("usage: bun Tools/build-cache-lock.mjs acquire <cache> --fd <descriptor> --pid <pid> [--timeout <seconds>]");
     process.exit(2);
   }
-  const timeout = Number(option("--timeout") ?? process.env.SWIFTUIWEB_BUILD_CACHE_LOCK_TIMEOUT ?? 3600);
+  const timeoutText = option("--timeout") ?? (process.env.SWIFTUIWEB_BUILD_CACHE_LOCK_TIMEOUT || "3600");
+  const timeout = /^\d+(\.\d+)?$/.test(timeoutText) ? Number(timeoutText) : NaN;
+  if (!Number.isFinite(timeout)) {
+    console.error(`the lock timeout is a number of seconds, not "${timeoutText}" (--timeout or SWIFTUIWEB_BUILD_CACHE_LOCK_TIMEOUT)`);
+    process.exit(2);
+  }
   process.exit(await acquire(cache, fd, pid, timeout));
 }

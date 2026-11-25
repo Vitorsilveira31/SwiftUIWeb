@@ -37,7 +37,7 @@ const until = async (condition) => {
   assert.ok(condition());
 };
 
-test("the lock outlives the tool, names its holder, and makes a second shell wait", () =>
+test("the lock outlives the tool, names its holder, and makes a second shell wait", { timeout: 20_000 }, () =>
   withCache(async (cache) => {
     const first = shell(cache, "echo held; sleep 2");
     await until(() => first.output().includes("held"));
@@ -51,7 +51,7 @@ test("the lock outlives the tool, names its holder, and makes a second shell wai
     assert.equal((await first.exited).code, 0);
   }));
 
-test("a killed holder frees the cache at once", () =>
+test("a killed holder frees the cache at once", { timeout: 20_000 }, () =>
   withCache(async (cache) => {
     const first = shell(cache, "echo held; sleep 30 9>&-");
     await until(() => first.output().includes("held"));
@@ -61,9 +61,9 @@ test("a killed holder frees the cache at once", () =>
     const result = await second.exited;
     assert.equal(result.code, 0);
     assert.match(result.output, /second/);
-  }), 20_000);
+  }));
 
-test("a waiting shell fails after its timeout and says how to build without the cache", () =>
+test("a waiting shell fails after its timeout and says how to build without the cache", { timeout: 20_000 }, () =>
   withCache(async (cache) => {
     const first = shell(cache, "echo held; sleep 30 9>&-");
     await until(() => first.output().includes("held"));
@@ -77,7 +77,7 @@ test("a waiting shell fails after its timeout and says how to build without the 
     }
   }));
 
-test("of shells that start together, one holds the cache at a time", () =>
+test("of shells that start together, one holds the cache at a time", { timeout: 20_000 }, () =>
   withCache(async (cache) => {
     // Each holder marks the folder while it holds the lock; a second mark while one exists is a double hold.
     const body = `if ! mkdir "${cache}/inside" 2>/dev/null; then echo DOUBLE; exit 1; fi; sleep 0.2; rmdir "${cache}/inside"`;
@@ -89,14 +89,14 @@ test("of shells that start together, one holds the cache at a time", () =>
     }
   }));
 
-test("a descriptor that is not open is an error, not a lock to wait for", () =>
+test("a descriptor that is not open is an error, not a lock to wait for", { timeout: 20_000 }, () =>
   withCache(async (cache) => {
     const child = spawn("bun", [SCRIPT, "acquire", cache, "--fd", "57", "--pid", String(process.pid), "--timeout", "5"]);
     const code = await new Promise((resolve) => child.on("exit", resolve));
     assert.notEqual(code, 0);
   }));
 
-test("a process the holder started keeps the cache while it still runs", () =>
+test("a process the holder started keeps the cache while it still runs", { timeout: 20_000 }, () =>
   withCache(async (cache) => {
     // A compiler the launcher started still writes the cache after the launcher is killed: the lock waits for it too.
     const first = shell(cache, "sleep 2 & echo held; wait");
@@ -108,4 +108,33 @@ test("a process the holder started keeps the cache while it still runs", () =>
     const result = await second.exited;
     assert.equal(result.code, 0);
     assert.ok(Date.now() - started >= 1500, "the cache was free while the holder's child still ran");
-  }), 20_000);
+  }));
+
+test("a timeout that is not a number of seconds is refused", { timeout: 20_000 }, () =>
+  withCache(async (cache) => {
+    for (const timeout of ["abc", "-1", "1e3"]) {
+      const result = await shell(cache, "echo held", timeout).exited;
+      assert.equal(result.code, 2, timeout);
+      assert.match(result.output, /number of seconds/);
+    }
+  }));
+
+test("a launcher waiting for the cache stops at once on SIGTERM", { timeout: 20_000 }, () =>
+  withCache(async (cache) => {
+    const first = shell(cache, "echo held; sleep 30 9>&-");
+    await until(() => first.output().includes("held"));
+    // The launcher's pattern: the tool waits in the background, so the TERM trap runs without waiting for it.
+    const script = `trap 'kill -TERM $waiter 2>/dev/null; exit 143' TERM; exec 9>>"$1/lock"; bun "$2" acquire "$1" --fd 9 --pid $$ & waiter=$!; wait $waiter; echo acquired`;
+    const launcher = spawn("bash", ["-c", script, "bash", cache, SCRIPT]);
+    let output = "";
+    launcher.stderr.on("data", (chunk) => (output += chunk));
+    launcher.stdout.on("data", (chunk) => (output += chunk));
+    await until(() => output.includes("Waiting"));
+    const started = Date.now();
+    launcher.kill("SIGTERM");
+    const code = await new Promise((resolve) => launcher.on("exit", resolve));
+    first.child.kill("SIGKILL");
+    assert.equal(code, 143);
+    assert.ok(Date.now() - started < 3000);
+    assert.doesNotMatch(output, /acquired/);
+  }));
