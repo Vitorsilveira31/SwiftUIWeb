@@ -9,6 +9,13 @@ before/after comparison.
 
 ## Unreleased
 
+### `Image(decorative:bundle:)`
+
+- **Added, with Apple's signature: `Image(decorative:bundle:)`.** It shows what `Image(_:bundle:)` shows (an asset-catalog
+  name, a path of the app's site, or a `data:`/`blob:` URL) with an empty `alt`, so assistive technologies skip it and a
+  failed load shows no text in its place; a decorative custom symbol is `aria-hidden`. `Image(_:bundle:)` keeps the
+  name as the text alternative, as before, which for a `data:` URL repeated the whole URL in `alt`.
+
 ### A sidebar's section titles keep their height (visual change)
 
 - **A `TabSection` title in a sidebar no longer shrinks when the sidebar's tabs do not fit.** The sidebar list is a column of
