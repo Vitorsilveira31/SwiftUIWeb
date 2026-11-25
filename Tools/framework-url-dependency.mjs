@@ -27,6 +27,11 @@ function declaredURL(call) {
   return /\burl:\s*"([^"]*)"/u.exec(call)?.[1];
 }
 
+// The explicit package name of a `.package(name: "…", url: …)` call, or undefined: target dependencies may refer to it.
+function declaredName(call) {
+  return /^\.package\(\s*name:\s*"([^"]*)"/u.exec(call)?.[1];
+}
+
 // The last component of a repository URL, without `.git` and slashes: the package identity SwiftPM derives (in lower case).
 export function repositoryName(url) {
   return url.replace(/\/+$/u, "").replace(/\.git$/u, "").split(/[/:]/u).pop() ?? "";
@@ -105,7 +110,7 @@ export function urlDependencies(text, matches) {
     }
     if (end === -1) continue;
     const url = declaredURL(text.slice(index, end));
-    if (url !== undefined && matches(url)) ranges.push([index, end]);
+    if (url !== undefined && matches(url)) ranges.push([index, end, declaredName(text.slice(index, end))]);
   }
   return ranges;
 }
@@ -118,8 +123,9 @@ export function frameworkURLDependencies(text) {
 function replaceRanges(text, ranges, manifestDirectory, destination) {
   const path = relative(manifestDirectory, destination) || ".";
   let result = text;
-  for (const [start, end] of [...ranges].reverse()) {
-    result = result.slice(0, start) + `.package(path: ${JSON.stringify(path)})` + result.slice(end);
+  for (const [start, end, name] of [...ranges].reverse()) {
+    const named = name === undefined ? "" : `name: ${JSON.stringify(name)}, `;
+    result = result.slice(0, start) + `.package(${named}path: ${JSON.stringify(path)})` + result.slice(end);
   }
   return result;
 }

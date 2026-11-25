@@ -24,7 +24,7 @@ test("a remote package that depends on SwiftUIWeb is staged; others, local ones 
     node("modules", "/work/Modules", [framework]),
   ]);
   assert.deepEqual(remotePackages(graph, "/s"), [
-    { url: "https://github.com/Vitorsilveira31/BlurHashSwift.git", checkout: "/c/blurhashswift", destination: "/s/remote/BlurHashSwift" },
+    { url: "https://github.com/Vitorsilveira31/BlurHashSwift.git", checkout: "/c/blurhashswift", destination: "/s/remote/BlurHashSwift", mode: "lower" },
   ]);
 });
 
@@ -98,4 +98,30 @@ test("the command says whether a manifest declares a package by URL other than S
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("a remote package that only leads to a browser package is staged unlowered, so its manifest can point at the lowered one", () => {
+  const inner = node("inner", "https://github.com/o/Inner.git", [framework]);
+  const graph = node("app", "/work/app", [
+    node("outer", "https://github.com/o/Outer.git", [inner, node("swift-asn1", "https://github.com/apple/swift-asn1.git")]),
+    node("leaf", "https://github.com/o/Leaf.git"),
+  ]);
+  assert.deepEqual(
+    remotePackages(graph, "/s").map(({ destination, mode }) => `${destination} ${mode}`),
+    ["/s/remote/Inner lower", "/s/remote/Outer copy"],
+  );
+});
+
+test("a package both leading to and depending on SwiftUIWeb is lowered once", () => {
+  const inner = node("inner", "https://github.com/o/Inner.git", [framework]);
+  const graph = node("app", "/work/app", [node("outer", "https://github.com/o/Outer.git", [framework, inner]), inner]);
+  assert.deepEqual(remotePackages(graph, "/s").map(({ mode }) => mode), ["lower", "lower"]);
+});
+
+test("an explicit package name survives the rewrite, since target dependencies may name it", () => {
+  const manifest = '.package(name: "BrowserLibrary", url: "https://github.com/o/Inner.git", from: "1.0.0")';
+  assert.equal(
+    rewriteURLDependency(manifest, "/s/level0/consumer", "https://github.com/o/Inner", "/s/remote/Inner"),
+    '.package(name: "BrowserLibrary", path: "../../remote/Inner")',
+  );
 });
