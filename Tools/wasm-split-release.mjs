@@ -42,6 +42,7 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { createServer } from "node:http";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -64,30 +65,50 @@ const QUIET_MS = 400;
 // worker's and the page's script that the profiling run loads, never to the bundle that ships.
 const PROFILE_HOOK = `{const instantiate=WebAssembly.instantiate;WebAssembly.instantiate=function(...args){return instantiate.apply(this,args).then(result=>{const instance=result instanceof WebAssembly.Instance?result:result.instance;if(instance&&instance.exports&&instance.exports.__write_profile)globalThis.__swiftuiwebProfiled=instance;return result;});};}\n`;
 
-/**
- * What the check of the data move prepends to the worker's and the page's script: the first module is instrumented
- * (Binaryen's `--instrument-memory` calls an import for every load and store), and these imports note the accesses that touch
- * the moved ranges `runs` (address pairs, sorted) before the second module is instantiated, which is when the first module must
- * not need that data. They go to `globalThis.__swiftuiwebDataReads`.
- */
 /** The wasm-opt passes that make a module report its loads and stores: bulk copies and fills become loops first, which the
  * instrumentation does not otherwise see. `flags` enable the module's features. */
 export function instrumentation(flags) {
   return [...flags, "--llvm-memory-copy-fill-lowering", "--instrument-memory"];
 }
 
-export function dataHook(runs) {
-  return `{const runs=${JSON.stringify(runs)};const reads=globalThis.__swiftuiwebDataReads=[];` +
-    `const channel=typeof BroadcastChannel==="function"?new BroadcastChannel("swiftuiweb-data-check"):null;const inPage=typeof document!=="undefined";` +
-    // What a Worker records it also posts, as it happens, so that a Worker that is terminated (the app moves to the main thread when
-    // a stack runs out) takes nothing with it that the page does not have; the page appends what arrives to its own record.
-    `if(channel&&inPage)channel.onmessage=event=>{if(reads.length<16)reads.push(String(event.data));};` +
+/**
+ * What the check of the data move prepends to the worker's and the page's script: the first module is instrumented
+ * (Binaryen's `--instrument-memory` calls an import for every load and store), and these imports note the accesses that touch
+ * the moved ranges `runs` (address pairs, sorted) before the second module is instantiated, which is when the first module must
+ * not need that data. They go to `globalThis.__swiftuiwebDataReads` of the scope that made them and, when the check gives a
+ * `sink` (its address, see `startReportSink`), to the check as well, by a synchronous request: the access goes on only after the
+ * check has it, so a Worker that is terminated the next instant (the app moves to the main thread when a stack runs out) has
+ * lost nothing, and no delivery has to be waited for. A report that fails throws, which stops the first screen and so fails the
+ * check. The sink is also told when an instrumented module is instantiated, which is how the check knows the hook ran.
+ */
+export function dataHook(runs, sink = null) {
+  return `{const runs=${JSON.stringify(runs)};const sink=${JSON.stringify(sink)};const reads=globalThis.__swiftuiwebDataReads=[];` +
+    `const report=entry=>{if(sink===null)return;const request=new XMLHttpRequest();request.open("GET",sink+encodeURIComponent(entry),false);request.send();if(request.status!==204)throw new Error("the data check did not take the report "+entry);};` +
     `const touches=(a,n)=>{let lo=0,hi=runs.length-1,k=runs.length;while(lo<=hi){const m=(lo+hi)>>1;if(runs[m][1]>a){k=m;hi=m-1;}else lo=m+1;}return k<runs.length&&runs[k][0]<a+n;};` +
     `const loaded=()=>performance.getEntriesByName("swiftuiweb-app-rest").length>0;` +
-    `const touch=kind=>(id,bytes,offset,ptr)=>{const a=(ptr+offset)>>>0;if(reads.length<16&&!loaded()&&touches(a,bytes)){const entry=kind+" "+a;reads.push(entry);if(channel&&!inPage)channel.postMessage(entry);}return ptr;};` +
+    `const touch=kind=>(id,bytes,offset,ptr)=>{const a=(ptr+offset)>>>0;if(reads.length<16&&!loaded()&&touches(a,bytes)){const entry=kind+" "+a;reads.push(entry);report(entry);}return ptr;};` +
     `const keep=(id,value)=>value;` +
     `const imports={load_ptr:touch("read"),store_ptr:touch("write"),load_val_i32:keep,load_val_i64:keep,load_val_f32:keep,load_val_f64:keep,store_val_i32:keep,store_val_i64:keep,store_val_f32:keep,store_val_f64:keep,memory_grow_pre:keep,memory_grow_post:keep};` +
-    `const instantiate=WebAssembly.instantiate;WebAssembly.instantiate=function(module,env){if(module instanceof WebAssembly.Module&&env&&WebAssembly.Module.imports(module).some(e=>e.module==="env"&&e.name==="load_ptr"))env.env=Object.assign({},env.env,imports);return instantiate.apply(this,arguments);};}\n`;
+    `const instantiate=WebAssembly.instantiate;WebAssembly.instantiate=function(module,env){if(module instanceof WebAssembly.Module&&env&&WebAssembly.Module.imports(module).some(e=>e.module==="env"&&e.name==="load_ptr")){env.env=Object.assign({},env.env,imports);report("instrumented");}return instantiate.apply(this,arguments);};}\n`;
+}
+
+/**
+ * A server on a free loopback port that keeps what the hook reports to it: `entries` lists, in order, the accesses (`read 8192`) and
+ * the instantiations of the instrumented module (`instrumented`) of every scope that ran its hook, Workers that are gone included.
+ * A report is on the list before it is answered, and the hook waits for the answer.
+ */
+export async function startReportSink() {
+  const entries = [];
+  const server = createServer((request, response) => {
+    try { entries.push(decodeURIComponent((request.url ?? "").slice(1))); } catch { entries.push("an unreadable report"); }
+    response.writeHead(204, { "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" }).end();
+  });
+  await new Promise((done, fail) => { server.once("error", fail); server.listen(0, "127.0.0.1", done); });
+  return {
+    url: `http://127.0.0.1:${server.address().port}/`,
+    entries,
+    stop: () => new Promise((done) => { server.close(() => done()); server.closeAllConnections?.(); }),
+  };
 }
 
 // Runs in the scope that holds the instrumented instance: the profile is written into fresh pages of its memory.
@@ -345,7 +366,7 @@ async function profileOnce(browser, base, route, viewport) {
  * Runs the first screen of the bundle `checked` (a copy whose first module is instrumented and carries `dataHook` in its scripts) at
  * one viewport and returns the accesses to the moved data that happened before the second module was instantiated.
  */
-export async function dataReadsOnce(browser, base, route, viewport) {
+export async function dataReadsOnce(browser, base, route, viewport, sink = null) {
   const context = await browser.newContext({ viewport, deviceScaleFactor: 1 });
   try {
     const page = await context.newPage();
@@ -361,19 +382,21 @@ export async function dataReadsOnce(browser, base, route, viewport) {
       await new Promise((done) => setTimeout(done, 100));
     }
     if (errors.length) throw new Error(`the instrumented bundle reported page errors: ${errors.join("; ")}`);
-    // What a Worker recorded was posted to the page as it happened (dataHook), so it is in the page's record even if that Worker is
-    // gone; a few turns of the page's event loop let the last of it arrive.
-    await page.evaluate(() => new Promise((done) => setTimeout(done, 150))).catch(() => {});
-    // A check that measured nothing has not passed: the hook must have run (its record exists in the page or in a Worker) and the
-    // second module must have been instantiated by the end, or the run says so.
+    // A check that measured nothing has not passed: the hook must have run and the second module must have been instantiated by the
+    // end, or the run says so. What every scope touched, a Worker that ended included, is on the sink, which has each report before
+    // the access that made it went on (dataHook); the scopes still alive are asked too, for a check without a sink.
     const reads = [];
-    let hooked = false, loaded = false;
+    let recorded = false, loaded = false, instrumented = false;
     for (const scope of [page, ...page.workers()]) {
       const record = await scope.evaluate(() => globalThis.__swiftuiwebDataReads ?? null).catch(() => null);
-      if (Array.isArray(record)) { hooked = true; for (const entry of record) if (!reads.includes(entry)) reads.push(entry); }
+      if (Array.isArray(record)) { recorded = true; for (const entry of record) if (!reads.includes(entry)) reads.push(entry); }
       loaded ||= (await scope.evaluate(() => performance.getEntriesByName("swiftuiweb-app-rest").length).catch(() => 0)) > 0;
     }
-    if (!hooked) reads.push("the instrumented module did not report");
+    for (const entry of sink ? sink.entries.splice(0) : []) {
+      if (entry === "instrumented") instrumented = true;
+      else if (!reads.includes(entry)) reads.push(entry);
+    }
+    if (!(sink ? instrumented : recorded)) reads.push("the instrumented module did not report");
     if (!loaded) reads.push("the second module was not instantiated within the run");
     return reads;
   } finally {
@@ -407,7 +430,10 @@ async function verifyOnce(browser, base, route, viewport) {
  * says there are none, and this run, over the first screen at each viewport, says whether it was right.
  */
 async function checkDataMove({ browser, serveBundle, bundle, work, route, viewports, primary, secondary, runs, flags, log }) {
+  let sink = null;
   try {
+    // The hook of every script reports to this server (dataHook), so it is up before the scripts are written.
+    sink = await startReportSink();
     const checked = servableCopy(bundle, join(work, "data-check"));
     const first = join(work, "first-with-data-moved.wasm");
     writeFileSync(first, primary);
@@ -415,12 +441,12 @@ async function checkDataMove({ browser, serveBundle, bundle, work, route, viewpo
     writeFileSync(join(checked, SECONDARY), secondary);
     for (const script of ["render-worker.js", "index.js"]) {
       const path = join(checked, script);
-      if (existsSync(path)) writeFileSync(path, dataHook(runs) + readFileSync(path, "utf8"));
+      if (existsSync(path)) writeFileSync(path, dataHook(runs, sink.url) + readFileSync(path, "utf8"));
     }
     const server = await serveBundle({ bundle: checked, logName: null });
     try {
       for (const viewport of viewports) {
-        const reads = await dataReadsOnce(browser, server.base, route, viewport);
+        const reads = await dataReadsOnce(browser, server.base, route, viewport, sink);
         if (reads.length > 0) return `the first screen at ${viewport.width}x${viewport.height} touched moved data before ${SECONDARY} arrived (${reads.slice(0, 3).join(", ")})`;
       }
     } finally {
@@ -430,6 +456,8 @@ async function checkDataMove({ browser, serveBundle, bundle, work, route, viewpo
   } catch (error) {
     log(`warning: the data move could not be checked (${String(error?.message ?? error).split("\n")[0]})`);
     return "the check of the moved data did not run";
+  } finally {
+    await sink?.stop();
   }
 }
 
