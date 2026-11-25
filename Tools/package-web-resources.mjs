@@ -1,12 +1,13 @@
 #!/usr/bin/env bun
 // Copies the browser files of a consumer's local packages into its Embedded bundle.
 //
-// usage: package-web-resources.mjs CONSUMER BUNDLE
+// usage: package-web-resources.mjs CONSUMER BUNDLE [PACKAGE...]
 //
 // A library package can keep browser-only files in its own `Web/Resources/` (the page service or the component its web
 // target drives, a JavaScript SDK it vendors), so an application that depends on it ships them without copies of its own.
 // For each local package the consumer depends on (`.package(path: "...")`, followed transitively, SwiftUIWeb itself
-// excepted) that has a `Web/Resources/` directory:
+// excepted), and for each PACKAGE (the checkouts of the remote browser packages the launcher lowered,
+// Tools/remote-package-dependencies.mjs), that has a `Web/Resources/` directory:
 //
 // * every file in it is copied to the same relative place in BUNDLE, links followed (a link must stay inside the
 //   package, as for the application's own resources); names that start with "." are skipped;
@@ -68,11 +69,16 @@ function filesIn(directory, boundary) {
   return out;
 }
 
-export function copyPackageResources(consumer, bundle, log = () => {}) {
+export function copyPackageResources(consumer, bundle, log = () => {}, remote = []) {
   const shippedBy = new Map();
   const headPath = join(bundle, HEAD_FILE);
   let heads = "";
-  for (const source of localPackages(consumer)) {
+  const packages = [...localPackages(consumer)];
+  for (const extra of remote) {
+    const source = realpathSync(extra);
+    if (!packages.includes(source)) packages.push(source);
+  }
+  for (const source of packages) {
     const resources = join(source, "Web", "Resources");
     if (!existsSync(resources) || !statSync(resources).isDirectory()) continue;
     const name = basename(source);
@@ -101,12 +107,12 @@ export function copyPackageResources(consumer, bundle, log = () => {}) {
 }
 
 export function main(argv = process.argv.slice(2)) {
-  if (argv.length !== 2) {
-    console.error("usage: package-web-resources.mjs CONSUMER BUNDLE");
+  if (argv.length < 2) {
+    console.error("usage: package-web-resources.mjs CONSUMER BUNDLE [PACKAGE...]");
     return 2;
   }
   try {
-    copyPackageResources(resolve(argv[0]), resolve(argv[1]), (line) => console.log(line));
+    copyPackageResources(resolve(argv[0]), resolve(argv[1]), (line) => console.log(line), argv.slice(2).map((path) => resolve(path)));
     return 0;
   } catch (error) {
     if (error instanceof ToolExit) { console.error(error.message); return 1; }

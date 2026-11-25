@@ -165,8 +165,8 @@ local dependencies') to a path dependency on the lowered framework. With no decl
 is placed two levels above the consumer in a directory called `swiftuiweb`, whatever the checkout that provides it is
 called (a worktree is fine); a local dependency that goes up more than two levels is refused as being outside the
 staging area. The checkout that runs the launcher (`SWIFTUIWEB_ROOT`) is the one that gets lowered, so it should be at
-the tag the manifest asks for. Only the consumer's own manifests and its local dependencies' are rewritten: a remote
-package that itself depends on SwiftUIWeb by URL still fetches the unlowered framework. In-place mode
+the tag the manifest asks for. The staged manifests of the consumer, its local dependencies and its remote browser packages
+(below) are all rewritten, so every package of the build uses the one lowered framework. In-place mode
 (`SWIFTUIWEB_LOWER_IN_PLACE=1`) refuses a URL declaration.
 
 The consumer's other **local** package dependencies (`.package(path: "../Modules")`) are staged and lowered the same way,
@@ -175,8 +175,18 @@ dependencies, transitively. A path dependency named `swiftuiweb` is always the f
 checkout the manifest's path happens to reach. `Tools/local-package-dependencies.mjs`
 lists them from the manifests; their sources join the application evidence of the release reachability
 check. A path that goes up more levels than the SwiftUIWeb dependency does is refused with an explanation (it would leave
-the staging area), and absolute paths are not staged. Remote (URL) dependencies need nothing: SwiftPM fetches them from the
-copied `Package.resolved`, but their sources are not lowered. In-place mode does not handle local dependencies.
+the staging area), and absolute paths are not staged. In-place mode does not handle local dependencies.
+
+A **remote** (URL) dependency that depends on SwiftUIWeb, a library with a browser target such as a Skip package's web
+build, is lowered too, so a consumer declares it by URL with a version or branch, as its native build does, instead of
+keeping a checkout next to its own. When a staged manifest declares a URL other than SwiftUIWeb's, the launcher resolves
+the staged package with the browser build's environment (`swift package show-dependencies`, its checkouts kept in the
+build cache), and `Tools/remote-package-dependencies.mjs` lists each remote package of the graph that depends on SwiftUIWeb.
+Its resolved checkout is lowered into `<staging>/remote/<repository name>`, so the package identity stays the URL's, and the
+declarations of its URL in every staged manifest, in any spelling (https or ssh, with or without `.git`), become a path
+dependency on that copy. Its `Web/Resources` reach the bundle like a local package's. A remote package that does not depend
+on SwiftUIWeb stays a URL dependency: SwiftPM fetches it from the copied `Package.resolved`, and its sources are not
+lowered.
 
 The historical behaviour, rewriting the consumer's `Sources` in place and restoring them on exit, is opt-in with
 `SWIFTUIWEB_LOWER_IN_PLACE=1`. It is needed only for a package whose SwiftUIWeb dependency is an absolute path (a copy

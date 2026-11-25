@@ -143,6 +143,8 @@ state="$BUILD_ROOT/embedded-source-lowering/state.json"; [[ ! -f "$state" ]] || 
 tmp="$(mktemp -d "$BUILD_ROOT/.embedded-browser.XXXXXX")"
 workspace="$tmp/workspace"; scratch="$tmp/scratch"
 framework_workspace=""
+# The checkouts of the remote browser packages the staged build lowered (their browser resources go into the bundle too).
+remote_checkouts=()
 server_pid=""
 mock_pid=""
 restore_external_sources() {
@@ -244,6 +246,39 @@ if [[ "$EXTERNAL_PACKAGE" == 1 ]]; then
       "$LOWERER" --apply ${SWIFTUIWEB_LIVE_LITERALS:+--live-literals} ${development_exports:+"$development_exports"} --root "$dependency_source" --product "$product" --lower-codable --workspace "$dependency_workspace" --report "$LOWERING_REPORT_ROOT/dependency-$dependency_name-report.json" ${lowering_cache:+--cache "$lowering_cache/dependency-$dependency_name"} ${stable_source_locations:+"$stable_source_locations"} ${full_swift:+"$full_swift"} ${application_export_args[@]+"${application_export_args[@]}"}
       dependency_workspaces="$dependency_workspaces$dependency_workspace"$'\n'
     done < <(bun Tools/local-package-dependencies.mjs "$PACKAGE_ROOT" "$workspace" "$staging_root" "$ROOT")
+    # Remote browser packages: a URL dependency that itself depends on SwiftUIWeb (a library with a browser target) has to
+    # be lowered like a local one, or SwiftPM would build its unlowered sources. SwiftPM resolves the staged graph with the
+    # browser build's environment (its checkouts are kept in the build cache, so a later build fetches nothing new),
+    # Tools/remote-package-dependencies.mjs picks those packages, each checkout is lowered into STAGING/remote/<name>, and
+    # every staged manifest's declaration of its URL becomes a path dependency on that copy. Nothing is resolved when no
+    # staged manifest declares a URL other than SwiftUIWeb's.
+    remote_manifests=("$workspace/Package.swift")
+    while IFS= read -r dependency_workspace; do [[ -z "$dependency_workspace" ]] || remote_manifests+=("$dependency_workspace/Package.swift"); done <<< "${dependency_workspaces:-}"
+    if bun Tools/remote-package-dependencies.mjs --declares-url "${remote_manifests[@]}"; then
+      resolve_scratch="${build_cache:+$build_cache/resolve}"; [[ -n "$resolve_scratch" ]] || resolve_scratch="$tmp/resolve"
+      if ! "$swift" package --package-path "$workspace" --scratch-path "$resolve_scratch" show-dependencies --format json > "$tmp/dependencies.json" 2> "$tmp/resolve.log"; then
+        cat "$tmp/resolve.log" >&2
+        echo "error: SwiftPM could not resolve the dependencies of the staged package $workspace for the browser build." >&2
+        exit 1
+      fi
+      bun Tools/remote-package-dependencies.mjs "$tmp/dependencies.json" "$staging_root" > "$tmp/remote-packages.tsv"
+      while IFS=$'\t' read -r remote_url remote_checkout remote_workspace; do
+        [[ -n "$remote_url" ]] || continue
+        remote_name="$(basename "$remote_workspace")"
+        # SwiftPM keeps its checkouts read-only, and the lowerer keeps the modes of the files it copies: lower a writable
+        # copy, so the lowered files (and the build cache's tree after them) can be rewritten.
+        remote_source="$tmp/remote-sources/$remote_name"
+        mkdir -p "$tmp/remote-sources"; cp -R "$remote_checkout" "$remote_source"; chmod -R u+w "$remote_source"
+        "$LOWERER" --apply ${SWIFTUIWEB_LIVE_LITERALS:+--live-literals} ${development_exports:+"$development_exports"} --root "$remote_source" --product "$product" --lower-codable --workspace "$remote_workspace" --report "$LOWERING_REPORT_ROOT/remote-$remote_name-report.json" ${lowering_cache:+--cache "$lowering_cache/remote-$remote_name"} ${stable_source_locations:+"$stable_source_locations"} ${full_swift:+"$full_swift"} ${application_export_args[@]+"${application_export_args[@]}"}
+        dependency_workspaces="$dependency_workspaces$remote_workspace"$'\n'
+        remote_manifests+=("$remote_workspace/Package.swift")
+        remote_checkouts+=("$remote_checkout")
+      done < "$tmp/remote-packages.tsv"
+      if [[ -s "$tmp/remote-packages.tsv" ]]; then
+        bun Tools/remote-package-dependencies.mjs --rewrite "$tmp/remote-packages.tsv" "${remote_manifests[@]}" >/dev/null
+        echo "Remote browser packages lowered: $(wc -l < "$tmp/remote-packages.tsv" | tr -d ' ')"
+      fi
+    fi
     # A manifest that names SwiftUIWeb by URL (`.package(url: ".../swiftuiweb.git", from: "0.1.0")`) would make SwiftPM fetch
     # the original framework; in the staged copies it points at the lowered framework instead, as a path dependency.
     bun Tools/framework-url-dependency.mjs rewrite "$workspace/Package.swift" "$framework_workspace" >/dev/null
@@ -634,7 +669,7 @@ final="$BUNDLE_ROOT/$product"; rm -rf "$final"; mkdir -p "$(dirname "$final")"; 
 # The local packages the consumer depends on can ship browser files of their own in `Web/Resources/` (the script of a
 # page service, a JavaScript SDK): they are copied first, and their head.html fragments go before the application's
 # (Tools/package-web-resources.mjs), so an application never keeps copies of a library's files.
-[[ "$EXTERNAL_PACKAGE" != 1 ]] || bun "$ROOT/Tools/package-web-resources.mjs" "$PACKAGE_ROOT" "$final"
+[[ "$EXTERNAL_PACKAGE" != 1 ]] || bun "$ROOT/Tools/package-web-resources.mjs" "$PACKAGE_ROOT" "$final" ${remote_checkouts[@]+"${remote_checkouts[@]}"}
 if [[ "$EXTERNAL_PACKAGE" == 1 ]]; then
   resources_dir="${SWIFTUIWEB_RESOURCES:-}"
   if [[ -z "$resources_dir" ]]; then

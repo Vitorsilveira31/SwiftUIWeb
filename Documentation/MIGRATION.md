@@ -9,6 +9,18 @@ before/after comparison.
 
 ## Unreleased
 
+### A browser package can be a URL dependency
+
+- **A remote package that depends on SwiftUIWeb is lowered like a local one.** The launcher lowered only local packages,
+  so a library with a browser target (a Skip package's web build, for example) had to be a checkout next to the
+  consumer, declared with `.package(path: "../../library")`, while its native build used a URL. The browser build now
+  resolves the staged package, lowers each remote package that depends on SwiftUIWeb from its resolved checkout and points
+  the staged manifests at that copy ([`EMBEDDED_SOURCE_LOWERING.md`](EMBEDDED_SOURCE_LOWERING.md)); its `Web/Resources`
+  reach the bundle as before.
+- **What to change.** Declare such a library by URL with the version or branch its native build uses, and remove the
+  checkout next to the consumer. A path dependency keeps working as before. The first build of a consumer that declares a
+  URL other than SwiftUIWeb's resolves its packages (SwiftPM fetches them once; the build cache keeps the checkouts).
+
 ### An external package keeps its build between runs
 
 - **A second build of a consumer package compiles only what changed.** The launcher lowered the consumer and the framework into
