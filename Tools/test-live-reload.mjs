@@ -355,6 +355,10 @@ await runSuite(async () => {
         // A stylesheet outside the known sources falls back to the build, which the page still gets as a css save.
         writeFileSync(join(pkg, "Sources/extra.css"), "p{}\n");
         await until(() => builds() === 2, "the build command to run for an unknown stylesheet");
+        // `builds()` counts a build from its first command: the stand-in reads page.txt a moment later. A save of page.txt made
+        // now would be read by this build (it fails with the next step's BREAK, and the failure is reported twice), so wait
+        // for the build to end, which the watcher logs after the command exits.
+        await until(() => /built in [\d.]+ s; swapping stylesheets/.test(output.join("")), "the build for an unknown stylesheet to end");
         await until(async () => (await page.evaluate(() => window.__marker)) === "kept", "the fallback to keep the page");
         assert.match(output.join(""), /stylesheet fast path not used/);
 

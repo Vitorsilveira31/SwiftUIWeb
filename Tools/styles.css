@@ -3413,9 +3413,10 @@
     opacity: 1;
   }
 
-  .button-plain[data-visible-shape]:hover:not(:disabled),
-  .button-borderless[data-visible-shape]:hover:not(:disabled),
-  .navigation-link[data-button-style="plain"][data-visible-shape]:hover {
+  /* `.hoverEffectDisabled()` (data-hover-disabled) turns this highlight off, as it turns off iPadOS's pointer effect. */
+  .button-plain[data-visible-shape]:hover:not(:disabled):not([data-hover-disabled="true"]),
+  .button-borderless[data-visible-shape]:hover:not(:disabled):not([data-hover-disabled="true"]),
+  .navigation-link[data-button-style="plain"][data-visible-shape]:hover:not([data-hover-disabled="true"]) {
     background-color: var(--color-swu-accent);
     color: var(--color-swu-accent-foreground);
   }
@@ -4637,6 +4638,9 @@
 
   .tab-sidebar-list > .tab-section-header {
     display: block;
+    /* The list is a column of fixed height that scrolls; without this a list taller than the sidebar shrank each title
+       (min-height 0, overflow hidden) to a sliver, while the tabs kept their height. */
+    flex: none;
     align-self: stretch;
     min-height: 0;
     margin: 18px 0 0;

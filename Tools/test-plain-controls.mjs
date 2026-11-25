@@ -2,7 +2,7 @@
 // Under `.buttonStyle(.plain)` a Button and a NavigationLink draw their label in the font and foreground style around
 // them, as SwiftUI's plain style (a list of rows mixing links and a "Sign out" button read in two colours and two
 // sizes). A destructive plain button is red text, not a red fill. A plain link with a declared shape highlights under the
-// pointer as a plain button does.
+// pointer as a plain button does, unless `.hoverEffectDisabled()` marked it (data-hover-disabled).
 //   bun Tools/test-plain-controls.mjs
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -13,6 +13,9 @@ const styles = readFileSync(join(ROOT, "Tools/styles.css"), "utf8");
 const html = `<div style="color: rgb(10, 20, 30); font-size: 19px; font-weight: 600; display: grid; gap: 30px; padding: 20px">
   <button id="button" class="push-button button-plain control-regular" data-button-style="plain">Sair</button>
   <a id="link" class="navigation-link" data-button-style="plain" data-visible-shape="true" href="#">Editar</a>
+  <button id="shaped" class="push-button button-plain control-regular" data-button-style="plain" data-visible-shape="true">Abrir</button>
+  <button id="quiet" class="push-button button-plain control-regular" data-button-style="plain" data-visible-shape="true" data-hover-disabled="true">Abrir</button>
+  <a id="quiet-link" class="navigation-link" data-button-style="plain" data-visible-shape="true" data-hover-disabled="true" href="#">Editar</a>
   <a id="tinted" class="navigation-link" href="#">Ver tudo</a>
   <button id="destructive" class="push-button button-plain control-regular" data-button-style="plain" data-role="destructive">Excluir</button>
 </div>`;
@@ -37,6 +40,12 @@ await runSuite(async () => {
     assert.notEqual(destructive.color, "rgb(10, 20, 30)", "a destructive plain button is drawn in the destructive colour");
     await page.hover("#link");
     assert.notEqual((await look("link")).background, "rgba(0, 0, 0, 0)", "a plain link with a shape highlights under the pointer");
+    await page.hover("#shaped");
+    assert.notEqual((await look("shaped")).background, "rgba(0, 0, 0, 0)", "a plain button with a shape highlights under the pointer");
+    await page.hover("#quiet");
+    assert.equal((await look("quiet")).background, "rgba(0, 0, 0, 0)", "hoverEffectDisabled turns off a plain button's highlight");
+    await page.hover("#quiet-link");
+    assert.equal((await look("quiet-link")).background, "rgba(0, 0, 0, 0)", "hoverEffectDisabled turns off a plain link's highlight");
     console.log("PASS plain buttons and links keep the look around them");
   } finally {
     await browser.close();

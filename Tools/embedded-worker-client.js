@@ -330,6 +330,12 @@ export async function createWorkerInstance(module, { baseURL, secondary = null, 
     // The worker processes calls in order: a publication reflects every call up to `calls`, and so does the latest one
     // for a call the worker answered with an `ack` (it changed nothing to publish).
     [PREFIX + 'calls_sent']: () => callsSent,
+    // `calls_sent` once the measurements held here have gone out. While Swift is behind they wait here, uncounted, and an answer
+    // to the calls before them (`calls_reflected` reaching the count taken meanwhile) is not an answer to them: a piece waiting
+    // for the answer to its measurement was shown when Swift only answered the publication before it (Tools/embedded-dom.js,
+    // `answerMeasurements`). The measurements go out in the order they were held, as when Swift catches up, and Swift still
+    // runs them after the calls it is behind on.
+    [PREFIX + 'calls_sent_flushed']: () => { if (!batches.length) sendWaiting(); return callsSent; },
     [PREFIX + 'calls_reflected']: () => Math.max(latest.calls ?? callsSent, callsHandled),
     [PREFIX + 'publish_ack']: sequence => call('publish_ack', [sequence], false),
     [PREFIX + 'publish_full']: () => call('publish_full', [], false),

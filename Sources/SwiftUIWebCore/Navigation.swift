@@ -2386,6 +2386,8 @@ public nonisolated struct NavigationLink<Label: View, Destination: View>: View {
     if !context.environment.buttonStyleIsCustom, style == "plain" || style == "borderless" {
       node.attributes["data-button-style"] = style
     }
+    // `.hoverEffectDisabled()` turns off the highlight a plain link takes from its label's shape, as for a button.
+    if !context.environment.isHoverEffectEnabled { node.attributes["data-hover-disabled"] = "true" }
     let child: _RenderNode
     if context.environment.buttonStyleIsCustom, !context.environment._buttonStyleIsPrimitive {
       // A link is a button to SwiftUI: an app-defined `ButtonStyle` draws its label, with a live `isPressed`.

@@ -63,13 +63,51 @@ const CASES = [
   ["plain-5000", 5000, "renders"],
 ];
 
-// A mount that took longer than this (seconds, click to the leaf on screen) has a quadratic cost again: padded 5000 levels
-// took 41 s before the identity paths and the HTML for a deep tree were made linear, and 2 to 4 s since. The limit is for
-// a machine under load, not a target.
-const MOUNT_LIMITS = {
-  "depth-5000": 12, "plain-5000": 8, "depth-8000": 20, "wide-10000": 15, "nav-1000": 5, "forcing-1000": 6,
-  "chain-1000": 3, "mods-1000": 3, "labeled-1000": 3,
-};
+// The cost of a mount must grow with the size of the tree. Padded 5000 levels took 41 s before the identity paths and the HTML
+// for a deep tree were made linear, and the 1000-level `nav` and `forcing` took 12 and 25 s: a quadratic cost, which grows with
+// the square of the size on any machine. A time limit says how fast the machine is as much as how the cost grows (the
+// 8 s one for `plain-5000` in WebKit failed at 8.7 s on a machine running other builds: the mount takes 3.6 s on a quiet one and
+// 7.2 to 8.3 s with ten browsers and 24 busy loops beside it), so each large mount is compared with a smaller one of the same
+// kind, mounted alternately with it three times in fresh pages, each side keeping its fastest mount: load that hits the whole
+// measurement slows both and cancels, and a spike that hits one mount does not decide it. [small, large, largest ratio of the
+// large mount's time to the small one's]. Measured, in WebKit on a quiet machine (load average 6), in WebKit loaded (19 to 82)
+// and in Chromium quiet: depth 5000/1000 4.0, 5.1 and 4.6; depth 8000/1000 6.5, 8.4 and 7.7; wide 10000/1000 5.0, 6.2 and 4.0;
+// nav, forcing, chain, mods and labeled 1000/300 at most 5.0, 4.5 and 5.3. A linear cost gives the size ratio, a quadratic one its
+// square (25, 64, 100 and 11), so each limit is three times the size ratio: more than the 1.3 times by which load raised a
+// ratio, less than the square. `plain` is the exception: WebKit lays out the 512 levels the HTML nests (the leaf of a
+// deeper tree follows as siblings) for 3.1 s on the main thread whatever the size, so 5000/1000 is 1.15 there, quiet and loaded,
+// and about 5 in Chromium. An engine without its own limit (Firefox, which no machine here could start to measure) takes the
+// rule: a fixed cost only lowers a ratio, so three times the size ratio cannot fail an engine that has one, and still catches
+// a quadratic cost where it has none.
+const SCALING = [
+  ["depth-1000", "depth-5000", 15], ["depth-1000", "depth-8000", 24],
+  ["plain-1000", "plain-5000", { webkit: 3, default: 15 }],
+  ["wide-1000", "wide-10000", 30],
+  ["nav-300", "nav-1000", 10], ["forcing-300", "forcing-1000", 10], ["chain-300", "chain-1000", 10], ["mods-300", "mods-1000", 10],
+  ["labeled-300", "labeled-1000", 10],
+];
+const SCALING_ROUNDS = 3;
+
+/** Seconds from the click on `button` to its leaf on screen, in a fresh page. */
+async function mountSeconds(browser, base, button) {
+  const depth = Number(button.split("-").pop());
+  const page = await browser.newPage();
+  try {
+    await page.goto(`${base}/stackDepth`, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector('html[data-embedded-mounted="true"]', { timeout: 30_000 });
+    const started = Date.now();
+    await page.locator(`[data-testid="${button}"]`).dispatchEvent("click");
+    await page.waitForFunction(
+      `document.querySelector('[data-testid="depth-value"]')?.textContent?.trim() === 'depth ${depth}'` +
+        ` && document.querySelector('[data-testid="depth-leaf"]')`,
+      undefined,
+      { timeout: 90_000, polling: 50 },
+    );
+    return (Date.now() - started) / 1000;
+  } finally {
+    await page.close();
+  }
+}
 
 await runSuite(async () => {
   const only = new Set((process.env.STACK_DEPTH_ONLY ?? "").split(",").filter(Boolean));
@@ -96,7 +134,6 @@ await runSuite(async () => {
       // Playwright aims at a button it scrolled into view can land on the strip itself (a plain page with
       // the same strip loses it too, see test-click-after-mount-browser.mjs). The DOM `click` event is what
       // the app answers, and test-click-after-mount-browser.mjs covers real pointer and key input.
-      const started = Date.now();
       await page.locator(`[data-testid="${button}"]`).dispatchEvent("click");
       await page.waitForFunction(
         `document.querySelector('[data-testid="depth-value"]')?.textContent?.trim() === 'depth ${depth}'` +
@@ -104,7 +141,6 @@ await runSuite(async () => {
         undefined,
         { timeout: 90_000, polling: 50 },
       );
-      const elapsed = (Date.now() - started) / 1000;
       await page.waitForTimeout(400);
       const leaf = await page.locator('[data-testid="depth-leaf"]').count();
       const workerAfter = await page.evaluate("window.__embeddedSession.worker");
@@ -118,13 +154,6 @@ await runSuite(async () => {
             })
           : 0;
       await page.close();
-      if (Object.hasOwn(MOUNT_LIMITS, button)) {
-        console.log(`${button}: ${elapsed.toFixed(2)} s`);
-        assert.ok(
-          elapsed < MOUNT_LIMITS[button],
-          `${button} took ${elapsed.toFixed(1)} s to mount in ${engine}, over ${MOUNT_LIMITS[button]} s`,
-        );
-      }
       // The HTML writes no deeper nesting than a parser builds: the rest of a deep tree follows as siblings, so
       // the leaf of a 5000-level tree sits about as deep as the 512-level limit of the parsers (the tree is the
       // same one they used to build themselves, but Chromium needed seconds to parse it).
@@ -142,6 +171,26 @@ await runSuite(async () => {
       assert.ok(
         leaf === 1 && errors.length === 0,
         `a view tree ${depth} levels deep (${button}) did not render in ${engine}: ${JSON.stringify(errors.slice(0, 2))}`,
+      );
+    }
+    // The cost of a mount grows with the size of the tree, not with its square (see SCALING).
+    for (const [small, large, limit] of SCALING) {
+      if (only.size && !only.has(large)) continue;
+      const seconds = { [small]: [], [large]: [] };
+      for (let round = 0; round < SCALING_ROUNDS; round++) {
+        seconds[small].push(await mountSeconds(browser, base, small));
+        seconds[large].push(await mountSeconds(browser, base, large));
+      }
+      const fastest = { [small]: Math.min(...seconds[small]), [large]: Math.min(...seconds[large]) };
+      const ratio = fastest[large] / fastest[small];
+      const allowed = typeof limit === "number" ? limit : (limit[engine] ?? limit.default);
+      const sizes = Number(large.split("-").pop()) / Number(small.split("-").pop());
+      console.log(`${large}: ${fastest[large].toFixed(2)} s, ${ratio.toFixed(1)} times ${small}'s ${fastest[small].toFixed(2)} s (limit ${allowed})`);
+      assert.ok(
+        ratio < allowed,
+        `${large} took ${fastest[large].toFixed(2)} s to mount in ${engine}, ${ratio.toFixed(1)} times the ${fastest[small].toFixed(2)} s of ${small} ` +
+          `(fastest of ${SCALING_ROUNDS}, mounted alternately; ${seconds[large].map((value) => value.toFixed(2))} against ${seconds[small].map((value) => value.toFixed(2))}), ` +
+          `over ${allowed}: the sizes are ${sizes} times apart, and a quadratic cost would make it ${sizes * sizes}`,
       );
     }
     // Staging must not change what a screen is: compare the most staged render with the plain one.

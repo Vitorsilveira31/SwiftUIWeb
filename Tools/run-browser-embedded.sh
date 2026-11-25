@@ -64,6 +64,23 @@ else
     if [[ "$EXTERNAL_PACKAGE" == 1 ]]; then product="$example"; else echo "Unknown example: $example" >&2; exit 2; fi
   esac
 fi
+# The build cache: a folder that lives between runs and holds the lowered tree and SwiftPM's scratch folder, so a build
+# recompiles only what changed instead of everything (SwiftPM decides by path and modification time, and a fresh temporary
+# folder has neither). The development loop names it (SWIFTUIWEB_DEV_CACHE). A staged external package gets one by default,
+# one per product, configuration and profile under the build root, except on CI (`CI` set), where a fresh machine would only
+# keep gigabytes it never reads again; SWIFTUIWEB_STABLE_WORKSPACE=0 builds in a temporary folder as before, =1 gives one
+# everywhere, the framework's own apps and CI included. Only the tree and the scratch folder are kept: the
+# development loop's settings (exports, deferred code generation, skipping an unchanged build) stay with SWIFTUIWEB_DEV_CACHE.
+# One build at a time writes a cache (Tools/build-cache-lock.mjs).
+build_cache="${SWIFTUIWEB_DEV_CACHE:-}"
+if [[ -z "$build_cache" ]]; then
+  case "${SWIFTUIWEB_STABLE_WORKSPACE:-}" in
+    0) ;;
+    1) build_cache="$BUILD_ROOT/build-cache/$product-$configuration-$dev_profile" ;;
+    "") [[ "$EXTERNAL_PACKAGE" != 1 || "$STAGED" != 1 || -n "${CI:-}" ]] || build_cache="$BUILD_ROOT/build-cache/$product-$configuration-$dev_profile" ;;
+    *) echo "SWIFTUIWEB_STABLE_WORKSPACE is 0 or 1, not $SWIFTUIWEB_STABLE_WORKSPACE" >&2; exit 2 ;;
+  esac
+fi
 # A build-only run of one of the framework's own apps reuses the bundle an earlier build made from the same inputs
 # (Tools/bundle-reuse.mjs: the sources, host files, settings and toolchain, and a bundle nobody changed since), so the
 # browser suites do not compile the same application again. SWIFTUIWEB_REUSE_BUNDLE=0 always builds.
@@ -86,16 +103,18 @@ else
 fi
 # The watcher reads this line to pass the same pair to the next builds.
 [[ -z "${SWIFTUIWEB_DEV_CACHE:-}" ]] || echo "Resolved toolchain: swift=$swift sdk=$sdk"
-# Per-file lowering results live in the development cache (SWIFTUIWEB_LOWERING_CACHE=0 turns it off): an unchanged source is
-# neither parsed nor lowered again. Each lowering call gets its own folder, because the lowerer prunes the entries a run did
-# not use.
+# Per-file lowering results live in the build cache (SWIFTUIWEB_LOWERING_CACHE=0 turns it off): an unchanged source is
+# neither parsed nor lowered again. An entry's key covers the source, the lowering options and the lowerer binary, so a
+# cached result is the one a fresh lowering would give. Each lowering call gets its own folder, because the lowerer prunes
+# the entries a run did not use.
 lowering_cache=""
-[[ -z "${SWIFTUIWEB_DEV_CACHE:-}" || "${SWIFTUIWEB_LOWERING_CACHE:-1}" == 0 ]] || lowering_cache="$SWIFTUIWEB_DEV_CACHE/lowering-cache"
+[[ -z "$build_cache" || "${SWIFTUIWEB_LOWERING_CACHE:-1}" == 0 ]] || lowering_cache="$build_cache/lowering-cache"
 # Set below when the lowerer writes straight into the development tree; that tree is then neither synced nor removed.
 sync_workspace=""
 # Development loop: the number of files the lowered tree changed on this run (0 when nothing changed), set only when the
-# tree is the one SWIFTUIWEB_DEV_CACHE keeps (dev_tree=1). Empty when unknown, which always builds.
-tree_changes=""; dev_tree=0
+# tree is the one SWIFTUIWEB_DEV_CACHE keeps (dev_tree=1). Empty when unknown, which always builds. cached_tree=1 when the
+# tree and the scratch folder are the build cache's (the development loop's or a stable workspace).
+tree_changes=""; dev_tree=0; cached_tree=0
 # Debug development loop: the framework's non-generic functions are marked `@export(interface)` by the lowering and the
 # libraries are built with DeferredCodeGen, so each library compiles that code once and the executable stops recompiling
 # it on every save; an edit inside such a function leaves the module unchanged and only relinks the app
@@ -144,13 +163,34 @@ cleanup(){
     wait "$mock_pid" 2>/dev/null || true
   fi
   restore_external_sources
+  if [[ -n "$lock_waiter_pid" ]]; then kill -TERM "$lock_waiter_pid" 2>/dev/null || true; fi
+  release_build_cache
   # SWIFTUIWEB_KEEP_WORKSPACE=1 leaves the lowered sources and build products for inspection.
   if [[ "${SWIFTUIWEB_KEEP_WORKSPACE:-0}" == 1 ]]; then echo "Kept lowered workspace: $tmp" >&2; else rm -rf "$tmp"; fi
   exit "$exit_code"
 }
+lock_waiter_pid=""; build_cache_locked=0
+# The lock is a `flock` on descriptor 9, which this shell keeps open (Tools/build-cache-lock.mjs): closing it, or this
+# shell ending, frees the cache. A process this shell started inherits the descriptor and keeps the cache while it runs.
+release_build_cache() {
+  [[ "$build_cache_locked" == 1 ]] || return 0
+  exec 9>&-
+  build_cache_locked=0
+}
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM HUP
+# Held from the first write into the build cache until the bundle is ready (the server below does not need it).
+if [[ -n "$build_cache" ]]; then
+  mkdir -p "$build_cache"; exec 9>>"$build_cache/lock"
+  # In the background, so a signal reaches the traps above at once instead of after the wait (bash runs a trap only
+  # between commands); cleanup stops the waiting tool.
+  bun "$ROOT/Tools/build-cache-lock.mjs" acquire "$build_cache" --fd 9 --pid "$$" &
+  lock_waiter_pid=$!
+  wait "$lock_waiter_pid" || exit 1
+  lock_waiter_pid=""
+  build_cache_locked=1
+fi
 if [[ "$EXTERNAL_PACKAGE" == 1 ]]; then
   # Recover a checkout left lowered by an older interrupted in-place run before anything else.
   restore_external_sources
@@ -242,12 +282,13 @@ if [[ "$EXTERNAL_PACKAGE" == 1 ]]; then
 else
   # Lower a complete disposable SwiftPM workspace. The checkout remains
   # byte-for-byte unchanged even if compilation or linker setup fails.
-  # In the development loop the lowerer writes straight into the tree that lives between runs (`--sync-workspace`):
+  # With a build cache (the development loop, or SWIFTUIWEB_STABLE_WORKSPACE=1) the lowerer writes straight into the tree
+  # that lives between runs (`--sync-workspace`):
   # only the files whose bytes change are written, so SwiftPM recompiles only what changed, without a copy of the
   # repository, a sync and a removal on every save (SWIFTUIWEB_SYNC_WORKSPACE=0 goes back to copy and sync).
   sync_workspace=""
-  if [[ -n "${SWIFTUIWEB_DEV_CACHE:-}" && "${SWIFTUIWEB_SYNC_WORKSPACE:-1}" != 0 ]]; then
-    mkdir -p "$SWIFTUIWEB_DEV_CACHE"; workspace="$SWIFTUIWEB_DEV_CACHE/tree"; sync_workspace="--sync-workspace"
+  if [[ -n "$build_cache" && "${SWIFTUIWEB_SYNC_WORKSPACE:-1}" != 0 ]]; then
+    mkdir -p "$build_cache"; workspace="$build_cache/tree"; sync_workspace="--sync-workspace"
   fi
   lower_args=(--apply ${SWIFTUIWEB_LIVE_LITERALS:+--live-literals} ${development_exports:+"$development_exports"} --root "$ROOT" --product "$product" --workspace "$workspace" --report "$LOWERING_REPORT_ROOT/$product-report.json" ${lowering_cache:+--cache "$lowering_cache/$product"} ${sync_workspace:+"$sync_workspace"} ${export_interface:+"$export_interface"} ${stable_source_locations:+"$stable_source_locations"} ${full_swift:+"$full_swift"})
   if [[ -n "$sync_workspace" ]]; then
@@ -255,7 +296,7 @@ else
     # A lowering that fails or is interrupted can have written some files before it stopped, and the next run, with the
     # source fixed, then writes nothing and reports no change. The marker stays until a lowering finishes, so that next
     # run builds instead of trusting a stamp that no longer describes the tree.
-    lowering_marker="$SWIFTUIWEB_DEV_CACHE/lowering-in-progress"
+    lowering_marker="$build_cache/lowering-in-progress"
     lowering_interrupted=0; [[ ! -e "$lowering_marker" ]] || lowering_interrupted=1
     : > "$lowering_marker"
     "$LOWERER" "${lower_args[@]}" | tee "$tmp/lowering-summary.json"
@@ -343,20 +384,26 @@ package_path="$workspace"; [[ "$EXTERNAL_PACKAGE" == 1 ]] && package_path="$PACK
 if [[ "$EXTERNAL_PACKAGE" == 1 && "$STAGED" == 1 ]]; then
   package_path="$workspace"
 fi
-# Development loop (`swiftuiweb-run --watch`): SWIFTUIWEB_DEV_CACHE names a folder that lives between runs. The lowered
-# tree is synced into it, rewriting only the files whose bytes changed, and SwiftPM's scratch folder stays there, so the
-# next build recompiles only what changed instead of everything. An external package lowered in place has no disposable
-# tree to sync, so it builds from scratch as before.
-if [[ -n "${SWIFTUIWEB_DEV_CACHE:-}" ]]; then
+# The build cache (the development loop's SWIFTUIWEB_DEV_CACHE, or a stable workspace): a folder that lives between runs.
+# The lowered tree is synced into it, rewriting only the files whose bytes changed, and SwiftPM's scratch folder stays
+# there, so the next build recompiles only what changed instead of everything. An external package lowered in place has no
+# disposable tree to sync, so it builds from scratch as before.
+if [[ -n "$build_cache" ]]; then
   if [[ "$EXTERNAL_PACKAGE" == 1 && "$STAGED" != 1 ]]; then
-    echo "note: SWIFTUIWEB_DEV_CACHE needs a staged build; this package is lowered in place, so it builds from scratch." >&2
+    echo "note: a build cache needs a staged build; this package is lowered in place, so it builds from scratch." >&2
   else
     if [[ -z "$sync_workspace" ]]; then
       sync_from="$workspace"; [[ "$EXTERNAL_PACKAGE" == 1 ]] && sync_from="$staging_root"
-      mkdir -p "$SWIFTUIWEB_DEV_CACHE"
+      mkdir -p "$build_cache"
       # The files the sync writes are listed for the direct build, which must know that each one is its to compile
       # (SWIFTUIWEB_SYNC_LIST=1 also prints them, to find files that change without an edit).
-      tree_summary="$(bun Tools/sync-tree.mjs "$sync_from" "$SWIFTUIWEB_DEV_CACHE/tree" --list 2> "$tmp/sync-changes.txt" || true)"
+      # A sync that fails partway leaves some files at their older bytes and times, which SwiftPM would then skip: stop here,
+      # and the next run rewrites every file that differs.
+      if ! tree_summary="$(bun Tools/sync-tree.mjs "$sync_from" "$build_cache/tree" --list 2> "$tmp/sync-changes.txt")"; then
+        grep -vE "^  (changed|removed): " "$tmp/sync-changes.txt" >&2 || true
+        echo "error: could not sync the lowered tree into $build_cache/tree; the next build syncs it again." >&2
+        exit 1
+      fi
       [[ -z "${SWIFTUIWEB_SYNC_LIST:-}" ]] || cat "$tmp/sync-changes.txt" >&2
       echo "Lowered tree: $tree_summary"
       # `changed 0, removed 0, …` is a tree the last build already saw; anything else (or no summary) builds.
@@ -365,15 +412,19 @@ if [[ -n "${SWIFTUIWEB_DEV_CACHE:-}" ]]; then
       if [[ "$tree_summary" == "changed 0, removed 0,"* ]]; then tree_changes=0
       elif [[ "$tree_summary" =~ ^changed\ ([0-9]+),\ removed\ 0, ]]; then tree_changes="${BASH_REMATCH[1]}"
       else tree_changes=""; fi
-      package_path="$SWIFTUIWEB_DEV_CACHE/tree${package_path#"$sync_from"}"
+      package_path="$build_cache/tree${package_path#"$sync_from"}"
     fi
-    scratch="$SWIFTUIWEB_DEV_CACHE/scratch"
-    dev_tree=1
-    # Nothing reads the index of this scratch folder (an editor indexes the checkout, not the lowered copy), and writing
-    # it is about 16% of a framework module's compile (Documentation/Performance/BUILD_TIME.md).
-    flags+=(--disable-index-store)
-    # The LLVM IR verifier only catches compiler bugs; in the debug loop it is about 0.8 s of an app module's 4.3 s of LLVM.
-    [[ "$configuration" != debug ]] || flags+=(-Xswiftc -Xfrontend -Xswiftc -disable-llvm-verify)
+    scratch="$build_cache/scratch"
+    cached_tree=1
+    # The development loop's settings stay with it: a stable workspace changes where the build happens, not what it builds.
+    if [[ -n "${SWIFTUIWEB_DEV_CACHE:-}" ]]; then
+      dev_tree=1
+      # Nothing reads the index of this scratch folder (an editor indexes the checkout, not the lowered copy), and writing
+      # it is about 16% of a framework module's compile (Documentation/Performance/BUILD_TIME.md).
+      flags+=(--disable-index-store)
+      # The LLVM IR verifier only catches compiler bugs; in the debug loop it is about 0.8 s of an app module's 4.3 s of LLVM.
+      [[ "$configuration" != debug ]] || flags+=(-Xswiftc -Xfrontend -Xswiftc -disable-llvm-verify)
+    fi
   fi
 fi
 # The direct build (development profile `fast`, development loop): the compiler commands of a verbose `swift build` are kept,
@@ -442,10 +493,11 @@ else
   if [[ -n "$hot_swap" && "$direct_status" != 0 ]]; then bun Tools/dev-direct-build.mjs prepare-hot --cache "$SWIFTUIWEB_DEV_CACHE" || true; fi
   # SwiftPM changes the one file it owns in the tree: a build deletes or rewrites the tree's Package.resolved, which the
   # next sync would write again and count as a change. Putting back the lowered copies of those files (and nothing else)
-  # means the next run finds the tree this build saw, so an unchanged run can skip the build.
-  if [[ "$dev_tree" == 1 ]]; then
+  # means the next run finds the tree this build saw, so an unchanged run can skip the build (and SwiftPM, which reads the
+  # file's modification time, does not resolve the packages again).
+  if [[ "$cached_tree" == 1 ]]; then
     resolved_from="$ROOT"; [[ -z "$sync_workspace" ]] && resolved_from="$sync_from"
-    resolved_to="$workspace"; [[ -z "$sync_workspace" ]] && resolved_to="$SWIFTUIWEB_DEV_CACHE/tree"
+    resolved_to="$workspace"; [[ -z "$sync_workspace" ]] && resolved_to="$build_cache/tree"
     while IFS= read -r resolved; do
       cmp -s "$resolved_from/$resolved" "$resolved_to/$resolved" || cp "$resolved_from/$resolved" "$resolved_to/$resolved"
     done < <(cd "$resolved_from" && find . -maxdepth 4 -name Package.resolved -not -path '*/.build/*' -not -path '*/node_modules/*' 2>/dev/null)
@@ -541,7 +593,8 @@ if [[ "$configuration" == release ]]; then
   fi
   WASM_SIZE_REPORT=0 WASM_OPT_ONE_CALLER_INLINE_MAX_SIZE="$release_inline_max" Tools/strip-wasm-release.sh "$tmp/app.wasm" "$tmp/app.wasm"
 fi
-[[ -n "$sync_workspace" ]] || rm -rf "$workspace"; [[ -n "${SWIFTUIWEB_DEV_CACHE:-}" ]] || rm -rf "$scratch"
+# A build cache keeps its tree and scratch folder for the next run; a temporary workspace goes now.
+[[ -n "$sync_workspace" ]] || rm -rf "$workspace"; [[ "$cached_tree" == 1 ]] || rm -rf "$scratch"
 [[ -z "$framework_workspace" ]] || rm -rf "$framework_workspace"
 restore_external_sources
 # The build's logs and staging copy do not ship with the bundle: the logs go next to the bundles
@@ -671,6 +724,8 @@ if [[ -n "${SWIFTUIWEB_PREVIOUS_BUNDLES:-}" ]]; then
   fi
 fi
 [[ -z "$reuse_key" ]] || bun "$ROOT/Tools/bundle-reuse.mjs" stamp "$final" "$reuse_key"
+# The bundle is written: the server below reads it, not the build cache, so another build may use the cache now.
+release_build_cache
 echo "Bundle ready: $final"
 [[ "${BUILD_ONLY:-0}" == 1 ]] && exit 0
 if [[ -n "${PORT:-}" ]]; then

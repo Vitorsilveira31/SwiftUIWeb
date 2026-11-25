@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { bundleFilePath } from "./hash-release-bundle.mjs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { launch, runSuite, serveDirectory } from "./browser-test-support.mjs";
+import { engineName, launch, runSuite, serveDirectory } from "./browser-test-support.mjs";
 
 function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -232,7 +232,15 @@ await runSuite(async () => {
     // measurement before the first frame. With Swift on the main thread the answer is committed before the paint; from a
     // Worker the presentation's piece stays hidden until Swift has answered. Sampled at every frame from the click, as
     // layout heights (a sheet's entrance transform scales its box).
-    for (const [mode, query] of [["Worker", ""], ["main thread", "?render-in-worker=0"]]) {
+    // The Worker is also sampled with the page's CPU 10 times slower (Chromium's own throttle): Swift is then still running
+    // the call before the measurement when the page takes it, so the measurement is held and counts for nothing in the calls
+    // sent. The panel was shown at 600 in 11 of 12 rounds like that, and now and then on a loaded machine without it. It is
+    // sampled three times, each in a fresh page: a page that shows the panel early does it in nearly every round.
+    const throttled = engineName() === "chromium" ? 10 : 1;
+    const modes = [["Worker", "", 1], ["main thread", "?render-in-worker=0", 1], ...(throttled > 1 ? [1, 2, 3].map((round) => [`Worker, CPU ${throttled} times slower, round ${round}`, "", throttled]) : [])];
+    for (const [mode, query, rate] of modes) {
+      const cdp = rate > 1 ? await page.context().newCDPSession(page) : null;
+      await cdp?.send("Emulation.setCPUThrottlingRate", { rate });
       await page.goto(`${base}/${query}`, { waitUntil: "networkidle" });
       await page.getByRole("button", { name: "Open geometry fixture", exact: true }).click();
       const toggle = page.getByRole("button", { name: "Toggle measured panel", exact: true });
@@ -256,6 +264,8 @@ await runSuite(async () => {
       if (!seen.length) throw new Error(`${mode}: the measured panel never showed: ${frames.join(",")}`);
       if (seen.includes(600)) throw new Error(`${mode}: the panel showed at its unmeasured height (600) before the measurement: ${frames.join(",")}`);
       check(`${mode}: a view sized from onGeometryChange first shows at its measured size (${seen[0]}, frame ${frames.indexOf(seen[0])})`);
+      await cdp?.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+      await cdp?.detach();
     }
 
     if (errors.length) throw new Error("browser runtime errors: " + errors.join("; "));

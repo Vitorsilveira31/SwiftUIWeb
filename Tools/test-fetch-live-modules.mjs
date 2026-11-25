@@ -16,9 +16,11 @@ const appName = await named("app", appBytes);
 const restName = await named("app-rest", restBytes);
 
 const servers = [];
+// Bound to 127.0.0.1, where the tests reach it: Bun.serve's default wildcard bind can be handed a port that another program
+// already listens on at 127.0.0.1, and the request then goes to that program (see Tools/test-check-dictionary-host.mjs).
+const listen = (options) => Bun.serve({ port: 0, hostname: "127.0.0.1", ...options });
 function serve(routes) {
-  const server = Bun.serve({
-    port: 0,
+  const server = listen({
     fetch(request) {
       const route = routes[new URL(request.url).pathname];
       if (route === undefined) return new Response("not found", { status: 404 });
@@ -148,7 +150,7 @@ describe("fetch-live-modules", () => {
     const first = await quiet(() => main([failing, directory]));
     expect(first.result).toBe(0);
     expect(first.lines.join("\n")).toContain("503");
-    const probe = Bun.serve({ port: 0, fetch: () => new Response("") });
+    const probe = listen({ fetch: () => new Response("") });
     const closed = `http://127.0.0.1:${probe.port}`;
     probe.stop(true);
     const second = await quiet(() => main([closed, directory]));

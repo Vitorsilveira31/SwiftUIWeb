@@ -59,12 +59,21 @@ struct LazyCellStateRootView: View {
         .tabItem { Label("Adaptive", systemImage: "house") }.tag(2)
       VerticalGridFixture(kind: "mixed", columns: [GridItem(.fixed(90), spacing: 8), GridItem(.adaptive(minimum: 120), spacing: 8)])
         .tabItem { Label("Mixed", systemImage: "house") }.tag(3)
+      AlignedGridFixture(kind: "aligned")
+        .tabItem { Label("Aligned", systemImage: "house") }.tag(7)
       VerticalGridFixture(kind: "flexible", columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3))
         .tabItem { Label("Flexible", systemImage: "house") }.tag(4)
       HorizontalGridFixture(kind: "across")
         .tabItem { Label("Across", systemImage: "house") }.tag(5)
       GrowingGridFixture(kind: "growing")
         .tabItem { Label("Growing", systemImage: "house") }.tag(6)
+      // A streaming app's home (hero, rails of posters over canvas placeholders): `Tools/test-streaming-home-resize-browser.mjs`.
+      StreamingHomeFixture()
+        .tabItem { Label("Streaming", systemImage: "house") }.tag(8)
+      StreamingHomeFixture(placeholders: false)
+        .tabItem { Label("Streaming bare", systemImage: "house") }.tag(9)
+      StreamingHomeFixture(grid: 4)
+        .tabItem { Label("Streaming coarse", systemImage: "house") }.tag(10)
     }
     .task { tab = 1 }
   }

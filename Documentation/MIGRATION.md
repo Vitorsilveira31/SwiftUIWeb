@@ -9,6 +9,42 @@ before/after comparison.
 
 ## Unreleased
 
+### An external package keeps its build between runs
+
+- **A second build of a consumer package compiles only what changed.** The launcher lowered the consumer and the framework into
+  a new temporary folder for every build, so SwiftPM never found its earlier work and every build, even with nothing
+  changed, compiled everything. The lowered tree and the scratch folder now live in `.build/build-cache/<product>-<configuration>-<profile>`
+  in the consumer's build root, and only files whose bytes changed are rewritten
+  ([`EMBEDDED_SOURCE_LOWERING.md`](EMBEDDED_SOURCE_LOWERING.md)). The compiler flags and the bundle are the same.
+- **What to know.** The cache takes disk space, about what one build's scratch folder takes; delete it to reclaim the space
+  (the next build is a full one). Two builds of the same product and configuration in the same package no longer run at
+  the same time: the second waits for the first. On CI (`CI` set) nothing changes unless `SWIFTUIWEB_STABLE_WORKSPACE=1`.
+  `SWIFTUIWEB_STABLE_WORKSPACE=0` restores the temporary folder; a development loop (`SWIFTUIWEB_DEV_CACHE`) always keeps
+  its own cache.
+
+### `.hoverEffectDisabled()` turns off a plain control's shape highlight
+
+- **A plain or borderless `Button`, or a plain `NavigationLink`, under `.hoverEffectDisabled()` no longer paints the
+  highlight it takes from its label's `contentShape` when the pointer is over it**, as `.hoverEffectDisabled()` turns off
+  the pointer effect on iPadOS. The modifier may sit on the control or around it: the control element is marked
+  `data-hover-disabled`. Use it where a row draws its own hover (a list row whose background lights up) so the control
+  inside does not add a second fill. Controls without the modifier keep the highlight; nothing else changes.
+
+### `Image(decorative:bundle:)`
+
+- **Added, with Apple's signature: `Image(decorative:bundle:)`.** It shows what `Image(_:bundle:)` shows (an asset-catalog
+  name, a path of the app's site, or a `data:`/`blob:` URL) with an empty `alt`, so assistive technologies skip it and a
+  failed load shows no text in its place; a decorative custom symbol is `aria-hidden`. `Image(_:bundle:)` keeps the
+  name as the text alternative, as before, which for a `data:` URL repeated the whole URL in `alt`.
+
+### A sidebar's section titles keep their height (visual change)
+
+- **A `TabSection` title in a sidebar no longer shrinks when the sidebar's tabs do not fit.** The sidebar list is a column of
+  fixed height that scrolls, and a section title (`min-height: 0`, `overflow: hidden`) was a flexible item, so a list taller
+  than the window squeezed each title to a few points and cut its text (9 of 24 points in a sidebar of 16 tabs and four
+  sections), while the tabs kept their height. The title no longer shrinks (`flex: none`); the list scrolls instead. A
+  sidebar whose tabs fit is unchanged.
+
 ### Lazy grid layout fixes (visual change)
 
 - **A fixed item beside an adaptive one keeps its track.** `LazyVGrid(columns: [GridItem(.fixed(90)), GridItem(.adaptive(minimum: 120))])`
@@ -20,6 +56,12 @@ before/after comparison.
   counted one row, so four rows of 100 wide cells gave 424 wide columns and a grid 3.4 times too long (11008 against 3232,
   with a scroll extent that changed while scrolling). The grid now has a percentage height (`height: 100%`, definite where
   its parent's height is), which both engines resolve to the same rows. Chromium is unchanged.
+- **A cell of a lazy grid with an adaptive item takes the alignment of the column it is rendered in.**
+  `LazyVGrid(columns: [GridItem(.fixed(90), alignment: .leading), GridItem(.adaptive(minimum: 120), alignment: .trailing)])`
+  aligned a cell by its index modulo the two items, so with three columns the third cell of a row was leading and the
+  fourth cell (the fixed column of the next row) trailing. The page now reads how many columns the browser made and aligns each
+  cell as the item of its column does, and again when the window or the grid changes size. Grids whose items all align the
+  same way, and grids without an adaptive item, are unchanged.
 
 ### Security fixes that change behaviour
 
