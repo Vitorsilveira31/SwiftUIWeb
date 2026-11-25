@@ -256,8 +256,14 @@ if [[ "$EXTERNAL_PACKAGE" == 1 ]]; then
     # every staged manifest's declaration of its URL becomes a path dependency on that copy. A remote package that only
     # leads to one is staged unlowered ("copy"), so its manifest is rewritten too. Nothing is resolved when no staged
     # manifest declares a URL other than SwiftUIWeb's. The work files live outside $tmp, which becomes the bundle.
-    remote_manifests=("$workspace/Package.swift")
-    while IFS= read -r dependency_workspace; do [[ -z "$dependency_workspace" ]] || remote_manifests+=("$dependency_workspace/Package.swift"); done <<< "${dependency_workspaces:-}"
+    # Every manifest SwiftPM may pick in a staged package: Package.swift and the version-specific Package@swift-*.swift.
+    package_manifests() { local manifest; for manifest in "$1"/Package.swift "$1"/Package@swift-*.swift; do [[ ! -f "$manifest" ]] || printf '%s\n' "$manifest"; done; }
+    remote_manifests=()
+    while IFS= read -r staged_manifest; do remote_manifests+=("$staged_manifest"); done < <(package_manifests "$workspace")
+    while IFS= read -r dependency_workspace; do
+      [[ -z "$dependency_workspace" ]] && continue
+      while IFS= read -r staged_manifest; do remote_manifests+=("$staged_manifest"); done < <(package_manifests "$dependency_workspace")
+    done <<< "${dependency_workspaces:-}"
     if bun Tools/remote-package-dependencies.mjs --declares-url "${remote_manifests[@]}"; then
       remote_work="$(mktemp -d "$BUILD_ROOT/.embedded-remote.XXXXXX")"
       resolve_scratch="${build_cache:+$build_cache/resolve}"; [[ -n "$resolve_scratch" ]] || resolve_scratch="$remote_work/resolve"
@@ -281,10 +287,7 @@ if [[ "$EXTERNAL_PACKAGE" == 1 ]]; then
         else
           "$LOWERER" --apply ${SWIFTUIWEB_LIVE_LITERALS:+--live-literals} ${development_exports:+"$development_exports"} --root "$remote_source" --product "$product" --lower-codable --workspace "$remote_workspace" --report "$LOWERING_REPORT_ROOT/remote-$remote_name-report.json" ${lowering_cache:+--cache "$lowering_cache/remote-$remote_name"} ${stable_source_locations:+"$stable_source_locations"} ${full_swift:+"$full_swift"} ${application_export_args[@]+"${application_export_args[@]}"}
         fi
-        # Every manifest SwiftPM may pick: Package.swift and the version-specific Package@swift-*.swift ones.
-        for remote_manifest in "$remote_workspace"/Package.swift "$remote_workspace"/Package@swift-*.swift; do
-          [[ ! -f "$remote_manifest" ]] || remote_manifests+=("$remote_manifest")
-        done
+        while IFS= read -r staged_manifest; do remote_manifests+=("$staged_manifest"); done < <(package_manifests "$remote_workspace")
         [[ "$remote_mode" != copy ]] || continue
         dependency_workspaces="$dependency_workspaces$remote_workspace"$'\n'
         remote_checkouts+=("$remote_checkout")
@@ -297,13 +300,12 @@ if [[ "$EXTERNAL_PACKAGE" == 1 ]]; then
     fi
     # A manifest that names SwiftUIWeb by URL (`.package(url: ".../swiftuiweb.git", from: "0.1.0")`) would make SwiftPM fetch
     # the original framework; in the staged copies it points at the lowered framework instead, as a path dependency.
-    bun Tools/framework-url-dependency.mjs rewrite "$workspace/Package.swift" "$framework_workspace" >/dev/null
-    while IFS= read -r dependency_workspace; do
-      [[ -n "$dependency_workspace" ]] || continue
-      for dependency_manifest in "$dependency_workspace"/Package.swift "$dependency_workspace"/Package@swift-*.swift; do
-        [[ ! -f "$dependency_manifest" ]] || bun Tools/framework-url-dependency.mjs rewrite "$dependency_manifest" "$framework_workspace" >/dev/null
-      done
-    done <<< "${dependency_workspaces:-}"
+    while IFS= read -r staged_workspace; do
+      [[ -n "$staged_workspace" ]] || continue
+      while IFS= read -r staged_manifest; do
+        bun Tools/framework-url-dependency.mjs rewrite "$staged_manifest" "$framework_workspace" >/dev/null
+      done < <(package_manifests "$staged_workspace")
+    done <<< "$workspace"$'\n'"${dependency_workspaces:-}"
     # Debug development loop: the application's library targets get the framework's DeferredCodeGen model too, in the
     # staged manifests only (Tools/dev-consumer-manifest.mjs). SWIFTUIWEB_CONSUMER_CODEGEN=0 leaves them as they are.
     if [[ -n "$export_interface" && "${SWIFTUIWEB_CONSUMER_CODEGEN:-1}" != 0 ]]; then
