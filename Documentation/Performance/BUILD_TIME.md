@@ -58,6 +58,28 @@ makes `app.wasm` about 38 % larger.
 - The watcher runs the toolchain report only for its first build.
 - CI restores the lowerer's build folder (`.github/actions/cache-lowering-tool`) instead of compiling swift-syntax in each job.
 
+## An external package's build cache
+
+An external package (`swiftuiweb-run --package-root`, the SwiftPM plugin) is built from a lowered copy. That copy used to be a
+new temporary folder on every build, so SwiftPM found none of its earlier work and every build compiled everything. The
+copy is now synced into `.build/build-cache/<product>-<configuration>-<profile>`, which keeps SwiftPM's scratch folder too
+([`EMBEDDED_SOURCE_LOWERING.md`](../EMBEDDED_SOURCE_LOWERING.md)). Measured on a consumer application with 5,154 lowered files
+and three local packages, release, `--build-only`, on the machine above under other load (load average 7 to 63):
+
+| Build | Whole pipeline | `swift build` |
+|---|---|---|
+| Temporary folder (before), any build | 539 to 638 s | everything |
+| Build cache, first build | 252 to 828 s | 155 to 343 s |
+| Build cache, nothing changed | 52 s | 0.7 s |
+| Build cache, from another checkout of the same commit at the same path (a reused build folder) | 35 s | 0.4 s |
+| Build cache, an environment variable the manifest reads changed, then changed back | 330 s, then 186 s | the targets that variable affects |
+
+- The time left when nothing changed is the copy and its sync (the lowering cache answers every file), the launcher's own
+  start and the bundle steps; `swift build` has nothing to do.
+- A manifest that reads an environment variable (a demo flag, for example) shares one cache between its values: SwiftPM sees
+  the change and recompiles, and switching back gives the same `app.wasm` bytes as the first build with that value.
+- The cache of that application takes 2.3 GB.
+
 ## Measuring
 
 - A single build: `Tools/run-browser.sh showcase` with `BUILD_ONLY=1 CONFIGURATION=release` (or `debug`), timing each stage.
