@@ -390,7 +390,12 @@ if [[ -n "$build_cache" ]]; then
       # The files the sync writes are listed for the direct build, which must know that each one is its to compile
       # (SWIFTUIWEB_SYNC_LIST=1 also prints them, to find files that change without an edit).
       # A sync that fails partway leaves some files at their older bytes and times, which SwiftPM would then skip: stop here,
-      # and the next run rewrites every file that differs.
+      # and the next run rewrites every file that differs. The files it did write are not in that run's list, so the marker
+      # left here makes that run neither skip the build nor trust the list (an unknown count is a `swift build`, which
+      # compiles by modification time).
+      sync_marker="$build_cache/sync-incomplete"
+      sync_incomplete=0; [[ ! -e "$sync_marker" ]] || sync_incomplete=1
+      : > "$sync_marker"
       if ! tree_summary="$(bun Tools/sync-tree.mjs "$sync_from" "$build_cache/tree" --list 2> "$tmp/sync-changes.txt")"; then
         grep -vE "^  (changed|removed): " "$tmp/sync-changes.txt" >&2 || true
         echo "error: could not sync the lowered tree into $build_cache/tree; the next build syncs it again." >&2
@@ -404,6 +409,8 @@ if [[ -n "$build_cache" ]]; then
       if [[ "$tree_summary" == "changed 0, removed 0,"* ]]; then tree_changes=0
       elif [[ "$tree_summary" =~ ^changed\ ([0-9]+),\ removed\ 0, ]]; then tree_changes="${BASH_REMATCH[1]}"
       else tree_changes=""; fi
+      [[ "$sync_incomplete" == 0 ]] || tree_changes=""
+      rm -f "$sync_marker"
       package_path="$build_cache/tree${package_path#"$sync_from"}"
     fi
     scratch="$build_cache/scratch"
