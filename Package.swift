@@ -102,7 +102,7 @@ let package = Package(
     // Keep the audited Swift 6.4-compatible line. Swift Crypto 4.3.1 includes
     // the published X-Wing input-validation fix; newer 4.4+ releases raise
     // the minimum compiler version and should be audited before moving.
-    .package(url: "https://github.com/apple/swift-crypto.git", exact: "5.1.1")
+    .package(url: "https://github.com/apple/swift-crypto.git", exact: "5.2.0")
   ]),
   targets: [
     .target(name: "CSwiftUIWebBrowserIO", path: "Sources/CSwiftUIWebBrowserIO", publicHeadersPath: "include", cSettings: embeddedRuntimeCSettings),
