@@ -10,6 +10,6 @@
   },
   "devDependencies": {
     "@playwright/test": "1.65.1",
-    "shaka-player": "5.3.5"
+    "shaka-player": "5.3.6"
   }
 }
