@@ -6,7 +6,7 @@
       "name": "swiftuiweb-browser-tooling",
       "devDependencies": {
         "@playwright/test": "1.65.1",
-        "shaka-player": "5.3.5",
+        "shaka-player": "5.3.6",
       },
     },
   },
@@ -17,6 +17,6 @@
 
     "playwright-core": ["playwright-core@1.65.1", "", { "bin": { "playwright-core": "cli.js" } }, "sha512-hqPpz7blSMPxWVdoeE1yiBSzXsKiVOd2k+kjCvmUywD2GPO2Dd9HfcWnq9NN0GHbNZDFgZ9JfBFr+X5/BLo0qw=="],
 
-    "shaka-player": ["shaka-player@5.3.5", "", {}, "sha512-43XebYhJ8vBCDJS5bL3rQDZs+BKfTXFcJRYua5pro6LwnQ+v/zwtzXyPAlce62lqVVffA0/oGwdTamBowHUsLQ=="],
+    "shaka-player": ["shaka-player@5.3.6", "", {}, "sha512-FP+pZ1ncSe9UAD6fzqDhEGcf8xENBm2nlS5dgpxjDjnYG/x6jMCg7FEg82NWdDRaSiwW26hF9WPKr0rqX4EIdA=="],
   }
 }
